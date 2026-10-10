@@ -23,6 +23,7 @@ def test_registry_resolves_scrap_profile_by_identity() -> None:
         "affiliation_subject",
         "verify_invoice",
         "owner_consistency",
+        "vehicle_type_light_duty",
     }
     assert profile.page_action_ids == ("fill_affiliation_fields",)
 

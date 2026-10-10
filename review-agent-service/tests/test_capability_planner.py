@@ -15,6 +15,7 @@ def test_configured_profile_plans_declared_capabilities_only():
         "affiliation_subject",
         "verify_invoice",
         "owner_consistency",
+        "vehicle_type_light_duty",
     }
 
 

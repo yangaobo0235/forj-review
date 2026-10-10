@@ -24,3 +24,6 @@ class ReplacementPolicy:
     disposal_date_from: date | None = None
     allowed_origins: tuple[str, ...] = ()
     origin_keywords: tuple[str, ...] = ()
+    # 报废车辆类型档位复核：材料原文命中这些关键词时，该字段转人工复核。
+    # 空元组表示本地区不做这条核验。
+    vehicle_type_review_keywords: tuple[str, ...] = ()

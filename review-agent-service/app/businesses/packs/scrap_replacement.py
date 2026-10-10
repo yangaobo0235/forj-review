@@ -42,6 +42,11 @@ QINGDAO_REPLACEMENT_POLICY = ReplacementPolicy(
     # 地区审核结论就不同。
     allowed_origins=("青岛", "青岛市", "山东省青岛市"),
     origin_keywords=("青岛",),
+    # 2026-10-10 起青岛口径：材料上的车辆类型写「轻型」时要人看档位
+    # （见 docs/业务/报废置换-青岛.md）。报废车辆类型按大类比对，「轻型厢式货车」
+    # 折叠后与「重型厢式货车」同为载货汽车，页面「载货车」一律判一致。
+    # 长春未提这个口径，留空即不生效。
+    vehicle_type_review_keywords=("轻型",),
 )
 
 CHANGCHUN_REPLACEMENT_POLICY = ReplacementPolicy(
@@ -89,6 +94,9 @@ SCRAP_REPLACEMENT_PACK = BusinessExtensionPack(
         SectionDeclaration(NEW_SECTION, "新车及发票信息"),
     ),
     fields=(
+        # `normalizer="vehicle_type"` 按大类折叠，「轻型厢式货车」与「重型厢式货车」
+        # 都归入载货汽车：档位不在比对范围内，由 `vehicle_type_light_duty` 另出一条
+        # 核验（见 app/businesses/rules/vehicle_type_light_duty.py）。
         FieldDeclaration(
             key="old_vehicle.type",
             writable=True,
@@ -713,6 +721,12 @@ SCRAP_REPLACEMENT_PACK = BusinessExtensionPack(
             "owner_consistency", kind="RULE", stage="POST_COMPARE",
             output_facts=("owner.consistency",), failure_policy="MANUAL_REVIEW",
         ),
+        # 报废车辆类型的档位复核。规则本身地区无关，关键词由地区政策声明，
+        # 未配置关键词的地区不产出检查项（与产地关键词同一套做法）。
+        CapabilitySpec(
+            "vehicle_type_light_duty", kind="RULE", stage="POST_COMPARE",
+            output_facts=("vehicle.type.light_duty",), failure_policy="MANUAL_REVIEW",
+        ),
     ),
     binding_declarations=(
         CapabilityBinding("material_completeness"),
@@ -720,6 +734,7 @@ SCRAP_REPLACEMENT_PACK = BusinessExtensionPack(
         CapabilityBinding("affiliation_subject"),
         CapabilityBinding("verify_invoice", required=False),
         CapabilityBinding("owner_consistency"),
+        CapabilityBinding("vehicle_type_light_duty"),
     ),
     page_action_ids=("fill_affiliation_fields",),
     page_interaction=True,
@@ -732,12 +747,14 @@ SCRAP_REPLACEMENT_PACK = BusinessExtensionPack(
         "old_vehicle.owner",
         "new_vehicle.owner",
     ),
-    # 规则结论并进哪个字段行。日期政策的两条并进对应日期字段（合并由
-    # `prepare_display_tasks` 按这张表做），主体关系辅助检查并进客户名称。
+    # 规则结论并进哪个字段行。日期政策的两条并进对应日期字段、档位核验并进
+    # 报废车辆类型（合并由 `prepare_display_tasks` 按这张表做，取最坏状态），
+    # 主体关系辅助检查并进客户名称。
     field_check_bindings=(
         ("AFFILIATION-AUX-CUSTOMER-NAME", "application.customer_name"),
         ("POLICY-INVOICE-DATE", "invoice.invoice_date"),
         ("POLICY-DISPOSAL-DEADLINE", "old_vehicle.recycle_date"),
+        ("VEHICLE-TYPE-LIGHT-DUTY", "old_vehicle.type"),
     ),
     # 「一键验真」的触发字段：发票号码与页面一致时才值得去点页面上那个按钮。
     invoice_verification_field="invoice.invoice_no",

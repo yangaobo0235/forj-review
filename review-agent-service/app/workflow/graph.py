@@ -28,6 +28,7 @@ from app.businesses.rules.owner_consistency import run_owner_consistency
 from app.businesses.rules.replacement_policy import run_replacement_policy
 from app.businesses.rules.transfer_invoice_date import run_transfer_invoice_date
 from app.businesses.rules.vehicle_model import run_vehicle_model
+from app.businesses.rules.vehicle_type_light_duty import run_vehicle_type_light_duty
 from app.capabilities import CapabilityRegistry
 from app.capabilities.business_rules import BusinessRuleRegistry
 from app.capabilities.external_checks import ExternalCheckRegistry
@@ -152,6 +153,7 @@ class ReviewWorkflow:
             "verify_invoice": run_verify_invoice,
             "vehicle_model_consistency": run_vehicle_model,
             "owner_consistency": run_owner_consistency,
+            "vehicle_type_light_duty": run_vehicle_type_light_duty,
             "transfer_invoice_date": run_transfer_invoice_date,
         }
         additional_rules = dict(business_rule_handlers or {})

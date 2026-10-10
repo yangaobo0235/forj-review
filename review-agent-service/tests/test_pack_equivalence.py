@@ -208,6 +208,7 @@ def test_shared_capabilities_are_declared_once_for_all_regions() -> None:
         "affiliation_subject",
         "verify_invoice",
         "owner_consistency",
+        "vehicle_type_light_duty",
     }
     # 地区政策能力不在共用清单里，由地区推导。
     assert not any(item.endswith("_replacement_policy") for item in shared)
