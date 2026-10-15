@@ -64,15 +64,20 @@ function resolve(
   if (
     automatic
     && (automatic.businessType !== manualSelection.businessType
-      || automatic.region !== manualSelection.region)
+      || automatic.region !== manualSelection.region
+      || (automatic.pageId && manualSelection.pageId && automatic.pageId !== manualSelection.pageId))
   ) {
     return { business: null, error: "人工选择的审核业务与当前页面不一致，请重新确认" };
   }
 
+  const identity = appliedPageCatalog()?.identities.find(i =>
+    i.business_type === manualSelection.businessType && i.region === manualSelection.region
+    && (!manualSelection.pageId || i.page_id === manualSelection.pageId));
   return {
     business: {
       ...manualSelection,
-      profileVersion: appliedPageCatalog()?.identities.find(i => i.business_type === manualSelection.businessType && i.region === manualSelection.region)?.profile_version || manualSelection.profileVersion,
+      ...(identity?.page_id ? { pageId: identity.page_id } : {}),
+      profileVersion: identity ? identity.profile_version || "1.0" : manualSelection.profileVersion,
       selectionMode: "MANUAL" as const,
       detectionStatus: "CONFIRMED",
     },

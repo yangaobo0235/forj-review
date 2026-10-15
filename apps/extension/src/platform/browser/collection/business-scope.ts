@@ -1,5 +1,6 @@
 
 import {
+  manifestDocumentType,
   manifestGroupLabelEntries,
   manifestSlotEntries,
 } from "../catalog/collect-manifest.ts";
@@ -71,7 +72,8 @@ import {
   };
 
   const documentTypeFor = (businessScope: string, groupOrder: number, categoryHint: string) =>
-    physicalDocumentTypes.get(String(categoryHint || ""))
+    manifestDocumentType(String(categoryHint || ""))
+    || physicalDocumentTypes.get(String(categoryHint || ""))
     || slotsFor().get(`${businessScope || "unknown"}:${groupOrder || 0}`)
     || "unknown";
 

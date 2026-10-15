@@ -6,6 +6,7 @@
  */
 
 import { manifestFieldLabels } from "../../../platform/browser/catalog/collect-manifest.ts";
+import type { PageCatalog, PageIdentityDeclaration } from "../../../platform/browser/catalog/page-catalog.ts";
 import type {
   BusinessSelection,
   BusinessType,
@@ -34,6 +35,28 @@ export const businessLabels: Record<BusinessChoice, string> = {
   // 需要审核员在这里手动选。
   transfer: "过户审核",
 };
+
+export function catalogBusinessLabel(identity: PageIdentityDeclaration): string {
+  const legacyKey = `${identity.business_type}_${identity.region}` as BusinessChoice;
+  const title = identity.title || businessLabels[legacyKey]
+    || businessLabels[identity.business_type as BusinessChoice] || identity.business_type;
+  return identity.title && identity.region !== "default" ? `${title} · ${identity.region}` : title;
+}
+
+/** The catalog is authoritative whenever available, including version 1.0 pages. */
+export function catalogBusinessChoices(catalog: PageCatalog | null): Record<string, string> {
+  if (!catalog?.identities.length) return businessLabels;
+  return {
+    AUTO: businessLabels.AUTO,
+    ...Object.fromEntries(catalog.identities.map(identity => [
+      `config:${encodeURIComponent(JSON.stringify({
+        businessType: identity.business_type, region: identity.region,
+        profileVersion: identity.profile_version || "1.0", pageId: identity.page_id,
+      }))}`,
+      catalogBusinessLabel(identity),
+    ])),
+  };
+}
 
 /** 区域后缀：业务列表里的键是「业务_区域」，查采集清单时要去掉。 */
 const REGION_SUFFIXES = ["_qingdao", "_changchun", "_default"];
@@ -78,8 +101,7 @@ export function manualBusinessSelection(
 ): BusinessSelection {
   if (choice.startsWith("config:")) {
     const encoded = choice.slice("config:".length);
-    // New catalog entries carry the stable page identity as one encoded payload.
-    // Keep accepting the old four-part key so previously opened panels continue to work.
+    // One encoded payload preserves page identity, including colons in page_id.
     try {
       const parsed = JSON.parse(decodeURIComponent(encoded)) as { businessType?: string; region?: string; profileVersion?: string; pageId?: string };
       if (parsed.businessType && parsed.region) {
@@ -92,18 +114,8 @@ export function manualBusinessSelection(
           ...(parsed.pageId ? { pageId: parsed.pageId } : {}),
         };
       }
-    } catch {
-      // Legacy key format below.
-    }
-    const [, businessType, region, profileVersion, pageId] = choice.split(":");
-    return {
-      businessType: businessType as BusinessType,
-      region: region as BusinessSelection["region"],
-      profileVersion,
-      workflowStage: businessType as BusinessType,
-      selectionMode: "MANUAL",
-      ...(pageId ? { pageId } : {}),
-    };
+    } catch { /* Report invalid catalog metadata below. */ }
+    throw new Error("页面配置标识无效，请重新选择审核页面");
   }
   const region = choice.endsWith("_qingdao")
     ? "qingdao"

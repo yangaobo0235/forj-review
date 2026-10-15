@@ -6,15 +6,17 @@
 """
 
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
 
 from pydantic import (
     AliasChoices,
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
     HttpUrl,
+    StringConstraints,
     model_validator,
 )
 
@@ -70,6 +72,29 @@ class Region(StrEnum):
     DEFAULT = "default"
     QINGDAO = "qingdao"
     CHANGCHUN = "changchun"
+
+
+# Known identifiers retain their enum instances for existing integrations; new
+# identifiers are validated strings and are resolved against the loaded registry.
+Identifier = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]{0,79}$")]
+
+
+def business_identifier(value: object) -> object:
+    try:
+        return BusinessType(value)
+    except (ValueError, TypeError):
+        return value
+
+
+def region_identifier(value: object) -> object:
+    try:
+        return Region(value)
+    except (ValueError, TypeError):
+        return value
+
+
+BusinessId = Annotated[BusinessType | Identifier, BeforeValidator(business_identifier)]
+RegionId = Annotated[Region | Identifier, BeforeValidator(region_identifier)]
 
 
 class SelectionMode(StrEnum):
@@ -308,11 +333,11 @@ class ReviewRequest(BaseModel):
     page_url: HttpUrl | str = Field(
         validation_alias=AliasChoices("page_url", "pageUrl")
     )
-    business_type: BusinessType = Field(
+    business_type: BusinessId = Field(
         default=BusinessType.SCRAP_REPLACEMENT,
         validation_alias=AliasChoices("business_type", "businessType"),
     )
-    region: Region = Region.DEFAULT
+    region: RegionId = Region.DEFAULT
     profile_version: str = Field(
         default="1.0",
         validation_alias=AliasChoices("profile_version", "profileVersion"),
@@ -424,8 +449,8 @@ class ReviewResponse(BaseModel):
     protocol_version: Literal["2.0"] = "2.0"
     trace_id: str = ""
     presentation: Literal["FIELD_WORKBENCH", "MANUAL_REVIEW"] = "MANUAL_REVIEW"
-    business_type: BusinessType = BusinessType.SCRAP_REPLACEMENT
-    region: Region = Region.DEFAULT
+    business_type: BusinessId = BusinessType.SCRAP_REPLACEMENT
+    region: RegionId = Region.DEFAULT
     profile_version: str = "1.0"
     recommendation: Recommendation
     risk_level: str

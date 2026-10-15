@@ -34,6 +34,7 @@ export interface ManifestMaterial {
 }
 
 export interface CollectManifest {
+  page_id?: string;
   business_type: string;
   region?: string;
   profile_version?: string;
@@ -239,6 +240,11 @@ export function manifestHintType(text: string): string | null {
     if (pattern.test(text)) return documentType;
   }
   return null;
+}
+
+/** Physical document types are declared by the backend, including new material types. */
+export function manifestDocumentType(category: string): string | null {
+  return appliedMaterialLabels && Object.hasOwn(appliedMaterialLabels, category) ? category : null;
 }
 
 /** 已应用的字段定义；没有应用清单时返回 null，调用方退回内置表。 */

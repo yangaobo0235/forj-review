@@ -8,7 +8,7 @@
 from collections import defaultdict
 
 from forj_review_assistant.businesses.page_catalog import (
-    PAGE_IDENTITIES,
+    active_identities,
     identities_for_path,
     page_catalog,
     path_matches,
@@ -41,7 +41,7 @@ def test_unique_paths_look_the_same_as_before() -> None:
 def test_every_shared_path_business_declares_anchors() -> None:
     """共享地址的业务必须声明特征，否则两条声明永远分不开。"""
     by_path: dict[str, list] = defaultdict(list)
-    for item in PAGE_IDENTITIES:
+    for item in active_identities():
         for path in item.paths:
             by_path[path].append(item)
 
@@ -59,7 +59,7 @@ def test_anchors_of_businesses_sharing_a_path_do_not_overlap() -> None:
     改版挪走一个词就能把结论翻过来，而且不报错。
     """
     by_path: dict[str, list] = defaultdict(list)
-    for item in PAGE_IDENTITIES:
+    for item in active_identities():
         for path in item.paths:
             by_path[path].append(item)
 
@@ -79,7 +79,7 @@ def test_anchors_avoid_words_the_whole_backend_shares() -> None:
     """
     shared_words = ("一致性审核", "报废置换审核", "赋界", "审核处理", "立即提交", "取消")
 
-    for item in PAGE_IDENTITIES:
+    for item in active_identities():
         for anchor in item.anchors:
             assert not any(word in anchor for word in shared_words), anchor
 
@@ -96,7 +96,7 @@ def test_catalog_shape_matches_what_the_browser_reads() -> None:
 
     assert catalog["version"] == "1.0"
     identities = catalog["identities"]
-    assert len(identities) == len(PAGE_IDENTITIES)
+    assert len(identities) == len(active_identities())
     for item in identities:
         assert {"business_type", "region", "paths", "anchors"} <= set(item) <= {
             "business_type", "region", "paths", "anchors", "title", "profile_version", "page_id"}
@@ -109,7 +109,7 @@ def test_catalog_shape_matches_what_the_browser_reads() -> None:
 def test_pack_declared_anchors_reach_the_catalog() -> None:
     """扩展包里的页面特征会汇总进清单，不另维护一份。"""
     vehicle_source = next(
-        item for item in PAGE_IDENTITIES
+        item for item in active_identities()
         if item.business_type is BusinessType.VEHICLE_SOURCE
     )
 

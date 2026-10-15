@@ -1,20 +1,20 @@
 {
   "snapshot_version": "1.0",
-  "generated_at_utc": "2026-10-15T03:56:35.288048+00:00",
-  "git_head": "fb97beb89d7b9967a9b88509bb0a86ef56883f09",
+  "generated_at_utc": "2026-10-15T07:09:42.749098+00:00",
+  "git_head": "4656ef997800f028c90cf2e0938d66f16eb29cd9",
   "baseline": "当前工作区源码，包含未提交改动；不能只按 git_head 还原",
   "source_sha256": {
     "apps/extension/package-lock.json": "3096e51fb01585c18f6589b315c9d97060c17dc0da315359c7a62c1d76481893",
     "apps/extension/package.json": "b1a9f2606f7d833835e75840a0a71a772bb131d8a6b7fcb669d67ff8ba4f0430",
     "apps/extension/src/app/App.css": "1eb6030d860b7b99537803a7df8e658f37a35d89721871db51942a8dcd9152da",
-    "apps/extension/src/app/App.tsx": "db94c9861ade2d88325d3e46a4c386d9c8fa4dc04acaa78a51008735e47cab10",
+    "apps/extension/src/app/App.tsx": "368e00f48b161f953947b379bc36c5903879aa5660e6bd8634ad84130ff1f5e1",
     "apps/extension/src/app/styles.css": "44ad24db08bdfb2fb7704f2418f83a1f879f0450ee0c6528e327bfd69f42724d",
     "apps/extension/src/entrypoints/background.ts": "62d57e00751cc748cc3f9bbdedfaae8e9437fbdb6cd467ce322322b021fcf307",
-    "apps/extension/src/entrypoints/content.ts": "0179d430187b7caea78d459f6734c5461cea2846d113dde7c694d9bc60af7479",
-    "apps/extension/src/features/review/api/collect-page.ts": "511a350d8b256c268e1c43817c3ec3ebc0460ba36d88285c25b717cbf209d630",
+    "apps/extension/src/entrypoints/content.ts": "34370c1e87f1005d94a7435585d17d11ca5273ab27d31be6b98ac72ee382df56",
+    "apps/extension/src/features/review/api/collect-page.ts": "13a75ffb0fc93f1f7345be827a47802bca4b1de28f0c7c970c481eb56c844a06",
     "apps/extension/src/features/review/api/review-client.ts": "88117577ad35fa9a2e552a0a845e006a37840a1051c181f1baaf4b3c9d44aceb",
     "apps/extension/src/features/review/api/review-jobs.ts": "916c2075de3b64ab48a4a9e18a1ac970e9596a7e7a6268ce69e578244de2f256",
-    "apps/extension/src/features/review/model/review-panel.ts": "587ba65bfdc1d6011921f94a3875d870da0b3a3b28e003740f7fb86016d41137",
+    "apps/extension/src/features/review/model/review-panel.ts": "6dfb73f6db7996300b89a1998967f5a49ff0503135129ed951416aa4f91ada87",
     "apps/extension/src/features/review/model/review-tasks.ts": "51808b721bc207e5aeed00aa073f5afb6dfd489d9be773b84aaed7438aec0e4e",
     "apps/extension/src/features/review/model/use-review-workflow.ts": "78642d38d2bfb14f662d1622ba7a24df968eb0c77fbe371115d4e52bb1abb221",
     "apps/extension/src/features/review/model/workbench.ts": "c3388134164e7935d11fd951279bab6278693a6c940c786857b1d3aa106f25f4",
@@ -40,21 +40,21 @@
     "apps/extension/src/platform/browser/adapters/scrap-replacement-adapter.ts": "d7e13946384ea42f457e4631d9255e9087269c8ed611ba2644b785e683ef668c",
     "apps/extension/src/platform/browser/adapters/selection.ts": "6bd905be0c684b870d594d3f0b9f8b65fac584bd202b28b36a6c54a05c4c01a6",
     "apps/extension/src/platform/browser/adapters/vehicle-source-adapter.ts": "9b5de4f613e1d5665e2257d9949341fb40bb40f59ab9ecd1b74c90b87d5b37c0",
-    "apps/extension/src/platform/browser/catalog/collect-manifest.ts": "958b0b1d9b539bc47cbcc1c6e08e20827fd99cc456a5cb0028d3f160861f8ec7",
+    "apps/extension/src/platform/browser/catalog/collect-manifest.ts": "f9a6223b3022074f07b49a47d5424655556996e2d570110203d957fd470f7be2",
     "apps/extension/src/platform/browser/catalog/page-catalog.ts": "eacc61a7ff42e66f957f5f5b502364de664f40ab24470b2a47f941aab212e11e",
-    "apps/extension/src/platform/browser/collection/business-scope.ts": "ad21e49b2be85aedfa1314d265f983b08d75fd906dbd9a75cc0de6dfb1bda635",
+    "apps/extension/src/platform/browser/collection/business-scope.ts": "8cac9513bf144f1f310ea7160a5e03d6566e3fa05091dd8073aa6591e3d6c156",
     "apps/extension/src/platform/browser/collection/image-candidates.ts": "e6f1f85bf9ff8e9f843d475e7b788fb06a35d094187985b231231c01f6a7e832",
     "apps/extension/src/platform/browser/collection/image-label.ts": "399c1f4de889882f878abe5515d5c4f0342c3d3e153e4dc9dae55c680d3ac781",
     "apps/extension/src/platform/browser/collection/page-field-collector.ts": "abab4564bc2b84966bb22b8a7c6c21be0d72a8b0bb51483d097035b65ca6ace3",
     "apps/extension/src/platform/browser/dom.ts": "55a64fbbcbba1c83d2e0fffae37033bf348425ffd093da781ae5cfab1d13a7a4",
-    "apps/extension/src/platform/browser/identity/business-detector.ts": "c62ff1f2f6b99f7b9ca1542aac92066480208ae7dec522e18fe7d44e839084b3",
+    "apps/extension/src/platform/browser/identity/business-detector.ts": "391359d245a41241dd87fd6b8fbd5c2a60106d3784673b537e8d5f746d1481b1",
     "apps/extension/src/platform/browser/identity/page-identity.ts": "39b5a39c1b4e6714fea724511be2d0de49321fe92385d28e60cbdf64c478789d",
     "apps/extension/src/platform/extension/execute-page-actions.ts": "f473ecb3231bb15732649b5104db41356a9bad3dfd16c6bd84bbef42f0b12279",
     "apps/extension/src/platform/extension/image-focus-client.ts": "ce9877bac01efe7c4f22b32b13a43644ef0833d6f9e8c0aafed61e38e96fd47b",
     "apps/extension/src/platform/extension/page-action-registry.ts": "d4b85f053d936978e0263745c627edc1331e74dddb087e6de861163317e38ced",
     "apps/extension/src/platform/extension/page-fill-client.ts": "ad2429271359484a5db448443961c5e7fad990bffdc833466a4090552c964fb6",
     "apps/extension/src/shared/contracts/page-fill.ts": "c22ef7b23b2ed431ebeba1d980a1fff7ec06f600878558a6eeaadc3357970202",
-    "apps/extension/src/shared/contracts/review.ts": "b02caab60bc96fbadace734321fe8ac3e19943a20ba013210b061c3a9fc6fa0b",
+    "apps/extension/src/shared/contracts/review.ts": "3f93c3be691b34e6d106e0ef50529e7616c9c0af8fc7aad113a7ce2b524fc617",
     "apps/extension/vite.config.ts": "738c32af7697f294446777efcc7f41ee5c4da63dd3eb720582b8a927b37df870",
     "docker-compose.server.yml": "3434fdad556d461d62661a09b65189bcd246ed8c464b3d760b41ec4f94b06622",
     "pyproject.toml": "83a0606969026ced45460af75b86fb703c13b12d2f0a143d6693ebfe3eb71948",
@@ -65,24 +65,29 @@
     "src/forj_review_assistant/bootstrap/application.py": "296ad5cab466f44bf8c0557d3d605a464d726ec196d0a78931be5830eac7d54b",
     "src/forj_review_assistant/businesses/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "src/forj_review_assistant/businesses/completeness.py": "3ea1026657c3d52ab5de734946991a295a56a2790311a66a9e745a72571dd9d6",
+    "src/forj_review_assistant/businesses/configuration/__init__.py": "de53ab64277f9e65c9926c8ec9455dad49b5c692107c612a7569e5f4e37e6122",
+    "src/forj_review_assistant/businesses/configuration/compiler.py": "d9847ccadbc95310dfc967b8d036d561cee42a8848a0706bb33086372756c99b",
+    "src/forj_review_assistant/businesses/configuration/loader.py": "af1cbdc689d452ca21435419ef53a9de1dde460f940847896797ea92cebd7167",
+    "src/forj_review_assistant/businesses/configuration/schema.py": "d9b1ddd23751378ba00d91da03bec54962bb78a4367ecd8a149813399f4f63cf",
     "src/forj_review_assistant/businesses/context.py": "c2ae59fba6c0b8fbefd5674572d16da56357466135b7b976318856fe362e6c9b",
-    "src/forj_review_assistant/businesses/context_validation.py": "bec94e02d60446c4af461033b0ace8029e87269a8b88732c8de6b4f3361c6365",
+    "src/forj_review_assistant/businesses/context_validation.py": "2f104530acccac37156c3ec317396e06e3cf85f6e103bfef9b625b26f77a1acd",
     "src/forj_review_assistant/businesses/field_policies.py": "ec40ae3e6027344b66f8826dff77a8b30fb30662999cd594f9c826812008b4cd",
-    "src/forj_review_assistant/businesses/fields.py": "b7ac01d95e6de05dd3de626d007b375d092f0adbf2e3c22711592a941c0889b1",
+    "src/forj_review_assistant/businesses/fields.py": "8468032e6f7e38cebcae5c2b91a2b287b0f6cf3d58522fabdaca361bcbe57ef0",
     "src/forj_review_assistant/businesses/material_policies.py": "79c3ba4abfe1abc7732509b642f0c4c51140d4872f1f54c5c2e83720ad6d67ad",
     "src/forj_review_assistant/businesses/materials.py": "a329ca4b10e346c5a0b0563b53f74583ddf10550cd580615b11d9813c854732e",
-    "src/forj_review_assistant/businesses/packs/__init__.py": "1eb58b5e6c291237b5e2d68b3493dc5a987a9b9eaf748ce64e1ff767db55dfb6",
-    "src/forj_review_assistant/businesses/packs/model.py": "126e42c490a4d62c9d9451621b9d1c6abc0fae178cd4a2207c032f800f804db8",
+    "src/forj_review_assistant/businesses/packs/__init__.py": "7816946cd3e7c6eb1321ef6e04e9e8a2de0fda62f39d3df2fbce27b70c90e56d",
+    "src/forj_review_assistant/businesses/packs/model.py": "08ec63ce8fbd0f610b8ecb015b73514cc00f0038a5326eecbafb9dc054a108ff",
     "src/forj_review_assistant/businesses/packs/scrap_replacement.py": "b74711612ca9e10a2de6e78e337fb23160c8842537d80108451997a0553a0087",
     "src/forj_review_assistant/businesses/packs/transfer.py": "dbff7fda166fdcd1c24d1055f039e69a9f0d0f99953e2cf2ed7482a5e6833e71",
     "src/forj_review_assistant/businesses/packs/vehicle_source.py": "541ba33b391457698e25c5e79f4e3efe410795929e52abb6960801dd8258220f",
-    "src/forj_review_assistant/businesses/page_catalog.py": "5521ea6183394c273cf4bf07b07076fca9a738332978b92255bcb1a4f2cf4464",
-    "src/forj_review_assistant/businesses/profiles.py": "ab2a9be3e450f7b3461b991f1067fec8614f89c0dd98518fe6fc9f60da74206c",
-    "src/forj_review_assistant/businesses/registry.py": "30ff502abf7c92658e0f26d4c523ac3cacface2108a4a84cb66425eb3a64e359",
+    "src/forj_review_assistant/businesses/page_catalog.py": "b560aad30f8a3dc5202889a85a8303828aa04338f2a58bc5e0ae3263bb56773b",
+    "src/forj_review_assistant/businesses/profiles.py": "3a60062318c5dbe7690f8df0eb94ad3dcb2700c70ec17dc5d8cc545b973f9288",
+    "src/forj_review_assistant/businesses/registry.py": "43f6a3bd169f37be33c259b57737578410551c1e74cf7caccd2afa60de7b00a7",
     "src/forj_review_assistant/businesses/replacement_policies.py": "66336419775aa7210908b0d32e9077e22219f784e65fa06db717e6d8b789a7f9",
-    "src/forj_review_assistant/businesses/routing.py": "cf04b7ca33f2996dd2665711652728cb7d4d3fe62c6390f46dabeaa4855336c2",
+    "src/forj_review_assistant/businesses/routing.py": "1ed9e65f884ec40286d32dd3215a185216fc55201518bc52064f6c46c6ff4c5b",
     "src/forj_review_assistant/businesses/rules/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "src/forj_review_assistant/businesses/rules/affiliation.py": "e4425ef499a8f24f4d1c9fe67de72c5e1bae6f801dfb1ba54dc5762a3999aed9",
+    "src/forj_review_assistant/businesses/rules/catalog.py": "91f681e8c6aee5c2c0182e42b81d0cb2122e2f30b0769809682a5f83f3927bfa",
     "src/forj_review_assistant/businesses/rules/invoice_verification.py": "6fec1c58563680805f71f83d69365519b33ed3ec62e28952b65b135b536f3e7f",
     "src/forj_review_assistant/businesses/rules/owner_consistency.py": "282d4ee77f31500482a0b8155deb9c3613070254a924b8583e854c31659db7c3",
     "src/forj_review_assistant/businesses/rules/replacement_policy.py": "aee08f9f3eef858ef6d0a1e06fda50e44f7e8e3d617ab6c52c8e41568f4c759b",
@@ -104,7 +109,7 @@
     "src/forj_review_assistant/contracts/checks.py": "da1eb3d38f47f0766d2435e3f6bf081a1b9cb1701b1695cadefa06057bc07fa0",
     "src/forj_review_assistant/contracts/evidence.py": "39d35de07b990df2f4aaaf0e273ac29c9c228cf7f67ec12dff52fad5a302d749",
     "src/forj_review_assistant/contracts/recognition.py": "9717bac61bf1c0855d17571617221ffbe096cac2ed1a195fcbe77dcd30d2689d",
-    "src/forj_review_assistant/contracts/review.py": "712b454b73c8f31f61c1c8ae862a16d2372a088e324c4a22ed600f688e02f147",
+    "src/forj_review_assistant/contracts/review.py": "8c56b71f0856da1d21bc8117632dcd0545df4d9078f9efb024009e353e72fdaa",
     "src/forj_review_assistant/contracts/review_schema.py": "634142df9977b04ec6604fc3d877cc1e590f8b562fbd90f16f88f78d7bbab495",
     "src/forj_review_assistant/evidence/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "src/forj_review_assistant/evidence/comparison/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -126,9 +131,9 @@
     "src/forj_review_assistant/integrations/recognition/extraction.py": "e59365594a10445cad236da0480b7e92ca1559505c89a5be1a2512e8ea4427f7",
     "src/forj_review_assistant/integrations/recognition/retry.py": "48da727e9836d4ea455cb38253bf220e4e8b4e551a32cebdf13902fcf4262705",
     "src/forj_review_assistant/interfaces/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "src/forj_review_assistant/interfaces/cli.py": "f87e281eb0adb45dbdeac222a5fbefa8ceaec09243f6c14490d5f3e26f1ddab5",
+    "src/forj_review_assistant/interfaces/cli.py": "7961285de3e75ae14f4ce78b6773cb50e2ec3a0bcd73bee86dcaff2ea533bb8c",
     "src/forj_review_assistant/interfaces/http/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "src/forj_review_assistant/interfaces/http/catalog.py": "c75a9113bc96551c08ac8093da53e08fd1b9e991e87ac9c66d281b576436c1d3",
+    "src/forj_review_assistant/interfaces/http/catalog.py": "d2f3d7f6431090ef65bb65909942f2a8578843401ec6e08f884af16afc261e2f",
     "src/forj_review_assistant/interfaces/http/dependencies.py": "2952c409aee6768a42d36ba30a75d3a32685c023a0d2c2d4dc752e4a9857d96e",
     "src/forj_review_assistant/interfaces/http/review.py": "087a91950477d723135e8e8fdf53180c7fc44a7e53539cb94dd93207a368a150",
     "src/forj_review_assistant/main.py": "bef7a29cf19258db27e0acf63908390e5df642ceb052f29f5475a0074624ad52",
@@ -143,11 +148,11 @@
     "src/forj_review_assistant/runtime/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "src/forj_review_assistant/runtime/jobs/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "src/forj_review_assistant/runtime/jobs/manager.py": "27ecf9d98ad9aa8a45a87abc810b08067f1e93a1f63726f282dfa4ead60b6987",
-    "src/forj_review_assistant/runtime/review_service.py": "b2d3dc46f40752fa91ca770c1f8067d8e1821cc74ec3b89d3745b61b344b3d25",
+    "src/forj_review_assistant/runtime/review_service.py": "c21e427ab3340b8e2ef9756024cfeaff96048157e004e68b3ea5d47aa013816c",
     "src/forj_review_assistant/runtime/scheduling/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "src/forj_review_assistant/runtime/scheduling/fair_scheduler.py": "11998c56b2d028ba94c8fec39a6aa8aab0238815b16ce50a6d66746e02e89f08",
     "src/forj_review_assistant/runtime/workflow/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "src/forj_review_assistant/runtime/workflow/graph.py": "5ae4d1634b73e2df8d640c35762cc21b411325858fde82e9449efee6802440fd",
+    "src/forj_review_assistant/runtime/workflow/graph.py": "6c1d1ad3df32bc905532e6c091188dcd4a64ea2885b09742b72d83e795b169a1",
     "src/forj_review_assistant/runtime/workflow/planner.py": "7345d1863c6e22b74e1d3de673a754f3749b6c675f91168315edf5dca56b8db9",
     "uv.lock": "99d39ad8566123feb09b6073ec088c0ef29325f7bd1265f0a310e65518a9c6fc"
   },
@@ -188,19 +193,6 @@
         ]
       },
       {
-        "business_type": "consistency",
-        "region": "default",
-        "paths": [
-          "/consistency-qingdao",
-          "/consistency-changchun"
-        ],
-        "anchors": [
-          "新车信息",
-          "车辆所有人类型",
-          "新车挂靠"
-        ]
-      },
-      {
         "business_type": "transfer",
         "region": "default",
         "title": "过户审核",
@@ -214,6 +206,19 @@
           "过户发票买家名称",
           "转入地车管所"
         ]
+      },
+      {
+        "business_type": "consistency",
+        "region": "default",
+        "paths": [
+          "/consistency-qingdao",
+          "/consistency-changchun"
+        ],
+        "anchors": [
+          "新车信息",
+          "车辆所有人类型",
+          "新车挂靠"
+        ]
       }
     ]
   },
@@ -223,6 +228,7 @@
       "region": "qingdao",
       "version": "1.0",
       "page_id": "scrap_replacement:qingdao",
+      "active": true,
       "configured": true,
       "unconfigured_message": null,
       "page_interaction": true,
@@ -2588,6 +2594,7 @@
       "region": "changchun",
       "version": "1.0",
       "page_id": "scrap_replacement:changchun",
+      "active": true,
       "configured": true,
       "unconfigured_message": null,
       "page_interaction": true,
@@ -4953,6 +4960,7 @@
       "region": "default",
       "version": "1.0",
       "page_id": "vehicle_source:default",
+      "active": true,
       "configured": true,
       "unconfigured_message": null,
       "page_interaction": true,
@@ -6524,31 +6532,11 @@
       }
     },
     {
-      "business_type": "consistency",
-      "region": "default",
-      "version": "1.0",
-      "page_id": "",
-      "configured": false,
-      "unconfigured_message": "一致性审核规则尚未配置，请人工复核",
-      "page_interaction": false,
-      "required_fields": [],
-      "capabilities": [],
-      "bindings": [],
-      "material_policy": null,
-      "field_check_bindings": [],
-      "page_actions": [],
-      "retry_policy": {
-        "semantic_retry_count": 1,
-        "confidence_threshold": 0.7,
-        "minimum_retry_window_seconds": 2.0,
-        "qr_web_retry_count": 1
-      }
-    },
-    {
       "business_type": "transfer",
       "region": "default",
       "version": "1.0",
       "page_id": "transfer:default",
+      "active": true,
       "configured": true,
       "unconfigured_message": null,
       "page_interaction": true,
@@ -7835,6 +7823,28 @@
           "hidden_check_prefixes": []
         }
       }
+    },
+    {
+      "business_type": "consistency",
+      "region": "default",
+      "version": "1.0",
+      "page_id": "",
+      "active": true,
+      "configured": false,
+      "unconfigured_message": "一致性审核规则尚未配置，请人工复核",
+      "page_interaction": false,
+      "required_fields": [],
+      "capabilities": [],
+      "bindings": [],
+      "material_policy": null,
+      "field_check_bindings": [],
+      "page_actions": [],
+      "retry_policy": {
+        "semantic_retry_count": 1,
+        "confidence_threshold": 0.7,
+        "minimum_retry_window_seconds": 2.0,
+        "qr_web_retry_count": 1
+      }
     }
   ],
   "review_contract_schema": {
@@ -8132,12 +8142,30 @@
           "title": "Page Url"
         },
         "business_type": {
-          "$ref": "#/$defs/BusinessType",
-          "default": "scrap_replacement"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BusinessType"
+            },
+            {
+              "pattern": "^[a-z][a-z0-9_]{0,79}$",
+              "type": "string"
+            }
+          ],
+          "default": "scrap_replacement",
+          "title": "Business Type"
         },
         "region": {
-          "$ref": "#/$defs/Region",
-          "default": "default"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Region"
+            },
+            {
+              "pattern": "^[a-z][a-z0-9_]{0,79}$",
+              "type": "string"
+            }
+          ],
+          "default": "default",
+          "title": "Region"
         },
         "profile_version": {
           "default": "1.0",
@@ -9805,12 +9833,30 @@
           "type": "string"
         },
         "business_type": {
-          "$ref": "#/$defs/BusinessType",
-          "default": "scrap_replacement"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BusinessType"
+            },
+            {
+              "pattern": "^[a-z][a-z0-9_]{0,79}$",
+              "type": "string"
+            }
+          ],
+          "default": "scrap_replacement",
+          "title": "Business Type"
         },
         "region": {
-          "$ref": "#/$defs/Region",
-          "default": "default"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Region"
+            },
+            {
+              "pattern": "^[a-z][a-z0-9_]{0,79}$",
+              "type": "string"
+            }
+          ],
+          "default": "default",
+          "title": "Region"
         },
         "profile_version": {
           "default": "1.0",
@@ -11985,6 +12031,674 @@
         "type": "object"
       }
     }
+  },
+  "page_configuration_schema": {
+    "$defs": {
+      "Authority": {
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "enum": [
+              "qr_page",
+              "page",
+              "image"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "label": {
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "document_types": {
+            "default": [],
+            "items": {
+              "pattern": "^[a-z][a-z0-9_]{0,79}$",
+              "type": "string"
+            },
+            "title": "Document Types",
+            "type": "array"
+          },
+          "match": {
+            "default": "full",
+            "enum": [
+              "full",
+              "suffix8"
+            ],
+            "title": "Match",
+            "type": "string"
+          },
+          "required": {
+            "default": false,
+            "title": "Required",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "source",
+          "label"
+        ],
+        "title": "Authority",
+        "type": "object"
+      },
+      "BusinessType": {
+        "enum": [
+          "scrap_replacement",
+          "vehicle_source",
+          "transfer",
+          "consistency"
+        ],
+        "title": "BusinessType",
+        "type": "string"
+      },
+      "EvidenceSource": {
+        "additionalProperties": false,
+        "properties": {
+          "material": {
+            "pattern": "^[a-z][a-z0-9_]{0,79}$",
+            "title": "Material",
+            "type": "string"
+          },
+          "field": {
+            "maxLength": 160,
+            "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$",
+            "title": "Field",
+            "type": "string"
+          },
+          "scope": {
+            "default": "",
+            "title": "Scope",
+            "type": "string"
+          },
+          "group_order": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Group Order"
+          }
+        },
+        "required": [
+          "material",
+          "field"
+        ],
+        "title": "EvidenceSource",
+        "type": "object"
+      },
+      "FieldConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "maxLength": 160,
+            "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$",
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Label"
+          },
+          "section": {
+            "default": "",
+            "title": "Section",
+            "type": "string"
+          },
+          "aliases": {
+            "default": [],
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Aliases",
+            "type": "array"
+          },
+          "page_section": {
+            "default": "unknown",
+            "title": "Page Section",
+            "type": "string"
+          },
+          "section_required": {
+            "default": false,
+            "title": "Section Required",
+            "type": "boolean"
+          },
+          "reviewable": {
+            "default": true,
+            "title": "Reviewable",
+            "type": "boolean"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "SYSTEM",
+                  "SINGLE_SOURCE",
+                  "AVAILABLE_EVIDENCE",
+                  "PARALLEL",
+                  "PAGE_AUXILIARY",
+                  "DERIVED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Mode"
+          },
+          "evidence": {
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/EvidenceSource"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "normalizer": {
+            "default": "default",
+            "enum": [
+              "default",
+              "text",
+              "identifier",
+              "plate",
+              "vin",
+              "invoice_number",
+              "vehicle_type",
+              "engine_model",
+              "fuel_type",
+              "amount",
+              "date",
+              "party_name"
+            ],
+            "title": "Normalizer",
+            "type": "string"
+          },
+          "authority": {
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/Authority"
+            },
+            "title": "Authority",
+            "type": "array"
+          },
+          "required": {
+            "default": true,
+            "title": "Required",
+            "type": "boolean"
+          },
+          "writable": {
+            "default": false,
+            "title": "Writable",
+            "type": "boolean"
+          },
+          "allow_single_evidence": {
+            "default": true,
+            "title": "Allow Single Evidence",
+            "type": "boolean"
+          },
+          "uncertain_requires_review": {
+            "default": true,
+            "title": "Uncertain Requires Review",
+            "type": "boolean"
+          },
+          "page_evidence_required": {
+            "default": true,
+            "title": "Page Evidence Required",
+            "type": "boolean"
+          },
+          "material_field": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Material Field"
+          },
+          "max_age_days": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Age Days"
+          },
+          "locator_name": {
+            "default": "",
+            "title": "Locator Name",
+            "type": "string"
+          },
+          "locator_id": {
+            "default": "",
+            "title": "Locator Id",
+            "type": "string"
+          },
+          "occurrence": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Occurrence",
+            "type": "integer"
+          },
+          "checks": {
+            "default": [],
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Checks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "FieldConfig",
+        "type": "object"
+      },
+      "MaterialConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "document_type": {
+            "pattern": "^[a-z][a-z0-9_]{0,79}$",
+            "title": "Document Type",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Label"
+          },
+          "hints": {
+            "default": [],
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Hints",
+            "type": "array"
+          },
+          "guidance": {
+            "default": "",
+            "title": "Guidance",
+            "type": "string"
+          },
+          "scopes": {
+            "default": [],
+            "items": {
+              "pattern": "^[a-z][a-z0-9_]{0,79}$",
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "required": {
+            "default": false,
+            "title": "Required",
+            "type": "boolean"
+          },
+          "minimum_count": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Minimum Count",
+            "type": "integer"
+          },
+          "required_pages": {
+            "default": [],
+            "items": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "title": "Required Pages",
+            "type": "array"
+          },
+          "alternative_group": {
+            "default": "",
+            "title": "Alternative Group",
+            "type": "string"
+          },
+          "extra_fields": {
+            "default": [],
+            "items": {
+              "maxLength": 160,
+              "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$",
+              "type": "string"
+            },
+            "title": "Extra Fields",
+            "type": "array"
+          }
+        },
+        "required": [
+          "document_type"
+        ],
+        "title": "MaterialConfig",
+        "type": "object"
+      },
+      "PageGroup": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "title": {
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "occurrence": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Occurrence",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "label",
+          "scope",
+          "title"
+        ],
+        "title": "PageGroup",
+        "type": "object"
+      },
+      "ProfileReference": {
+        "additionalProperties": false,
+        "properties": {
+          "page_id": {
+            "pattern": "^[a-z][a-z0-9_.:-]{0,159}$",
+            "title": "Page Id",
+            "type": "string"
+          },
+          "version": {
+            "minLength": 1,
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "page_id",
+          "version"
+        ],
+        "title": "ProfileReference",
+        "type": "object"
+      },
+      "Region": {
+        "enum": [
+          "default",
+          "qingdao",
+          "changchun"
+        ],
+        "title": "Region",
+        "type": "string"
+      },
+      "Section": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "pattern": "^[a-z][a-z0-9_]{0,79}$",
+            "title": "Key",
+            "type": "string"
+          },
+          "title": {
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "title"
+        ],
+        "title": "Section",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "schema_version": {
+        "const": "1.0",
+        "default": "1.0",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "page_id": {
+        "pattern": "^[a-z][a-z0-9_.:-]{0,159}$",
+        "title": "Page Id",
+        "type": "string"
+      },
+      "business_type": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/BusinessType"
+          },
+          {
+            "pattern": "^[a-z][a-z0-9_]{0,79}$",
+            "type": "string"
+          }
+        ],
+        "title": "Business Type"
+      },
+      "region": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/Region"
+          },
+          {
+            "pattern": "^[a-z][a-z0-9_]{0,79}$",
+            "type": "string"
+          }
+        ],
+        "default": "default",
+        "title": "Region"
+      },
+      "version": {
+        "default": "1.0",
+        "minLength": 1,
+        "title": "Version",
+        "type": "string"
+      },
+      "active": {
+        "default": true,
+        "title": "Active",
+        "type": "boolean"
+      },
+      "title": {
+        "minLength": 1,
+        "title": "Title",
+        "type": "string"
+      },
+      "paths": {
+        "items": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "title": "Paths",
+        "type": "array"
+      },
+      "anchors": {
+        "default": [],
+        "items": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "title": "Anchors",
+        "type": "array"
+      },
+      "extends": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ProfileReference"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "scopes": {
+        "default": [],
+        "items": {
+          "pattern": "^[a-z][a-z0-9_]{0,79}$",
+          "type": "string"
+        },
+        "title": "Scopes",
+        "type": "array"
+      },
+      "sections": {
+        "default": [],
+        "items": {
+          "$ref": "#/$defs/Section"
+        },
+        "title": "Sections",
+        "type": "array"
+      },
+      "page_groups": {
+        "default": [],
+        "items": {
+          "$ref": "#/$defs/PageGroup"
+        },
+        "title": "Page Groups",
+        "type": "array"
+      },
+      "materials": {
+        "default": [],
+        "items": {
+          "$ref": "#/$defs/MaterialConfig"
+        },
+        "title": "Materials",
+        "type": "array"
+      },
+      "fields": {
+        "default": [],
+        "items": {
+          "$ref": "#/$defs/FieldConfig"
+        },
+        "title": "Fields",
+        "type": "array"
+      },
+      "remove_fields": {
+        "default": [],
+        "items": {
+          "maxLength": 160,
+          "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$",
+          "type": "string"
+        },
+        "title": "Remove Fields",
+        "type": "array"
+      },
+      "enable_rules": {
+        "default": [],
+        "items": {
+          "pattern": "^[a-z][a-z0-9_]{0,79}$",
+          "type": "string"
+        },
+        "title": "Enable Rules",
+        "type": "array"
+      },
+      "disable_rules": {
+        "default": [],
+        "items": {
+          "pattern": "^[a-z][a-z0-9_]{0,79}$",
+          "type": "string"
+        },
+        "title": "Disable Rules",
+        "type": "array"
+      },
+      "identity_anchors": {
+        "default": [],
+        "items": {
+          "maxLength": 160,
+          "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$",
+          "type": "string"
+        },
+        "title": "Identity Anchors",
+        "type": "array"
+      },
+      "record_identity_fields": {
+        "default": [],
+        "items": {
+          "maxLength": 160,
+          "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$",
+          "type": "string"
+        },
+        "title": "Record Identity Fields",
+        "type": "array"
+      },
+      "page_actions": {
+        "default": [],
+        "items": {
+          "const": "fill_review_fields",
+          "type": "string"
+        },
+        "title": "Page Actions",
+        "type": "array"
+      },
+      "writable_control_kinds": {
+        "default": [],
+        "items": {
+          "enum": [
+            "text",
+            "textarea",
+            "number"
+          ],
+          "type": "string"
+        },
+        "title": "Writable Control Kinds",
+        "type": "array"
+      },
+      "review_declared_fields_only": {
+        "default": true,
+        "title": "Review Declared Fields Only",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "page_id",
+      "business_type",
+      "title",
+      "paths"
+    ],
+    "title": "PageDefinition",
+    "type": "object"
   },
   "reproduction_schemas": {
     "QwenClassification": {

@@ -15,8 +15,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from forj_review_assistant.businesses.packs import BUSINESS_PACKS
-from forj_review_assistant.contracts.review import BusinessType, Region
+from forj_review_assistant.contracts.review import (
+    BusinessId,
+    BusinessType,
+    Region,
+    RegionId,
+)
 
 # 一致性审核页独有的详情区文字。
 #
@@ -27,7 +31,7 @@ from forj_review_assistant.contracts.review import BusinessType, Region
 CONSISTENCY_ANCHORS = ("新车信息", "车辆所有人类型", "新车挂靠")
 
 # 过户审核的特征不在这里：它已经有扩展包，地址和特征都由 `TRANSFER_PACK` 的
-# `RegionDeclaration` 声明，再由 `_pack_identities()` 汇总进来。同一个地址挂
+# `RegionDeclaration` 声明，再从活动 Profile 汇总进来。同一个地址挂
 # 多个业务时，两边的特征必须互不重叠，由 `tests/test_page_catalog.py` 锁住。
 
 
@@ -35,27 +39,13 @@ CONSISTENCY_ANCHORS = ("新车信息", "车辆所有人类型", "新车挂靠")
 class PageIdentity:
     """一个审核页面：地址 + 页面特征 + 它属于哪个业务和地区。"""
 
-    business_type: BusinessType
-    region: Region
+    business_type: BusinessId
+    region: RegionId
     paths: tuple[str, ...] = ()
     anchors: tuple[str, ...] = ()
     profile_version: str = "1.0"
     title: str = ""
     page_id: str = ""
-
-
-def _pack_identities() -> tuple[PageIdentity, ...]:
-    """已声明扩展包的业务：页面地址和特征都来自业务声明。"""
-    return tuple(
-        PageIdentity(
-            business_type=BusinessType(pack.business_type),
-            region=declaration.region,
-            paths=declaration.admin_paths,
-            anchors=declaration.page_anchors,
-        )
-        for pack in BUSINESS_PACKS.values()
-        for declaration in pack.regions
-    )
 
 
 # 一致性审核与过户审核的页面地址。青岛和长春两套页面**用的是同一套规则**，
@@ -74,23 +64,33 @@ _DECLARED_IDENTITIES: tuple[PageIdentity, ...] = (
     ),
 )
 
-PAGE_IDENTITIES: tuple[PageIdentity, ...] = (*_pack_identities(), *_DECLARED_IDENTITIES)
 
-
-def active_identities():
+def active_identities(profiles=None):
     from forj_review_assistant.businesses.profiles import BUSINESS_PROFILES
+
     active = {}
-    for profile in BUSINESS_PROFILES:
-        active[profile.page_id or f"{profile.business_type.value}:{profile.region.value}"] = profile
+    for profile in BUSINESS_PROFILES if profiles is None else profiles:
+        active[profile.page_id or f"{profile.business_type}:{profile.region}"] = profile
     result = []
     for page_id, profile in active.items():
         key = (profile.business_type, profile.region)
         pack = profile.pack_declaration
         declaration = pack.region(profile.region) if pack else None
         if declaration:
-            result.append(PageIdentity(*key, declaration.admin_paths, declaration.page_anchors, profile.version, pack.title, page_id))
+            result.append(
+                PageIdentity(
+                    *key,
+                    declaration.admin_paths,
+                    declaration.page_anchors,
+                    profile.version,
+                    pack.title,
+                    page_id,
+                )
+            )
         else:
-            result.extend(item for item in _DECLARED_IDENTITIES if (item.business_type, item.region) == key)
+            result.extend(
+                item for item in _DECLARED_IDENTITIES if (item.business_type, item.region) == key
+            )
     return tuple(result)
 
 
@@ -99,7 +99,7 @@ def path_matches(path: str, prefix: str) -> bool:
     return path == prefix or path.startswith(f"{prefix}/")
 
 
-def identities_for_path(path: str) -> tuple[PageIdentity, ...]:
+def identities_for_path(path: str, profiles=None) -> tuple[PageIdentity, ...]:
     """该地址可能属于哪些业务。地址唯一时不返回多条，地址共享时返回全部候选。
 
     审核请求的页面地址校验用它：地址共享意味着「地址」不能再作为业务判定的
@@ -107,11 +107,13 @@ def identities_for_path(path: str) -> tuple[PageIdentity, ...]:
     青岛的单子照样被挡住。
     """
     return tuple(
-        item for item in active_identities() if any(path_matches(path, route) for route in item.paths)
+        item
+        for item in active_identities(profiles)
+        if any(path_matches(path, route) for route in item.paths)
     )
 
 
-def page_catalog() -> dict[str, object]:
+def page_catalog(profiles=None) -> dict[str, object]:
     """下发给浏览器的页面识别清单。
 
     浏览器据此判定当前页面是哪个业务；清单不可用时浏览器退回内置表，但内置表
@@ -121,14 +123,18 @@ def page_catalog() -> dict[str, object]:
         "version": "1.0",
         "identities": [
             {
-                "business_type": item.business_type.value,
-                "region": item.region.value,
-                **({"profile_version": item.profile_version} if item.profile_version != "1.0" else {}),
+                "business_type": str(item.business_type),
+                "region": str(item.region),
+                **(
+                    {"profile_version": item.profile_version}
+                    if item.profile_version != "1.0"
+                    else {}
+                ),
                 **({"title": item.title} if item.title else {}),
                 **({"page_id": item.page_id} if item.page_id else {}),
                 "paths": list(item.paths),
                 "anchors": list(item.anchors),
             }
-            for item in active_identities()
+            for item in active_identities(profiles)
         ],
     }

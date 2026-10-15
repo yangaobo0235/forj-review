@@ -23,23 +23,7 @@ from forj_review_assistant.businesses.completeness import (
 from forj_review_assistant.businesses.context import with_business_context
 from forj_review_assistant.businesses.context_validation import validate_request_route
 from forj_review_assistant.businesses.profiles import BusinessProfile
-from forj_review_assistant.businesses.rules.affiliation import run_affiliation_subject
-from forj_review_assistant.businesses.rules.invoice_verification import (
-    run_verify_invoice,
-)
-from forj_review_assistant.businesses.rules.owner_consistency import (
-    run_owner_consistency,
-)
-from forj_review_assistant.businesses.rules.replacement_policy import (
-    run_replacement_policy,
-)
-from forj_review_assistant.businesses.rules.transfer_invoice_date import (
-    run_transfer_invoice_date,
-)
-from forj_review_assistant.businesses.rules.vehicle_model import run_vehicle_model
-from forj_review_assistant.businesses.rules.vehicle_type_light_duty import (
-    run_vehicle_type_light_duty,
-)
+from forj_review_assistant.businesses.rules.catalog import build_rule_handlers
 from forj_review_assistant.capabilities import CapabilityRegistry
 from forj_review_assistant.capabilities.business_rules import BusinessRuleRegistry
 from forj_review_assistant.capabilities.external_checks import ExternalCheckRegistry
@@ -165,18 +149,9 @@ class ReviewWorkflow:
                 **(external_check_handlers or {}),
             }
         )
-        # 规则实现都在 `app/businesses/rules/` 各自的模块里，主图只负责按稳定
-        # ID 登记。以前这些实现是 `ReviewWorkflow` 的私有方法，于是改一条业务
-        # 门槛（例如「挂靠写回要同时满足哪几个条件」）得动这个通用文件。
-        builtin_rules: dict[str, BusinessRuleHandler] = {
-            **{rule_id: run_replacement_policy for rule_id in policy_rule_ids},
-            "affiliation_subject": run_affiliation_subject,
-            "verify_invoice": run_verify_invoice,
-            "vehicle_model_consistency": run_vehicle_model,
-            "owner_consistency": run_owner_consistency,
-            "vehicle_type_light_duty": run_vehicle_type_light_duty,
-            "transfer_invoice_date": run_transfer_invoice_date,
-        }
+        # Rule implementations and their metadata are assembled by the catalog.
+        # Adding a business handler does not change workflow orchestration.
+        builtin_rules = build_rule_handlers(policy_rule_ids)
         additional_rules = dict(business_rule_handlers or {})
         overridden = builtin_rules.keys() & additional_rules.keys()
         if overridden:
@@ -245,12 +220,12 @@ class ReviewWorkflow:
                 raise ValueError("地区政策规则缺少 replacement_policy 配置")
             policy = profile.replacement_policy
             # `and` 的优先级高于 `or`，最后一组条件必须加括号才读得出来。
-            expected_policy_rules = {f"{profile.region.value}_replacement_policy"}
+            expected_policy_rules = {f"{profile.region}_replacement_policy"}
             if policy is not None and (
                 profile.business_type is not BusinessType.SCRAP_REPLACEMENT
                 or policy.region != profile.region
                 or policy.version != profile.version
-                or policy.policy_id != f"scrap_replacement_{profile.region.value}"
+                or policy.policy_id != f"scrap_replacement_{profile.region}"
                 or (policy_rules and policy_rules != expected_policy_rules)
             ):
                 raise ValueError("地区政策的归属、版本或规则标识与 Profile 不一致")
@@ -306,11 +281,10 @@ class ReviewWorkflow:
                 logger.info("review node completed node=%s duration_ms=%.1f trace_id=%s", name, (perf_counter() - started) * 1000, state.get("trace_id", ""))
         return wrapped
 
-    @staticmethod
-    def _validate_context(state: ReviewState) -> dict[str, Any]:
+    def _validate_context(self, state: ReviewState) -> dict[str, Any]:
         """保留入口已解析的请求和业务配置，建立稳定的初始状态。"""
         request, profile = state["request"], state["profile"]
-        validate_request_route(request)
+        validate_request_route(request, self.service.registry.active_profiles)
         if (
             profile.business_type != request.business_type
             or profile.version != request.profile_version
@@ -325,11 +299,10 @@ class ReviewWorkflow:
         """Resolve the already selected profile into a stable graph context."""
         return {"request": state["request"], "profile": state["profile"]}
 
-    @staticmethod
-    def _validate_input(state: ReviewState) -> dict[str, Any]:
+    def _validate_input(self, state: ReviewState) -> dict[str, Any]:
         """Validate request/profile compatibility before any external work."""
         try:
-            return ReviewWorkflow._validate_context(state)
+            return self._validate_context(state)
         except (ValueError, LookupError) as exc:
             return {"validation_error": str(exc)}
 

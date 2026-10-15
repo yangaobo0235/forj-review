@@ -63,14 +63,17 @@ export async function collectPageData(
   // 侧边栏和 Content Script 是两个独立的 JS 运行时，Content Script 里应用的
   // 清单不会传到这里。面板重新应用同一份，用于把字段键和材料类型显示成中文；
   // 采集判定仍然只发生在 Content Script。
-  applyCollectManifest(
-    manifests.find(
+  const selectedManifest = manifests.find(
       (item) =>
         item.business_type === pageData.businessType &&
+        (!item.page_id || item.page_id === pageData.pageId) &&
         (!item.region || item.region === pageData.region) &&
         (!item.profile_version ||
           item.profile_version === pageData.profileVersion),
-    ),
   );
+  if (pageData.pageId && !selectedManifest) {
+    throw new Error("当前页面的采集配置不可用，请检查服务连接后重新采集");
+  }
+  applyCollectManifest(selectedManifest);
   return { ...pageData, sourceTabId: tab.id };
 }

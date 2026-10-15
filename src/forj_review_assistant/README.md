@@ -23,6 +23,8 @@
 
 业务声明集中在 `businesses/packs/<业务>.py`，执行流程消费 Profile 和注册表，不在 HTTP 或调度器中添加业务分支。测试位于仓库根目录 `tests/`。
 
+普通页面配置入口为 `businesses/configuration/`：Schema 校验、编译与目录快照加载。通过 `REVIEW_PAGES_DIR` 启用 JSON 声明，继承现有 Profile 后可以只写字段差异。业务处理器在 `businesses/rules/catalog.py` 登记，主图不直接导入各业务处理器。前端只接收采集元数据和后端审核结果。
+
 ## 异步审核接口
 
 扩展一次调用 POST /api/review/jobs/urls，按 GET /api/review/jobs/{job_id} 轮询。普通材料字段仍由模型直接读取 URL；二维码官网核验在模型没有可靠 `qr_codes` 时，对受控候选图片 URL 读取一次原图到内存，ZXing 优先、OpenCV 兜底，然后执行官网域名、HTTPS、访问及字段核验。二维码读取不会写盘、上传或重复调用模型；每次尝试都会记录来源和失败阶段，无法可靠识别或官网不可用时明确转人工复核。

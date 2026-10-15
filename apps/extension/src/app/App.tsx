@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from "react";
 import { fetchPageCatalog } from "../platform/browser/catalog/page-catalog";
+import type { PageCatalog } from "../platform/browser/catalog/page-catalog";
 import { agentBaseUrl } from "../features/review/api/review-client";
 
 import "./App.css";
@@ -16,7 +17,7 @@ import { ReviewProgress } from "../features/review/ui/ReviewProgress";
 import { ReviewResults } from "../features/review/ui/ReviewResults";
 import type { ExceptionFilter } from "../features/review/presentation/exception";
 import { useReviewWorkflow } from "../features/review/model/use-review-workflow";
-import { businessLabels, type BusinessChoice } from "../features/review/model/review-panel";
+import { businessLabels, catalogBusinessChoices, catalogBusinessLabel, type BusinessChoice } from "../features/review/model/review-panel";
 import type { PageData } from "../shared/contracts/review";
 
 /**
@@ -26,7 +27,10 @@ import type { PageData } from "../shared/contracts/review";
  * 每加一个共用地址的业务就要再补一个分支，漏一个不会报错，只会显示成
  * 字段键。
  */
-function currentBusinessLabel(page: PageData): string {
+function currentBusinessLabel(page: PageData, catalog: PageCatalog | null): string {
+  const identity = catalog?.identities.find(item => item.business_type === page.businessType
+    && item.region === page.region && (!page.pageId || item.page_id === page.pageId));
+  if (identity) return catalogBusinessLabel(identity);
   const key = `${page.businessType}_${page.region}` as BusinessChoice;
   return businessLabels[key] ?? businessLabels[page.businessType as BusinessChoice] ?? String(page.businessType);
 }
@@ -35,17 +39,12 @@ function App() {
   const [businessSelection, setBusinessSelection] = useState<BusinessChoice>("AUTO");
   const [exceptionFilter, setExceptionFilter] = useState<ExceptionFilter>("ALL");
   const workflow = useReviewWorkflow(businessSelection);
-  const [dynamicChoices, setDynamicChoices] = useState<Record<string,string>>({});
+  const [pageCatalog, setPageCatalog] = useState<PageCatalog | null>(null);
   useEffect(() => {
     let live = true;
     void fetchPageCatalog(agentBaseUrl).then(catalog => {
       if (!live) return;
-      setDynamicChoices(Object.fromEntries((catalog?.identities || [])
-        .filter(i => (i.profile_version || "1.0") !== "1.0")
-        .map(i => {
-          const key = `config:${encodeURIComponent(JSON.stringify({ businessType: i.business_type, region: i.region, profileVersion: i.profile_version || "1.0", pageId: i.page_id }))}`;
-          return [key, `${i.title || i.business_type} · ${i.region} · 已配置`];
-        })));
+      setPageCatalog(catalog);
     });
     return () => { live = false; };
   }, []);
@@ -75,13 +74,13 @@ function App() {
           onChange={(event) => changeBusinessSelection(event.target.value as BusinessChoice)}
           disabled={workflow.loading}
         >
-          {Object.entries({...businessLabels, ...dynamicChoices}).map(([value, label]) => (
+          {Object.entries(catalogBusinessChoices(pageCatalog)).map(([value, label]) => (
             <option value={value} key={value}>{label}</option>
           ))}
         </select>
         {workflow.pageData?.businessType ? (
           <small>
-            当前：{currentBusinessLabel(workflow.pageData)} ·{" "}
+            当前：{currentBusinessLabel(workflow.pageData, pageCatalog)} ·{" "}
             {workflow.pageData.selectionMode === "MANUAL" ? "人工选择" : "自动识别"}
           </small>
         ) : null}

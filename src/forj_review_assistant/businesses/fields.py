@@ -30,7 +30,7 @@ def _merge_labels() -> dict[str, str]:
     for business_type, pack in BUSINESS_PACKS.items():
         for key, label in pack.labels().items():
             if key in merged:
-                raise ValueError(f"字段 {key} 被多个业务声明了标签：{business_type.value}")
+                raise ValueError(f"字段 {key} 被多个业务声明了标签：{business_type}")
             merged[key] = label
     return merged
 

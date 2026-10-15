@@ -7,6 +7,7 @@
 from collections.abc import Mapping
 from typing import Any
 
+from forj_review_assistant.businesses.context import current_pack
 from forj_review_assistant.businesses.packs import SCRAP_REPLACEMENT_PACK as _PACK
 from forj_review_assistant.businesses.packs import pack_for_scope
 from forj_review_assistant.businesses.packs.model import (
@@ -80,7 +81,7 @@ def route_fields(
     未显式传 `pack` 时按业务分区反查声明；分区只有报废置换的老车/新车时才退回
     报废置换声明，未声明的分区一律不路由。
     """
-    resolved_pack = pack or pack_for_scope(business_scope) or _PACK
+    resolved_pack = pack or current_pack() or pack_for_scope(business_scope) or _PACK
     normalized_type = normalize_document_type(document_type)
     material = resolved_pack.material(normalized_type)
 

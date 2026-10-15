@@ -63,6 +63,21 @@ def check_architecture(source: Path = SOURCE) -> list[str]:
                     reason = "external adapter imports orchestration or presentation"
             if reason:
                 findings.append(f"{relative.as_posix()}:{line}: {reason}: {module}")
+            if relative.as_posix() == "runtime/workflow/graph.py" and module.startswith(
+                f"{PACKAGE}.businesses.rules."
+            ) and not module.startswith(f"{PACKAGE}.businesses.rules.catalog."):
+                findings.append(f"{relative.as_posix()}:{line}: workflow imports a concrete business rule: {module}")
+            if relative.parts[:2] == ("businesses", "configuration") and module.startswith((
+                f"{PACKAGE}.runtime", f"{PACKAGE}.integrations",
+                f"{PACKAGE}.interfaces", f"{PACKAGE}.bootstrap",
+            )):
+                findings.append(f"{relative.as_posix()}:{line}: configuration compiler imports an execution adapter: {module}")
+        if relative.parts[:2] == ("businesses", "configuration"):
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in {
+                    "eval", "exec", "__import__",
+                }:
+                    findings.append(f"{relative.as_posix()}:{node.lineno}: configuration executes dynamic code")
     return findings
 
 

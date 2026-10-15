@@ -13,6 +13,7 @@ from forj_review_assistant.businesses.material_policies import (
     RetryPolicy,
 )
 from forj_review_assistant.businesses.packs import (
+    BUSINESS_PACKS,
     SCRAP_REPLACEMENT_PACK,
     TRANSFER_PACK,
     VEHICLE_SOURCE_PACK,
@@ -23,7 +24,13 @@ from forj_review_assistant.capabilities.specs import (
     CapabilitySpec,
     ExternalCheckSpec,
 )
-from forj_review_assistant.contracts.review import BusinessType, Region
+from forj_review_assistant.contracts.review import (
+    BusinessId,
+    BusinessType,
+    Region,
+    RegionId,
+    business_identifier,
+)
 
 
 @dataclass(frozen=True)
@@ -35,8 +42,8 @@ class SectionDefinition:
 
 @dataclass(frozen=True)
 class BusinessProfile:
-    business_type: BusinessType
-    region: Region
+    business_type: BusinessId
+    region: RegionId
     version: str
     required_fields: tuple[str, ...]
     sections: tuple[SectionDefinition, ...]
@@ -172,7 +179,7 @@ class BusinessProfile:
 
 
 
-def _build_profile(pack, region: Region, *, page_id: str | None = None) -> BusinessProfile:
+def build_profile(pack, region: RegionId, *, page_id: str | None = None) -> BusinessProfile:
     """从业务声明生成某个地区的 Profile。
 
     字段、材料、能力和页面动作在地区之间共用，只有地区政策不同。地区政策为
@@ -180,12 +187,12 @@ def _build_profile(pack, region: Region, *, page_id: str | None = None) -> Busin
     """
     declaration = pack.region(region)
     if declaration is None:
-        raise ValueError(f"{pack.business_type} 声明中缺少地区：{region.value}")
+        raise ValueError(f"{pack.business_type} 声明中缺少地区：{region}")
     titles = {section.key: section.title for section in pack.sections}
     return BusinessProfile(
-        page_id=page_id or f"{pack.business_type}:{region.value}",
+        page_id=page_id or f"{pack.business_type}:{region}",
         pack_declaration=pack,
-        business_type=BusinessType(pack.business_type),
+        business_type=business_identifier(pack.business_type),
         region=declaration.region,
         version=declaration.version,
         required_fields=pack.required_keys(),
@@ -210,13 +217,13 @@ def _build_profile(pack, region: Region, *, page_id: str | None = None) -> Busin
 
 def build_scrap_profile(region: Region) -> BusinessProfile:
     """从业务声明生成某个地区的报废置换 Profile。"""
-    return _build_profile(SCRAP_REPLACEMENT_PACK, region)
+    return build_profile(SCRAP_REPLACEMENT_PACK, region)
 
 
 SCRAP_REPLACEMENT_QINGDAO = build_scrap_profile(Region.QINGDAO)
 
 # 车源审核不分地区，页面地址是 /vehicle-source，配置取默认地区。
-VEHICLE_SOURCE_DEFAULT = _build_profile(VEHICLE_SOURCE_PACK, Region.DEFAULT)
+VEHICLE_SOURCE_DEFAULT = build_profile(VEHICLE_SOURCE_PACK, Region.DEFAULT)
 
 # 一致性审核不分地区：青岛与长春两个页面地址（/consistency-qingdao、
 # /consistency-changchun）用的是同一套规则，因此和车源审核一样取默认地区，
@@ -238,24 +245,9 @@ SCRAP_REPLACEMENT_CHANGCHUN = build_scrap_profile(Region.CHANGCHUN)
 
 # 过户审核与一致性审核同址（两个地址都一样），靠列表页状态筛选进到各自的页面。
 # 同样不分地区，因此和车源审核一样取默认地区。
-TRANSFER_DEFAULT = _build_profile(TRANSFER_PACK, Region.DEFAULT)
-
-# 仅用于旧数据/测试迁移，永不加入 BUSINESS_PROFILES。与上面的现役座位分开命名：
-# 两个都叫「过户 + 默认地区」，混用会让旧数据的迁移路径悄悄连到线上配置。
-TRANSFER_LEGACY = BusinessProfile(
-    business_type=BusinessType.TRANSFER,
-    region=Region.DEFAULT,
-    version="deprecated",
-    required_fields=(),
-    sections=(),
-    rules_configured=False,
-    unconfigured_message="过户审核已停用",
-)
+TRANSFER_DEFAULT = build_profile(TRANSFER_PACK, Region.DEFAULT)
 
 BUSINESS_PROFILES = (
-    SCRAP_REPLACEMENT_QINGDAO,
-    SCRAP_REPLACEMENT_CHANGCHUN,
-    VEHICLE_SOURCE_DEFAULT,
+    *(build_profile(pack, region.region) for pack in BUSINESS_PACKS.values() for region in pack.regions),
     CONSISTENCY_DEFAULT,
-    TRANSFER_DEFAULT,
 )

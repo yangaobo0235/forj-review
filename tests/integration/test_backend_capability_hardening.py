@@ -3,8 +3,8 @@ from dataclasses import replace
 import pytest
 
 from forj_review_assistant.businesses.profiles import (
+    CONSISTENCY_DEFAULT,
     SCRAP_REPLACEMENT_QINGDAO,
-    TRANSFER_LEGACY,
 )
 from forj_review_assistant.businesses.registry import BusinessRegistry
 from forj_review_assistant.capabilities.business_rules import BusinessRuleRegistry
@@ -211,8 +211,8 @@ def test_duplicate_rule_groups_and_ids_produce_single_check():
     result = registry.execute(
         ("one", "two", "one"),
         ReviewExecutionContext(
-            request=request_for(TRANSFER_LEGACY),
-            profile=TRANSFER_LEGACY,
+            request=request_for(CONSISTENCY_DEFAULT),
+            profile=CONSISTENCY_DEFAULT,
             batch=AgentBatchResult(),
             observations=(),
         ),

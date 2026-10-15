@@ -61,7 +61,7 @@ def _validate_scope_ownership() -> None:
     duplicated: dict[str, list[str]] = {}
     for business_type, pack in BUSINESS_PACKS.items():
         for scope in pack.scopes:
-            duplicated.setdefault(scope, []).append(business_type.value)
+            duplicated.setdefault(scope, []).append(str(business_type))
     conflicts = {scope: owners for scope, owners in duplicated.items() if len(owners) > 1}
     if conflicts:
         detail = "；".join(f"{scope}：{'、'.join(owners)}" for scope, owners in conflicts.items())

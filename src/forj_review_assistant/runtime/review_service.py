@@ -177,7 +177,7 @@ class ReviewService:
         )
 
     def resolve_profile(self, request: ReviewRequest) -> BusinessProfile:
-        validate_request_route(request)
+        validate_request_route(request, self.registry.active_profiles)
         return self.registry.resolve(
             request.business_type,
             request.region,

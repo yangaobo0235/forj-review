@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "page_id": "vehicle_source:default",
+  "business_type": "vehicle_source",
+  "region": "default",
+  "version": "2.0",
+  "title": "车源审核",
+  "paths": ["/vehicle-source"],
+  "anchors": ["车源审核", "行驶证信息"],
+  "extends": {"page_id": "vehicle_source:default", "version": "1.0"},
+  "fields": [
+    {"key": "vehicle.issue_date", "max_age_days": 180}
+  ]
+}

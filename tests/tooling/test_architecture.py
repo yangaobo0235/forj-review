@@ -31,3 +31,18 @@ def test_architecture_allows_protocols_and_annotations_only_imports(tmp_path):
         encoding="utf-8",
     )
     assert check_architecture(tmp_path) == []
+
+
+def test_workflow_cannot_register_concrete_business_rules(tmp_path):
+    (tmp_path / "runtime/workflow").mkdir(parents=True)
+    graph = tmp_path / "runtime/workflow/graph.py"
+    graph.write_text("from forj_review_assistant.businesses.rules.vehicle_model import run_vehicle_model\n", encoding="utf-8")
+    assert any("concrete business rule" in item for item in check_architecture(tmp_path))
+    graph.write_text("from forj_review_assistant.businesses.rules.catalog import build_rule_handlers\n", encoding="utf-8")
+    assert check_architecture(tmp_path) == []
+
+
+def test_configuration_cannot_execute_generated_python(tmp_path):
+    (tmp_path / "businesses/configuration").mkdir(parents=True)
+    (tmp_path / "businesses/configuration/loader.py").write_text("exec('print(1)')\n", encoding="utf-8")
+    assert any("dynamic code" in item for item in check_architecture(tmp_path))

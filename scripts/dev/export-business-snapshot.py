@@ -17,9 +17,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
+from forj_review_assistant.businesses.configuration.schema import PageDefinition  # noqa: E402
 from forj_review_assistant.businesses.packs.model import build_collect_manifest  # noqa: E402
 from forj_review_assistant.businesses.page_catalog import page_catalog  # noqa: E402
-from forj_review_assistant.businesses.profiles import BUSINESS_PROFILES  # noqa: E402
+from forj_review_assistant.businesses.registry import build_business_registry  # noqa: E402
 from forj_review_assistant.contracts.recognition import (  # noqa: E402
     AgentBatchResult,
     QwenClassification,
@@ -29,13 +30,15 @@ from forj_review_assistant.contracts.review_schema import review_contract_schema
 
 
 def main() -> None:
+    registry = build_business_registry()
     profiles = []
-    for profile in BUSINESS_PROFILES:
+    for profile in registry.profiles:
         item = {
-            "business_type": profile.business_type.value,
-            "region": profile.region.value,
+            "business_type": str(profile.business_type),
+            "region": str(profile.region),
             "version": profile.version,
             "page_id": profile.page_id,
+            "active": any(profile is active for active in registry.active_profiles),
             "configured": profile.rules_configured,
             "unconfigured_message": profile.unconfigured_message,
             "page_interaction": profile.page_interaction,
@@ -85,9 +88,10 @@ def main() -> None:
             path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
             for path in sorted(source_files)
         },
-        "catalog": page_catalog(),
+        "catalog": page_catalog(registry.active_profiles),
         "profiles": profiles,
         "review_contract_schema": review_contract_schema(),
+        "page_configuration_schema": PageDefinition.model_json_schema(),
         "reproduction_schemas": {
             "QwenClassification": QwenClassification.model_json_schema(),
             "QwenExtraction": QwenExtraction.model_json_schema(),

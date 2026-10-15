@@ -2,12 +2,15 @@
 
 FORJ Review Assistant 是一个面向车辆审核页面的浏览器扩展与审核服务。系统通过统一的 LangGraph（流程图编排框架）主图处理材料采集、文档识别、证据聚合、字段比较、业务规则和审核任务生成；前端只负责页面采集、任务呈现和受控页面操作。
 
-当前已配置的审核业务包括青岛和长春的报废置换审核、车源审核和过户审核。一致性审核保留为未配置（`rules_configured=false`）的人工复核入口，不等同于「停用」；`TRANSFER_LEGACY`（`version="deprecated"`）只服务历史数据迁移、永不进 `BUSINESS_PROFILES`，它不代表过户业务停用。
+当前已配置的审核业务包括青岛和长春的报废置换审核、车源审核和过户审核。一致性审核保留为未配置（`rules_configured=false`）的人工复核入口。
+
+普通页面和字段调整优先使用[声明式页面配置](docs/指南/声明式页面配置.md)：一份 JSON 可新增页面或继承现有版本，字段的提取白名单、材料映射和采集清单由后端生成，前端不增加业务规则。启用前执行 `uv run forj-review-assistant --check-pages review-pages`，再设置 `REVIEW_PAGES_DIR` 并重启服务。本轮仅提供配置底座，不含聊天配置 Agent。
 
 ## 文档入口
 
 - [文档总索引](docs/索引.md)
 - [项目结构与迁移](docs/指南/项目结构与迁移.md)：目录树、职责、命名、旧路径对照与升级步骤
+- [业务底座与遗留审计](docs/参考/业务底座改造与遗留审计.md)：结构判断、已处理耦合及保留的兼容边界
 
 ## 安装与启动
 
@@ -79,7 +82,7 @@ node scripts/ci/check-extension-architecture.mjs
 
 后端入口通常从 `src/forj_review_assistant/main.py` 和 API 路由进入，审核流程从 `src/forj_review_assistant/runtime/workflow/graph.py` 进入；业务 Profile 位于 `src/forj_review_assistant/businesses`，能力和规则位于 `src/forj_review_assistant/capabilities`、`src/forj_review_assistant/evidence/comparison` 与 `src/forj_review_assistant/presentation`。前端入口从 `apps/extension/src/main.tsx` 开始，页面采集查看 `apps/extension/src/platform/browser`，工作台查看 `apps/extension/src/features/review/ui`，页面写回查看 `apps/extension/src/platform/extension`。遇到不确定的代码归属，先阅读 [系统架构与边界](docs/概念/系统定位.md) 和模块 README。
 
-`apps/extension/src/platform/browser/adapters`（页面适配器）已经接入主流程：`apps/extension/src/platform/browser/identity/business-detector.ts` 通过 `buildPageAdapterRegistry()`（`apps/extension/src/platform/browser/adapters/index.ts`）解析当前页面，`ScrapReplacementPageAdapter` 等适配器负责页面识别与业务判定。采集和写回仍在 `apps/extension/src/platform/browser` 内实现，新增页面时在 `apps/extension/src/platform/browser/adapters/` 新增一个适配器并在 `buildPageAdapterRegistry()` 中注册。
+`apps/extension/src/platform/browser/adapters`（页面适配器）已经接入主流程：`apps/extension/src/platform/browser/identity/business-detector.ts` 通过 `buildPageAdapterRegistry()`（`apps/extension/src/platform/browser/adapters/index.ts`）解析当前页面。普通新增页面通过后端页面目录和采集清单接入，复用通用采集与写回能力；超出现有 DOM 采集能力的特殊控件，再由开发人员扩展浏览器平台。适配器只负责页面身份识别，不执行审核规则。
 
 ## 交付标准
 

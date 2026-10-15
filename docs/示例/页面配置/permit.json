@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "page_id": "example_permit",
+  "business_type": "permit_review",
+  "region": "default",
+  "version": "1.0",
+  "title": "示例许可证审核",
+  "paths": ["/example-permit-review"],
+  "anchors": ["许可证资料", "车辆识别代号"],
+  "scopes": ["vehicle"],
+  "sections": [{"key": "vehicle", "title": "车辆信息"}],
+  "page_groups": [
+    {"label": "许可证资料", "scope": "vehicle", "title": "许可证资料"}
+  ],
+  "materials": [
+    {
+      "document_type": "permit",
+      "label": "车辆许可证",
+      "hints": ["车辆许可证", "许可证"],
+      "guidance": "读取许可证中的车辆识别代号，保留原文，无法看清时标记不确定。",
+      "required": true
+    }
+  ],
+  "fields": [
+    {
+      "key": "permit.vin",
+      "label": "车辆识别代号",
+      "aliases": ["车辆识别代号", "车架号"],
+      "normalizer": "vin",
+      "evidence": [{"material": "permit", "field": "license.vin"}]
+    }
+  ],
+  "identity_anchors": ["permit.vin"],
+  "record_identity_fields": ["permit.vin"]
+}

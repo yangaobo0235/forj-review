@@ -384,6 +384,7 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
   applyCollectManifest(
     (message.collectManifests as CollectManifest[] | undefined)
       ?.find((item) => item.business_type === business?.businessType &&
+        (!item.page_id || item.page_id === business?.pageId) &&
         (!item.region || item.region === business?.region) && (!item.profile_version || item.profile_version === business?.profileVersion)),
   );
   const fieldCollection = ReviewPageFieldCollector.collect(

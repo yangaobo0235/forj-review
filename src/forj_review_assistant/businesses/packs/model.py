@@ -1,12 +1,8 @@
 """业务扩展包：一个审核业务的声明式描述。
 
-同一份业务数据目前有五处投影——字段清单与中文标签、字段证据策略、材料提取
-白名单与读取指引、材料字段路由、前端 DOM 别名。它们各自维护，新增业务时
-必须在多处各改一遍，且改漏一处不会报错，只会静默降级为人工复核。
-
-业务扩展包把这份数据收敛成一份声明，各投影从它派生。派生函数只产出数据，
-接入运行时由各投影模块自行决定；在确认派生结果与现有实现完全一致之前，
-两边并行存在（见 `tests/test_pack_equivalence.py`）。
+字段标签、证据策略、提取白名单、材料路由和浏览器采集元数据均从声明派生。
+原生 Python 业务包和声明式页面配置编译器共享此不可变运行时模型；本模块不
+负责读取配置文件、执行模型调用或操作页面 DOM。
 """
 
 from __future__ import annotations
@@ -21,7 +17,7 @@ from forj_review_assistant.businesses.material_policies import (
 )
 from forj_review_assistant.businesses.replacement_policies import ReplacementPolicy
 from forj_review_assistant.capabilities.specs import CapabilityBinding, CapabilitySpec
-from forj_review_assistant.contracts.review import Region
+from forj_review_assistant.contracts.review import RegionId
 
 EvidenceMode = Literal[
     "SYSTEM", "SINGLE_SOURCE", "AVAILABLE_EVIDENCE", "PARALLEL", "PAGE_AUXILIARY", "DERIVED"
@@ -222,7 +218,7 @@ class RegionDeclaration:
     不需要单独声明。
     """
 
-    region: Region
+    region: RegionId
     version: str = "1.0"
     replacement_policy: ReplacementPolicy | None = None
     # 该地区审核页面的 URL 路径。
@@ -238,7 +234,7 @@ class RegionDeclaration:
     page_anchors: tuple[str, ...] = ()
 
     def policy_capability_id(self) -> str | None:
-        return f"{self.region.value}_replacement_policy" if self.replacement_policy else None
+        return f"{self.region}_replacement_policy" if self.replacement_policy else None
 
 
 @dataclass(frozen=True)
@@ -302,7 +298,7 @@ class BusinessExtensionPack:
     material_policy: MaterialPolicy | None = None
     retry_policy: RetryPolicy = DEFAULT_RETRY_POLICY
     presentation: TaskPresentation = TaskPresentation()
-    def region(self, region: Region) -> RegionDeclaration | None:
+    def region(self, region: RegionId) -> RegionDeclaration | None:
         return next((item for item in self.regions if item.region == region), None)
 
     def check_bindings_by_field(self) -> dict[str, tuple[str, ...]]:
@@ -482,6 +478,10 @@ def validate_pack_references(pack: BusinessExtensionPack) -> None:
 
     if pack.invoice_verification_field:
         require(pack.invoice_verification_field, "发票验真触发字段 invoice_verification_field")
+
+    if pack.material_policy:
+        for requirement in pack.material_policy.field_sources:
+            require(requirement.field, "材料证据要求 field_sources")
 
     if problems:
         detail = "\n  - ".join(problems)
