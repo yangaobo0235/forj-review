@@ -12,7 +12,6 @@ from typing import Literal
 from forj_review_assistant.businesses.field_policies import field_policy
 from forj_review_assistant.businesses.fields import PAGE_FIELD_LABELS
 from forj_review_assistant.businesses.profiles import BusinessProfile
-from forj_review_assistant.businesses.rules.affiliation import normalize_page_owner_type
 from forj_review_assistant.contracts.checks import CheckResult, CheckResultValue
 from forj_review_assistant.contracts.recognition import MaterialCompletenessReport
 from forj_review_assistant.contracts.review import (
@@ -32,6 +31,7 @@ from forj_review_assistant.evidence.comparison.composite_fields import (
 )
 from forj_review_assistant.evidence.fields.normalize import normalize_value
 from forj_review_assistant.presentation.advice import FIELD_LABELS
+from forj_review_assistant.presentation.projectors import project_field_task
 
 
 def profile_uses_page_interaction(profile: BusinessProfile) -> bool:
@@ -160,10 +160,17 @@ def _field_step(
     result_status = _comparison_status(comparison)
     material_evidence_by_image: dict[tuple[str, str | None], EvidenceFact] = {}
     for item in comparison.evidence:
-        if item.image_id and item.source == "图片识别":
-            material_evidence_by_image.setdefault((item.image_id, item.source_field), item)
+        image_identity = item.image_id or (
+            f"index:{item.image_index}" if item.image_index is not None else item.source_id
+        )
+        if image_identity and item.source == "图片识别":
+            material_evidence_by_image.setdefault((image_identity, item.source_field), item)
     material_evidence = list(material_evidence_by_image.values())
-    if result_status == "MATCH" and not _page_field_collected(request, comparison.field):
+    policy = field_policy(comparison.field)
+    if (
+        result_status == "MATCH" and (policy is None or policy.page_evidence_required)
+        and not _page_field_collected(request, comparison.field)
+    ):
         result_status = "INSUFFICIENT"
         reason = f"{comparison.message}；{MISSING_PAGE_FIELD_REASON}"
     else:
@@ -175,7 +182,6 @@ def _field_step(
         reason = f"{reason}；{label}由票面数电号码适配"
     # 报废置换字段全部在审核助手中展示；原页面保持干净，不再注入标记。
     # 页面是否采集、页面原值和材料证据都由 evidence/values 传给工作台处理。
-    policy = field_policy(comparison.field)
     return _step(
         step_id=f"FIELD-{comparison.field}",
         category="FIELD",
@@ -190,7 +196,7 @@ def _field_step(
         evidence=material_evidence,
         requires_reviewer_action=(result_status != "MATCH"),
         details={
-            "evidence_count": len({item.image_id for item in material_evidence}),
+            "evidence_count": len({image for image, _ in material_evidence_by_image}),
             "evidence_mode": policy.mode if policy else None,
             "evidence_sources": list(dict.fromkeys(_evidence_source(item) for item in material_evidence)),
             "not_found_sources": list(policy.allowed_document_types) if policy and not material_evidence else [],
@@ -293,28 +299,6 @@ def _composite_field_step(
     )
 
 
-def _owner_type_system_step(snapshot: ReviewFieldSnapshot) -> ReviewTask:
-    """Treat the backend-provided owner type as input, not OCR evidence."""
-
-    valid = normalize_page_owner_type(snapshot.value) is not None
-    return _step(
-        step_id="FIELD-application.owner_type",
-        category="FIELD",
-        display_target=ReviewDisplayTarget.ASSISTANT,
-        label=snapshot.label,
-        result_status="MATCH" if valid else "INSUFFICIENT",
-        reason=(
-            "系统业务字段，无需材料比对"
-            if valid
-            else "车辆所有人类型为空或不是个人/企业，请人工确认"
-        ),
-        page_value=snapshot.value,
-        control_type=snapshot.control_type,
-        writable=False,
-        values=[CheckResultValue(source="申请页面字段", value=snapshot.value)],
-    )
-
-
 def _check_backed_field_step(
     request: ReviewRequest,
     field: str,
@@ -392,12 +376,7 @@ def _with_control_snapshot(
     allow_write: bool,
     profile: BusinessProfile,
 ) -> ReviewTask:
-    # Operation-only affiliation controls are identified by their canonical
-    # field key. Never expose that internal key as the reviewer-facing label.
-    label = {
-        "old_vehicle.affiliation": "报废车挂靠",
-        "new_vehicle.affiliation": "新车挂靠",
-    }.get(snapshot.field, snapshot.label)
+    label = snapshot.label
     return step.model_copy(
         update={
             "label": label,
@@ -412,62 +391,6 @@ def _with_control_snapshot(
                 and profile.allows_field_write(snapshot.control_type)
             ),
         }
-    )
-
-
-def _affiliation_control_step(
-    snapshot: ReviewFieldSnapshot,
-    subject: CheckResult | None,
-) -> ReviewTask:
-    is_old = snapshot.field == "old_vehicle.affiliation"
-    type_source = "旧车主体类型" if is_old else "新车主体类型"
-    expected_raw = next(
-        (
-            item.value
-            for item in (subject.values if subject else [])
-            if item.source == type_source
-        ),
-        None,
-    )
-    expected_type = str(expected_raw) if expected_raw in {"PERSONAL", "COMPANY"} else None
-    expected_label = {"PERSONAL": "个人", "COMPANY": "公司"}.get(expected_type)
-    actual_type = normalize_page_owner_type(snapshot.value)
-    values = [CheckResultValue(source="申请页面字段", value=snapshot.value)]
-    if expected_label:
-        values.append(CheckResultValue(source="主体关系核验", value=expected_label))
-
-    if subject is None or subject.status != "MATCH":
-        status: ResultStatus = subject.status if subject else "INSUFFICIENT"
-        reason = "主体关系尚未通过，不能确定挂靠字段的正确取值"
-    elif not expected_type:
-        status = "INSUFFICIENT"
-        reason = "主体关系已核验，但未得到明确的个人/公司类型"
-    elif not actual_type:
-        # 挂靠字段本身是主体关系规则的派生填写目标，不要求材料再次
-        # 提供同名证据。主体关系已通过且类型明确时，空控件也视为规则通过，
-        # 由页面写入链路负责填写“个人/公司”。
-        status = "MATCH"
-        reason = f"主体关系核验已通过，将自动填写{expected_label}"
-    elif actual_type == expected_type:
-        status = "MATCH"
-        reason = "页面挂靠类型与主体关系核验结果一致"
-    else:
-        status = "CONFLICT"
-        reason = "页面挂靠类型与主体关系核验结果不一致"
-
-    return _step(
-        step_id=f"FIELD-{snapshot.field}",
-        category="FIELD",
-        display_target=ReviewDisplayTarget.ASSISTANT,
-        label=snapshot.label,
-        result_status=status,
-        reason=reason,
-        page_target_field=snapshot.field,
-        page_value=snapshot.value,
-        control_type=snapshot.control_type,
-        writable=False,
-        values=values,
-        evidence=subject.evidence if subject else [],
     )
 
 
@@ -516,10 +439,6 @@ def _field_first_steps(
         )
         return result
 
-    subject = next(
-        (item for item in business_checks if item.check_id == "AFFILIATION-SUBJECT-001"),
-        None,
-    )
     composite_checks = {
         item.check_id: item
         for item in business_checks
@@ -566,11 +485,9 @@ def _field_first_steps(
                 steps.append(step)
                 emitted_composites.add(composite.check_id)
             continue
-        if field == "application.owner_type":
-            steps.append(_owner_type_system_step(snapshot))
-            continue
-        if field in {"old_vehicle.affiliation", "new_vehicle.affiliation"}:
-            steps.append(_affiliation_control_step(snapshot, subject))
+        projected_task = project_field_task(profile, snapshot, business_checks, _step) if field else None
+        if projected_task is not None:
+            steps.append(projected_task)
             continue
         comparison = comparisons_by_field.get(field)
         projected = projected_by_field.get(field or "")
@@ -595,6 +512,17 @@ def _field_first_steps(
         elif _is_review_scope_field(profile, field):
             step_id = f"FIELD-{field}" if field else f"FIELD-DOM-{index}"
             steps.append(_page_catalog_step(snapshot, step_id, profile))
+    # Material-only fields have no DOM control; retain their results alongside
+    # page fields instead of dropping them when a DOM catalogue is available.
+    emitted_step_ids = {step.step_id for step in steps}
+    steps.extend(
+        _field_step(request, comparison, page_interaction=False)
+        for comparison in comparisons
+        if f"FIELD-{comparison.field}" not in emitted_step_ids
+        and comparison.field not in COMPOSITE_FIELDS_BY_MEMBER
+        and (policy := field_policy(comparison.field)) is not None
+        and not policy.page_evidence_required
+    )
     return steps
 
 
@@ -742,18 +670,23 @@ def build_review_tasks(
 
     tasks = prepare_display_tasks(
         _resequence(_deduplicate_steps(steps)),
-        qr_enabled=any(
-            spec.capability_id == "scrap_certificate_qr"
-            for spec in profile.capabilities
-            if spec.kind == "EXTERNAL"
-        ),
+        task_groups=profile.pack_declaration.presentation.groups if profile.pack_declaration else (),
+        enabled_capabilities=tuple(spec.capability_id for spec in profile.capabilities),
         field_check_bindings=profile.field_check_bindings,
     ) if page_interaction else _resequence(_deduplicate_steps(steps))
     pack = profile.pack_declaration
     if pack is None:
         return tasks
     policy = pack.presentation
-    return [task.model_copy(update={"visible": not (
-        (task.page_field or task.page_target_field) in policy.hidden_fields
-        or (task.category != "FIELD" and task.step_id.removeprefix("BUSINESS-").startswith(policy.hidden_check_prefixes))
-    )}) for task in tasks]
+    writable_fields = set(pack.writable_field_keys())
+    result = []
+    for task in tasks:
+        targets = task.page_target_fields or [task.page_target_field or task.page_field]
+        result.append(task.model_copy(update={
+            "writable": task.writable and all(target in writable_fields for target in targets),
+            "visible": not (
+                (task.page_field or task.page_target_field) in policy.hidden_fields
+                or (task.category != "FIELD" and task.step_id.removeprefix("BUSINESS-").startswith(policy.hidden_check_prefixes))
+            ),
+        }))
+    return result

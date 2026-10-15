@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 
+from forj_review_assistant.businesses.packs.model import TaskGroupDeclaration
 from forj_review_assistant.contracts.review import ReviewTask
 
 # Business rule steps are namespaced by review_step_routing as
@@ -39,8 +40,10 @@ def _merge(base: ReviewTask, members: Sequence[ReviewTask]) -> ReviewTask:
 
 
 def prepare_display_tasks(
-    tasks: Sequence[ReviewTask], *, qr_enabled: bool,
+    tasks: Sequence[ReviewTask], *,
     field_check_bindings: Sequence[tuple[str, str]] = (),
+    task_groups: Sequence[TaskGroupDeclaration] = (),
+    enabled_capabilities: Sequence[str] = (),
 ) -> list[ReviewTask]:
     # Field-first profiles keep the task in the assistant while exposing the
     # canonical DOM target through page_target_field. Date policy results must
@@ -66,27 +69,38 @@ def prepare_display_tasks(
         base.step_id: _merge(base, bound_rules[base.step_id])
         for base in by_field.values() if base.step_id in bound_rules
     }
-    subject = next((item for item in tasks if item.step_id == "BUSINESS-AFFILIATION-SUBJECT-001"), None)
-    if subject:
-        auxiliary = [item for item in tasks if item.step_id.startswith("BUSINESS-AFFILIATION-AUX-")]
-        replacements[subject.step_id] = _merge(replacements.get(subject.step_id, subject), auxiliary).model_copy(update={
-            "details": {**subject.details, "affiliation_subject_status": subject.result_status},
-        })
-        consumed.update(item.step_id for item in auxiliary)
-    result = []
-    qr_members = [
-        item for item in tasks
-        if item.step_id.startswith("QR-") or item.step_id == "EXTERNAL-scrap_certificate_qr"
-    ]
-    if qr_enabled or qr_members:
-        consumed.update(item.step_id for item in qr_members)
-        status = "MATCH" if qr_members else "INSUFFICIENT"
-        base = ReviewTask(
-            step_id="QR-GROUP", sequence=min((item.sequence for item in qr_members), default=10000),
-            category="EXTERNAL", display_target="ASSISTANT", label="二维码官网核验",
-            result_status=status, requires_reviewer_action=status != "MATCH",
-            reason="" if qr_members else "未取得可核验的二维码",
-        )
-        result.append(_merge(base, qr_members))
-    result.extend(replacements.get(item.step_id, item) for item in tasks if item.step_id not in consumed)
+    result = [replacements.get(item.step_id, item) for item in tasks if item.step_id not in consumed]
+    for group in task_groups:
+        parent = next((item for item in result if item.step_id == group.parent_step_id), None)
+        if group.parent_step_id and parent is None:
+            continue
+        members = [
+            item for item in result if item is not parent and (
+                item.step_id in group.member_step_ids
+                or bool(group.member_prefixes) and item.step_id.startswith(group.member_prefixes)
+            )
+        ]
+        if parent is None and not members and group.capability_id not in enabled_capabilities:
+            continue
+        if parent is not None:
+            base = parent
+        else:
+            status = "MATCH" if members else "INSUFFICIENT"
+            base = ReviewTask(
+                step_id=group.step_id,
+                sequence=min((item.sequence for item in members), default=10000),
+                category="EXTERNAL", display_target="ASSISTANT", label=group.label,
+                result_status=status, requires_reviewer_action=status != "MATCH",
+                reason="" if members else f"未取得{group.label}结果",
+            )
+        merged = _merge(base, members)
+        if group.original_status_detail:
+            merged = merged.model_copy(update={
+                "details": {**merged.details, group.original_status_detail: base.result_status},
+            })
+        consumed_ids = {item.step_id for item in members}
+        if parent:
+            consumed_ids.add(parent.step_id)
+        result = [item for item in result if item.step_id not in consumed_ids]
+        result.append(merged)
     return [item.model_copy(update={"sequence": i}) for i, item in enumerate(sorted(result, key=lambda item: item.sequence), 1)]

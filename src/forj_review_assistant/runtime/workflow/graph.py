@@ -4,6 +4,7 @@
 修改日期：2026-08-26
 """
 
+import asyncio
 import inspect
 import logging
 from collections.abc import Callable, Mapping, Sequence
@@ -20,6 +21,7 @@ from forj_review_assistant.businesses.completeness import (
     evaluate_collected,
     evaluate_extracted,
 )
+from forj_review_assistant.businesses.configuration.inspection import profile_fingerprint
 from forj_review_assistant.businesses.context import with_business_context
 from forj_review_assistant.businesses.context_validation import validate_request_route
 from forj_review_assistant.businesses.profiles import BusinessProfile
@@ -62,6 +64,7 @@ from forj_review_assistant.evidence.comparison.composite_fields import (
     build_page_composite_checks,
 )
 from forj_review_assistant.evidence.comparison.review import build_field_comparisons
+from forj_review_assistant.observability.context import safe_id
 from forj_review_assistant.presentation.advice import build_final_advice
 from forj_review_assistant.presentation.response import _log_decision, response_from_results
 from forj_review_assistant.presentation.routing import build_review_tasks
@@ -202,17 +205,26 @@ class ReviewWorkflow:
     def _instrument(name: str, fn: Callable[..., Any]) -> Callable[..., Any]:
         async def wrapped(state: ReviewState) -> dict[str, Any]:
             started = perf_counter()
+            outcome, error_type = "SUCCEEDED", "-"
             try:
                 result = fn(state)
                 if inspect.isawaitable(result):
                     result = await result
                 return result
+            except asyncio.CancelledError:
+                outcome = "CANCELLED"
+                raise
+            except Exception as exc:
+                outcome, error_type = "FAILED", type(exc).__name__
+                raise
             finally:
-                logger.info(
-                    "review node completed node=%s duration_ms=%.1f trace_id=%s",
+                logger.log(
+                    logging.INFO if outcome == "SUCCEEDED" else logging.WARNING,
+                    "review node completed node=%s duration_ms=%.1f trace_id=%s result=%s error_type=%s",
                     name,
                     (perf_counter() - started) * 1000,
                     state.get("trace_id", ""),
+                    outcome, error_type,
                 )
 
         return wrapped
@@ -233,6 +245,11 @@ class ReviewWorkflow:
     @staticmethod
     def _resolve_context(state: ReviewState) -> dict[str, Any]:
         """Resolve the already selected profile into a stable graph context."""
+        profile = state["profile"]
+        logger.info(
+            "review configuration page_id=%s profile=%s configuration_sha256=%s",
+            safe_id(profile.page_id), safe_id(profile.version), profile_fingerprint(profile),
+        )
         return {"request": state["request"], "profile": state["profile"]}
 
     def _validate_input(self, state: ReviewState) -> dict[str, Any]:
@@ -292,6 +309,10 @@ class ReviewWorkflow:
         if batch is None:
             raise RuntimeError("工作流状态缺少文档提取结果")
         report = evaluate_extracted(state["request"], state["profile"], batch)
+        logger.info("review evidence quality status=%s documents=%d issues=%d reasons=%s trace_id=%s",
+                    report.status, len(batch.recognized_documents), len(report.issues),
+                    ",".join(sorted({issue.reason_code or "unspecified" for issue in report.issues})) or "-",
+                    state["trace_id"])
         updated = batch.model_copy(update={"material_completeness": report})
         callback = state.get("batch_callback")
         if callback is not None:

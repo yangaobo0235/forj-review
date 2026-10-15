@@ -26,9 +26,8 @@ from forj_review_assistant.contracts.recognition import (
     QwenExtraction,
 )
 
-# 与任务、调度、图片处理共用同一个 logger：Uvicorn 已给它挂好控制台处理器，
-# 换成 __name__ 会落到 root 上，日志级别和格式都跟现有事件行不一致。
-logger = logging.getLogger("uvicorn.error")
+# Bootstrap routes the whole application namespace to the same console/file sinks.
+logger = logging.getLogger(__name__)
 
 
 class QwenResponseSyntaxError(ValueError):
@@ -331,6 +330,9 @@ class QwenClient:
                 raise TypeError("message.content 不是字符串")
             self._log_call(stage, image_id, started, rate_limited, body.get("usage"), "ok")
             return content
+        except asyncio.CancelledError:
+            self._log_call(stage, image_id, started, rate_limited, None, "cancelled")
+            raise
         except httpx.HTTPStatusError as exc:
             self._log_call(
                 stage,

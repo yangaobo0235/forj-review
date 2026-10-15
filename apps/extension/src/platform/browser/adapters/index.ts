@@ -13,7 +13,8 @@ export { ConsistencyPageAdapter } from "./consistency-adapter.ts";
 export { pagePath, pageSelection, pathMatches } from "./selection.ts";
 
 /**
- * 全应用的页面识别表。新增页面 = 写一个适配器并在这里注册。
+ * 历史页面识别的兼容注册表。普通新页面使用后端动态目录与采集清单；
+ * 只有新的浏览器识别能力才需要在这里扩展适配器。
  *
  * 适配器只负责页面特有的识别。字段采集和受控写回是通用能力，依据后端下发
  * 的采集清单完成。

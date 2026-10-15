@@ -13,6 +13,7 @@ from forj_review_assistant.businesses.profiles import BusinessProfile
 class ConfiguredPages:
     profiles: tuple[BusinessProfile, ...]
     active: tuple[BusinessProfile, ...]
+    sources: tuple[tuple[str, PageDefinition], ...] = ()
 
 
 def profile_id(profile: BusinessProfile) -> str:
@@ -37,6 +38,7 @@ def load_page_profiles(
     available = {(profile_id(p), p.version): p for p in templates}
     active = {profile_id(p): p for p in templates}
     pending = {}
+    sources = []
     for path in sorted(directory.glob("*.json")):
         try:
             definition = PageDefinition.model_validate(
@@ -51,6 +53,7 @@ def load_page_profiles(
         if key in pending or key in available:
             raise ValueError(f"页面配置 {path.name} 重复定义了 {key}；修改配置请使用新版本")
         pending[key] = (path.name, definition)
+        sources.append((path.name, definition))
     active_ids = [definition.page_id for _, definition in pending.values() if definition.active]
     if len(active_ids) != len(set(active_ids)):
         raise ValueError("同一 page_id 只能有一个 active=true 的配置版本")
@@ -81,4 +84,8 @@ def load_page_profiles(
             compiled.append(profile)
             if definition.active:
                 active[definition.page_id] = profile
-    return ConfiguredPages(tuple(compiled), tuple(active.values()))
+    result = ConfiguredPages(tuple(compiled), tuple(active.values()), tuple(sources))
+    from forj_review_assistant.businesses.configuration.history import validate_recorded_versions
+
+    validate_recorded_versions(directory, result)
+    return result

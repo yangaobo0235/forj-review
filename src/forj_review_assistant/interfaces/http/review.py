@@ -20,7 +20,7 @@ from forj_review_assistant.runtime.jobs.manager import ReviewJobManager
 from forj_review_assistant.runtime.review_service import ReviewService
 
 router = APIRouter()
-logger = logging.getLogger("uvicorn.error")
+logger = logging.getLogger(__name__)
 
 
 def validate_business_profile(request: ReviewRequest, review_service: ReviewService) -> None:
@@ -42,9 +42,8 @@ def assist(
     """执行一次只读审核辅助，不会修改原审核系统。"""
     validate_business_profile(request, review_service)
     logger.info(
-        "Review request received: trace_id=%s application_id=%s field_count=%d image_count=%d",
+        "Review request received: trace_id=%s field_count=%d image_count=%d",
         request.trace_id or "generated",
-        request.application_id or "unknown",
         len(request.page_fields),
         len(request.images),
     )
@@ -71,9 +70,8 @@ def create_review_job(
 ) -> ReviewJobCreated:
     validate_business_profile(request, review_service)
     logger.info(
-        "Review job requested: trace_id=%s application_id=%s image_count=%d",
+        "Review job requested: trace_id=%s image_count=%d",
         request.trace_id or "generated",
-        request.application_id or "unknown",
         len(request.images),
     )
     try:

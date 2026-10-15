@@ -6,9 +6,9 @@
 
 import asyncio
 import inspect
+import logging
 from collections.abc import Callable, Mapping
 from typing import Any
-from uuid import uuid4
 
 from forj_review_assistant.businesses.context import with_business_context
 from forj_review_assistant.businesses.context_validation import validate_request_route
@@ -43,6 +43,7 @@ from forj_review_assistant.integrations.recognition.extraction import (
     AgentService,
     declared_material_types,
 )
+from forj_review_assistant.observability.context import with_review_log_context
 from forj_review_assistant.presentation.response import (
     build_review_response,
     build_unconfigured_response,
@@ -50,6 +51,7 @@ from forj_review_assistant.presentation.response import (
 from forj_review_assistant.runtime.workflow.graph import ReviewWorkflow
 
 ReviewProgressCallback = Callable[[ReviewResponse, AgentBatchResult], Any]
+logger = logging.getLogger(__name__)
 
 
 class ReviewService:
@@ -89,6 +91,7 @@ class ReviewService:
         return response
 
     @with_business_context
+    @with_review_log_context
     async def assist_with_batch_async(
         self,
         request: ReviewRequest,
@@ -97,8 +100,6 @@ class ReviewService:
     ) -> tuple[ReviewResponse, AgentBatchResult]:
         """执行审核并复用 URL 任务已完成的图片提取结果。"""
 
-        if not request.trace_id:
-            request = request.model_copy(update={"trace_id": uuid4().hex})
         profile = self.resolve_profile(request)
 
         async def handle_agent_progress(batch: AgentBatchResult) -> None:
@@ -215,6 +216,7 @@ class ReviewService:
         return response
 
     @with_business_context
+    @with_review_log_context
     async def extract_image_async(
         self,
         request: ReviewRequest,
@@ -260,6 +262,10 @@ class ReviewService:
                 decode_result = await self.qr_decoder.decode(image.recognition_source)
                 codes = list(decode_result.values)
                 decoder = decode_result.decoder if codes else None
+            logger.info("review qr decode image_id=%s source=%s codes=%d error_code=%s duration_ms=%d",
+                        image.image_id or image.index, decoder or (decode_result.decoder if decode_result else "none"), len(codes),
+                        decode_result.error_code if decode_result else ("collection_error" if image.collection_error else "-"),
+                        decode_result.elapsed_ms if decode_result else 0)
             if not codes:
                 if decode_result is not None:
                     if decode_result.error_code == "decode_empty":
@@ -309,7 +315,7 @@ class ReviewService:
                         accessible=verified.accessible,
                         page_fields=verified.page_fields,
                         status=status,
-                        message=(
+                        message=verified.message or (
                             "二维码网页字段已提取"
                             if verified.page_fields
                             else "二维码网页无法完成核验"

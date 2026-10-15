@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ReviewPageFieldWriter } from "../src/platform/browser/actions/page-field-writer.ts";
+import { calendarDate } from "../src/platform/browser/actions/date-picker.ts";
 
 function loadWriter(globalOverrides = {}) {
   Object.assign(globalThis, globalOverrides);
@@ -248,4 +249,169 @@ test("composite rollback reads both restored values before reporting success", a
   assert.equal(result.ok, false);
   assert.equal(first.value, "FIRST");
   assert.match(result.message, /自动回滚未完成/);
+});
+
+test("Ant virtual select clicks visible sibling options, never the accessibility mirror", async () => {
+  let committed = "载货车";
+  let mirrorClicks = 0;
+  let foreignClicks = 0;
+  const input = valueInput("");
+  input.readOnly = true;
+  input.getAttribute = name => ({ role: "combobox", "aria-controls": "truck_list" })[name] ?? null;
+  const selected = { get textContent() { return committed; } };
+  const actualOption = { textContent: "牵引车", getAttribute: () => null,
+    click() { committed = "牵引车"; } };
+  const dropdown = { querySelectorAll: () => [actualOption] };
+  const accessibilityList = {
+    closest: () => dropdown,
+    querySelectorAll: () => [{ getAttribute: name => name === "aria-label" ? "牵引车" : null,
+      click() { mirrorClicks++; } }],
+  };
+  const container = { querySelector: () => selected };
+  input.closest = selector => selector === ".ant-select, .el-select" ? container : null;
+  input.click = () => {};
+  const root = {
+    getElementById: id => id === "truck_list" ? accessibilityList : null,
+    querySelectorAll: () => [{ textContent: "牵引车", click: () => foreignClicks++ }],
+  };
+  const result = await ReviewPageFieldWriter.executeValue(root, input,
+    { field: "old_vehicle.type", value: "牵引车", expectedValue: "载货车" }, () => true);
+  assert.equal(result.ok, true);
+  assert.equal(committed, "牵引车");
+  assert.equal(mirrorClicks, 0);
+  assert.equal(foreignClicks, 0);
+});
+
+const classes = (...names) => ({ contains: name => names.includes(name) });
+
+function calendarFixture({ initial = "2026-10-12", disabledDate = "", blockedNavigation = false, closingDelay = 0 } = {}) {
+  let committed = initial;
+  let open = false;
+  let closingUntil = 0;
+  const close = () => { if (open) closingUntil = Date.now() + closingDelay; open = false; };
+  const visible = () => open || Date.now() < closingUntil;
+  let month = initial ? initial.slice(0, 7) : "2026-10";
+  let navigations = 0;
+  let selectionClicks = 0;
+  const plain = { getAttribute: () => null, dispatchEvent() {} };
+  const picker = {
+    ...plain, classList: classes("ant-picker"),
+    querySelectorAll: () => [control],
+    querySelector: () => ({ ...plain, click() {}, dispatchEvent(event) { if (event.type === "mouseup") committed = ""; } }),
+  };
+  const control = {
+    ...plain, tagName: "INPUT", readOnly: true, isConnected: true,
+    get value() { return committed; },
+    set value(_) { throw new Error("readonly date must be committed by calendar events"); },
+    closest: selector => selector.includes(".ant-picker") ? picker : null,
+    focus() {}, blur() {}, click() {},
+    dispatchEvent(event) {
+      if (event.type === "mousedown") open = true;
+      if (event.key === "Escape") close();
+    },
+  };
+  const cells = () => Array.from({ length: new Date(`${month}-01T00:00:00Z`).getUTCMonth() === 1 ? 28 : 30 }, (_, index) => {
+    const title = `${month}-${String(index + 1).padStart(2, "0")}`;
+    return { ...plain,
+      classList: classes("ant-picker-cell-in-view", ...(title === disabledDate ? ["ant-picker-cell-disabled"] : [])),
+      getAttribute: name => name === "title" ? title : null,
+      click() { selectionClicks++; committed = title; close(); },
+    };
+  });
+  const panel = {
+    ...plain,
+    querySelectorAll: () => cells(),
+    querySelector: selector => ({ ...plain, click() {
+      navigations++;
+      if (blockedNavigation) return;
+      const delta = (selector.includes("super-") ? 12 : 1) * (selector.includes("prev") ? -1 : 1);
+      const date = new Date(`${month}-01T00:00:00Z`);
+      date.setUTCMonth(date.getUTCMonth() + delta);
+      month = date.toISOString().slice(0, 7);
+    } }),
+  };
+  const popup = {
+    ...plain,
+    get style() { return { display: visible() ? "block" : "none" }; },
+    querySelectorAll: () => [panel],
+    querySelector: selector => selector.includes("ant-picker-time-panel") ? null : cells()[0],
+  };
+  const root = {
+    defaultView: {
+      KeyboardEvent: class { constructor(type, init) { this.type = type; Object.assign(this, init); } },
+      MouseEvent: class { constructor(type, init) { this.type = type; Object.assign(this, init); } },
+    },
+    querySelectorAll: () => visible() ? [popup] : [],
+  };
+  control.ownerDocument = root;
+  return { root, control, picker, value: () => committed, clicks: () => selectionClicks, navigations: () => navigations };
+}
+
+test("readonly Ant date input commits through its calendar and survives blur", async () => {
+  const fixture = calendarFixture();
+  const result = await ReviewPageFieldWriter.executeValue(fixture.root, fixture.control,
+    { field: "old_vehicle.recycle_date", value: "2026-10-13", expectedValue: "2026-10-12" }, () => true);
+  assert.equal(result.ok, true);
+  assert.equal(fixture.value(), "2026-10-13");
+  assert.equal(fixture.clicks(), 1);
+  assert.equal(ReviewPageFieldWriter.controlKind(fixture.control), "date");
+});
+
+test("calendar selection navigates years and months before selecting the exact day", async () => {
+  const fixture = calendarFixture();
+  const result = await ReviewPageFieldWriter.executeValue(fixture.root, fixture.control,
+    { field: "new_vehicle.registration_date", value: "2024-08-15", expectedValue: "2026-10-12" }, () => true);
+  assert.equal(result.ok, true);
+  assert.equal(fixture.value(), "2024-08-15");
+  assert.equal(fixture.navigations(), 4);
+});
+
+test("consecutive date writes wait for the reused calendar's closing animation", async () => {
+  const fixture = calendarFixture({ closingDelay: 180 });
+  for (const [expectedValue, value] of [["2026-10-12", "2026-10-13"], ["2026-10-13", "2024-08-15"]]) {
+    const result = await ReviewPageFieldWriter.executeValue(fixture.root, fixture.control,
+      { field: "old_vehicle.recycle_date", value, expectedValue }, () => true);
+    assert.equal(result.ok, true, result.message);
+    assert.equal(fixture.value(), value);
+  }
+});
+
+test("date validation, disabled cells, stale identity and blocked navigation never commit a date", async () => {
+  for (const [value, options, guard] of [
+    ["2026-02-30", {}, () => true],
+    ["2026-10-13", { disabledDate: "2026-10-13" }, () => true],
+    ["2026-11-13", { blockedNavigation: true }, () => true],
+    ["2026-10-13", {}, () => false],
+  ]) {
+    const fixture = calendarFixture(options);
+    const result = await ReviewPageFieldWriter.executeValue(fixture.root, fixture.control,
+      { field: "old_vehicle.recycle_date", value, expectedValue: "2026-10-12" }, guard);
+    assert.equal(result.ok, false);
+    assert.equal(fixture.value(), "2026-10-12");
+    assert.equal(fixture.clicks(), 0);
+  }
+  assert.equal(calendarDate("2024-02-29"), "2024-02-29");
+  assert.equal(calendarDate("2024/2/29"), null);
+  assert.equal(calendarDate("2025-02-29"), null);
+});
+
+test("date picker is still subject to the backend control type allowlist", async () => {
+  const fixture = calendarFixture();
+  const result = await ReviewPageFieldWriter.executeValue(fixture.root, fixture.control,
+    { field: "old_vehicle.recycle_date", value: "2026-10-13", expectedValue: "2026-10-12" }, () => true,
+    { fields: new Set(["old_vehicle.recycle_date"]), controlKinds: new Set(["text"]) });
+  assert.equal(result.ok, false);
+  assert.match(result.message, /控件类型暂不支持/);
+  assert.equal(fixture.clicks(), 0);
+});
+
+test("composite rollback clears a formerly empty Ant date using its mouseup handler", async () => {
+  const fixture = calendarFixture({ initial: "" });
+  const rejected = valueInput("ORIGINAL");
+  rejected.dispatchEvent = () => { rejected.value = "FRAMEWORK-REJECTED"; };
+  const result = await ReviewPageFieldWriter.executeValueGroup(fixture.root,
+    [{ field: "old_vehicle.recycle_date", element: fixture.control }, { field: "new_vehicle.vin", element: rejected }],
+    { fields: ["old_vehicle.recycle_date", "new_vehicle.vin"], value: "2026-10-13", expectedValues: { "old_vehicle.recycle_date": "", "new_vehicle.vin": "ORIGINAL" } }, () => true);
+  assert.equal(result.ok, false);
+  assert.equal(fixture.value(), "");
 });

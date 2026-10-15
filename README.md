@@ -6,6 +6,8 @@ FORJ Review Assistant 是一个面向车辆审核页面的浏览器扩展与审�
 
 普通页面和字段调整优先使用[声明式页面配置](docs/指南/声明式页面配置.md)：一份 JSON 可新增页面或继承现有版本，字段的提取白名单、材料映射和采集清单由后端生成，前端不增加业务规则。启用前执行 `uv run forj-review-assistant --check-pages review-pages`，再设置 `REVIEW_PAGES_DIR` 并重启服务。本轮仅提供配置底座，不含聊天配置 Agent。
 
+当前先在本地使用；有效配置预览、版本差异、离线回放和历史快照见[本地页面配置工作流](docs/指南/本地页面配置工作流.md)。这些命令不启动服务、不调用模型，也不发布到服务器。
+
 ## 文档入口
 
 - [文档总索引](docs/索引.md)
@@ -24,6 +26,16 @@ uv run forj-review-assistant --reload
 ```
 
 在另一个终端运行 `npm run build:extension`，在浏览器扩展管理页加载 `apps/extension/dist`。发布构建使用 `npm run build:extension:public`。
+
+Windows 一键发布打包入口（在仓库根目录执行）：
+
+```powershell
+.\package-server.cmd
+.\package-extension.cmd
+# 本地后端版本的插件：.\package-extension.cmd -Local
+```
+
+后端完整发布包在 `.tmp/server-release/`，公网插件在 `.tmp/forj-review-extension-public.zip`。上传后端目录内的全部文件到服务器，再运行 `./start-review.sh`；完整步骤与回滚见[部署指南](docs/指南/部署.md)，日志位置与字段见[日志与排查](docs/参考/日志与排查.md)。
 
 **想理解系统**
 

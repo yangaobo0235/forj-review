@@ -125,7 +125,7 @@ def test_finalization_failure_only_exposes_exception_type(caplog):
         async def assist_with_batch_async(self, request, initial_batch):
             raise AttributeError("private model details")
     manager = ReviewJobManager(Failing())
-    with caplog.at_level("ERROR", logger="uvicorn.error"):
+    with caplog.at_level("ERROR", logger="forj_review_assistant"):
         created = manager.create(request(0))
         assert manager.wait(created.job_id, 2)
     snapshot = manager.get(created.job_id)
@@ -145,6 +145,33 @@ def test_groups_use_scope_when_category_hint_disagrees():
     snapshot = manager.get(created.job_id)
     assert snapshot.groups["old_vehicle"].total_count == 0
     assert snapshot.groups["new_vehicle"].completed_count == 1
+
+
+def test_custom_page_progress_uses_declared_scopes():
+    from forj_review_assistant.businesses.configuration.compiler import compile_page
+    from forj_review_assistant.businesses.configuration.schema import PageDefinition
+    from forj_review_assistant.businesses.registry import BusinessRegistry
+
+    profile = compile_page(PageDefinition.model_validate({
+        "page_id": "custom", "business_type": "custom", "title": "自定义页面",
+        "paths": ["/custom"], "scopes": ["permit", "attachment"],
+        "fields": [{"key": "custom.name", "label": "名称", "aliases": ["名称"], "mode": "SYSTEM"}],
+    }))
+    service = UrlService()
+    service.registry = BusinessRegistry((profile,))
+    manager = ReviewJobManager(service)
+    try:
+        data = ReviewRequest(page_id="custom", business_type="custom", page_url="https://example.test/custom", images=[{
+            "index": 0, "src": "https://example.test/synthetic.jpg", "business_scope": "permit",
+        }])
+        created = manager.create(data)
+        assert manager.wait(created.job_id, 2)
+        groups = manager.get(created.job_id).groups
+        assert set(groups) == {"permit", "attachment"}
+        assert groups["permit"].completed_count == 1
+        assert groups["attachment"].total_count == 0
+    finally:
+        manager.close()
 
 
 def test_duplicate_ids_and_excessive_counts_are_rejected():
@@ -192,7 +219,7 @@ def test_cancel_removes_queued_images_and_never_finalizes():
 
 def test_phase_timing_snapshot_isolation_and_expiry(caplog):
     manager = ReviewJobManager(UrlService(), ttl_seconds=60)
-    with caplog.at_level("INFO", logger="uvicorn.error"):
+    with caplog.at_level("INFO", logger="forj_review_assistant"):
         created = manager.create(request(1))
         assert manager.wait(created.job_id, 2)
     lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("review job timing")]
@@ -208,3 +235,33 @@ def test_phase_timing_snapshot_isolation_and_expiry(caplog):
     manager._jobs[created.job_id].updated_at -= 61
     with pytest.raises(KeyError):
         manager.get(created.job_id)
+
+
+@pytest.mark.parametrize("outcome", ["FAILED", "CANCELLED"])
+def test_every_terminal_outcome_logs_timing_once(outcome, caplog):
+    entered = threading.Event()
+
+    class TerminalService(UrlService):
+        async def assist_with_batch_async(self, request, initial_batch):
+            entered.set()
+            if outcome == "FAILED":
+                raise ValueError("synthetic private exception payload")
+            await asyncio.Event().wait()
+
+    manager = ReviewJobManager(TerminalService())
+    try:
+        with caplog.at_level("INFO", logger="forj_review_assistant"):
+            created = manager.create(request(1))
+            assert entered.wait(2)
+            if outcome == "CANCELLED":
+                manager.cancel(created.job_id)
+                manager.cancel(created.job_id)
+            assert manager.wait(created.job_id, 2)
+            manager.close()
+        lines = [record.getMessage() for record in caplog.records if "review job timing" in record.getMessage()]
+        assert len(lines) == 1
+        assert f"status={outcome}" in lines[0]
+        assert "trace_id=" in lines[0] and f"job_id={created.job_id}" in lines[0]
+        assert manager.get(created.job_id).status.value == outcome
+    finally:
+        manager.close()

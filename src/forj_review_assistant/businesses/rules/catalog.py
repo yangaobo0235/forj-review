@@ -73,7 +73,7 @@ RULE_DEFINITIONS = MappingProxyType(
                 "old_vehicle.affiliation",
                 "new_vehicle.affiliation",
             ),
-            ("AFFILIATION-SUBJECT-001",),
+            ("AFFILIATION-SUBJECT-001", "AFFILIATION-AUX-CUSTOMER-NAME"),
             "FINAL_REVIEW",
         ),
         "verify_invoice": RuleDefinition(run_verify_invoice),
@@ -84,6 +84,12 @@ RULE_HANDLERS = MappingProxyType({key: value.handler for key, value in RULE_DEFI
 RULE_FIELDS = MappingProxyType(
     {key: frozenset(value.fields) for key, value in RULE_DEFINITIONS.items()}
 )
+
+REPLACEMENT_POLICY_CHECKS = frozenset({"POLICY-INVOICE-DATE", "POLICY-DISPOSAL-DEADLINE"})
+TASK_PROJECTOR_RULES = MappingProxyType({
+    "old_vehicle_affiliation": "affiliation_subject",
+    "new_vehicle_affiliation": "affiliation_subject",
+})
 
 
 def rule_spec(rule_id: str) -> CapabilitySpec:

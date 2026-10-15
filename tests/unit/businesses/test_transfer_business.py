@@ -389,13 +389,13 @@ def test_buyer_fields_need_both_the_register_and_the_invoice(
     assert comparison.status.value == expected, comparison.message
 
 
-def test_only_text_controls_may_be_written_back() -> None:
+def test_registered_text_select_and_date_controls_may_be_written_back() -> None:
     assert TRANSFER_PACK.page_action_ids == ("fill_review_fields",)
-    assert TRANSFER_PACK.writable_control_kinds == ("text", "textarea", "number")
-    # 开票日期是日期控件：声明为可写，但控件类型不在白名单里，界面上不会出现
-    # 回填按钮，一律交人工填写。
+    assert TRANSFER_PACK.writable_control_kinds == ("text", "textarea", "number", "select", "date")
     assert TRANSFER_PACK.field("transfer.invoice_date").writable is True
-    assert TRANSFER_DEFAULT.allows_field_write("date") is False
+    assert TRANSFER_DEFAULT.allows_field_write("date") is True
+    assert TRANSFER_DEFAULT.allows_field_write("select") is True
+    assert TRANSFER_DEFAULT.allows_field_write("file") is False
     assert TRANSFER_DEFAULT.allows_field_write("text") is True
 
 

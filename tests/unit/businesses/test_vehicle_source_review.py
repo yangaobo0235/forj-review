@@ -353,22 +353,20 @@ def test_projected_reason_stays_visible_when_a_check_did_not_write_it() -> None:
         ("text", True, True),
         ("textarea", True, True),
         ("number", True, True),
-        # 下拉和日期控件写回器还没验证过，一律交人工填写。
-        ("select", True, False),
-        ("date", True, False),
+        ("select", True, True),
+        ("date", True, True),
+        ("file", True, False),
+        ("select", False, False),
+        ("date", False, False),
         ("text", False, False),
     ],
 )
-def test_vehicle_source_offers_writeback_only_for_text_controls(
+def test_vehicle_source_offers_writeback_only_for_supported_controls(
     control_type: str,
     editable: bool,
     writable: bool,
 ) -> None:
-    """回填按钮只在业务声明过的控件类型上出现。
-
-    声明为可写的字段渲染成下拉或日期控件时同样不给按钮——审核员点出一个
-    写不进去（或写进去回读不准）的操作比没有按钮更糟。
-    """
+    """业务允许的控件类型仍须页面可编辑，文件等未支持控件不给按钮。"""
     from forj_review_assistant.contracts.review import FieldComparison, FieldStatus
     from forj_review_assistant.presentation.routing import build_review_tasks
 
@@ -424,8 +422,7 @@ def test_vehicle_source_declares_writeback_for_its_text_fields() -> None:
         "vehicle.fuel_type",
         "vehicle.engine_model",
     )
-    # 只放开文本框；下拉与日期控件在写回器验证之前不放开。
-    assert VEHICLE_SOURCE_PACK.writable_control_kinds == ("text", "textarea", "number")
+    assert VEHICLE_SOURCE_PACK.writable_control_kinds == ("text", "textarea", "number", "select", "date")
     assert VEHICLE_SOURCE_DEFAULT.page_action_ids == ("fill_review_fields",)
 
 

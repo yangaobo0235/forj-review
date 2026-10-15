@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, get_args
 
 from forj_review_assistant.businesses.material_policies import (
     DEFAULT_RETRY_POLICY,
@@ -22,6 +22,7 @@ from forj_review_assistant.contracts.review import RegionId
 EvidenceMode = Literal[
     "SYSTEM", "SINGLE_SOURCE", "AVAILABLE_EVIDENCE", "PARALLEL", "PAGE_AUXILIARY", "DERIVED"
 ]
+TaskProjectorId = Literal["", "owner_type", "old_vehicle_affiliation", "new_vehicle_affiliation"]
 
 
 @dataclass(frozen=True)
@@ -92,6 +93,7 @@ class FieldDeclaration:
     locator_name: str = ""
     locator_id: str = ""
     occurrence: int = 1
+    task_projector: TaskProjectorId = ""
 
 
 @dataclass(frozen=True)
@@ -238,11 +240,32 @@ class RegionDeclaration:
 
 
 @dataclass(frozen=True)
+class QrFieldBinding:
+    page_field: str
+    field: str
+    comparison: Literal["field", "alphanumeric"] = "field"
+
+
+@dataclass(frozen=True)
+class TaskGroupDeclaration:
+    """Backend task grouping; preserves all member conclusions and evidence."""
+
+    step_id: str
+    label: str = ""
+    member_step_ids: tuple[str, ...] = ()
+    member_prefixes: tuple[str, ...] = ()
+    parent_step_id: str | None = None
+    capability_id: str = ""
+    original_status_detail: str = ""
+
+
+@dataclass(frozen=True)
 class TaskPresentation:
     """Business-owned visibility; it never changes evidence or rule conclusions."""
 
     hidden_fields: tuple[str, ...] = ()
     hidden_check_prefixes: tuple[str, ...] = ()
+    groups: tuple[TaskGroupDeclaration, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -257,6 +280,9 @@ class BusinessExtensionPack:
     sections: tuple[SectionDeclaration, ...] = ()
     fields: tuple[FieldDeclaration, ...] = ()
     materials: tuple[MaterialDeclaration, ...] = ()
+    # Compiler provenance: explicit/rule-only inputs before route/page-number
+    # expansion. None identifies a native pack, whose seeds are derived once.
+    material_extraction_seeds: tuple[MaterialDeclaration, ...] | None = None
     # 页面上的图片分组标题 → 业务分区。
     page_groups: tuple[PageGroupDeclaration, ...] = ()
     # 材料字段 → 领域字段的路由规则。
@@ -284,6 +310,7 @@ class BusinessExtensionPack:
     # 核验条目，审核员在字段视图里就能看到结论，不必到页面外核验里找。
     # 一个字段可以绑定多条检查，投影时按最坏状态合并。
     field_check_bindings: tuple[tuple[str, str], ...] = ()
+    qr_field_bindings: tuple[QrFieldBinding, ...] = ()
     # 页面上的组合字段（两个控件描述同一件事，先互校再比材料）。
     page_field_composites: tuple[CompositeFieldDeclaration, ...] = ()
     # 「一键验真」的触发字段：该字段的页面值与材料一致时，才值得去点页面上
@@ -420,6 +447,8 @@ def validate_pack_references(pack: BusinessExtensionPack) -> None:
         if item.key in seen_fields:
             problems.append(f"字段键重复声明：「{item.key}」")
         seen_fields.add(item.key)
+        if item.task_projector not in get_args(TaskProjectorId):
+            problems.append(f"字段「{item.key}」引用了未知任务投影「{item.task_projector}」")
         # 该字段与另一个材料字段共用证据策略，两者都必须存在。
         if item.material_field:
             require(item.material_field, f"字段「{item.key}」的 material_field")
@@ -465,6 +494,27 @@ def validate_pack_references(pack: BusinessExtensionPack) -> None:
 
     for check_id, field_key in pack.field_check_bindings:
         require(field_key, f"检查项「{check_id}」的 field_check_bindings")
+    qr_keys = set()
+    for binding in pack.qr_field_bindings:
+        require(binding.field, f"二维码字段「{binding.page_field}」的 qr_field_bindings")
+        if not binding.page_field or binding.page_field in qr_keys:
+            problems.append("二维码网页字段绑定为空或重复")
+        qr_keys.add(binding.page_field)
+        if binding.comparison not in {"field", "alphanumeric"}:
+            problems.append(f"二维码字段「{binding.page_field}」用了未知比较方式")
+    group_ids = set()
+    capability_ids = {spec.capability_id for spec in pack.capability_specs}
+    capability_ids.update(r.policy_capability_id() for r in pack.regions)
+    for group in pack.presentation.groups:
+        if not group.step_id or group.step_id in group_ids:
+            problems.append("任务分组标识为空或重复")
+        group_ids.add(group.step_id)
+        if "" in (*group.member_prefixes, *group.member_step_ids):
+            problems.append(f"任务分组「{group.step_id}」不能使用空成员标识或前缀")
+        if not group.parent_step_id and not group.label:
+            problems.append(f"任务分组「{group.step_id}」缺少 label")
+        if group.capability_id and group.capability_id not in capability_ids:
+            problems.append(f"任务分组「{group.step_id}」引用了未声明的能力")
 
     for anchor in pack.identity_anchors:
         require(anchor, "页面指纹锚点 identity_anchors")

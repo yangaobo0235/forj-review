@@ -1,0 +1,228 @@
+{
+  "schema_version": "1.0",
+  "cases": [
+    {
+      "name": "材料与页面一致",
+      "request": {
+        "page_id": "example_permit",
+        "business_type": "permit_review",
+        "region": "default",
+        "profile_version": "1.0",
+        "page_url": "https://admin.forjtruck.com/example-permit-review",
+        "page_fields": {
+          "permit.vin": "TESTVIN001"
+        },
+        "images": [
+          {
+            "index": 0,
+            "image_id": "fixture-0",
+            "src": "https://example.test/synthetic.jpg",
+            "business_scope": "vehicle",
+            "document_type_hint": "permit"
+          }
+        ]
+      },
+      "batch": {
+        "total_count": 1,
+        "completed_count": 1,
+        "completed_image_ids": [
+          "fixture-0"
+        ],
+        "recognized_documents": [
+          {
+            "target_id": "fixture-0",
+            "image_index": 0,
+            "document_type": "permit",
+            "business_scope": "vehicle"
+          }
+        ],
+        "observations": [
+          {
+            "field": "permit.vin",
+            "value": "TESTVIN001",
+            "source_type": "image",
+            "source_id": "fixture-0",
+            "image_index": 0,
+            "document_type": "permit",
+            "business_scope": "vehicle"
+          }
+        ],
+        "confidences": [
+          0.99
+        ]
+      },
+      "expect": {
+        "recommendation": "PASS",
+        "comparisons": {
+          "permit.vin": "MATCH"
+        },
+        "comparison_fields": [
+          "permit.vin"
+        ],
+        "manifest_fields": [
+          "permit.vin"
+        ],
+        "writable_fields": []
+      }
+    },
+    {
+      "name": "材料与页面冲突",
+      "request": {
+        "page_id": "example_permit",
+        "business_type": "permit_review",
+        "region": "default",
+        "profile_version": "1.0",
+        "page_url": "https://admin.forjtruck.com/example-permit-review",
+        "page_fields": {
+          "permit.vin": "TESTVIN001"
+        },
+        "images": [
+          {
+            "index": 0,
+            "image_id": "fixture-0",
+            "src": "https://example.test/synthetic.jpg",
+            "business_scope": "vehicle",
+            "document_type_hint": "permit"
+          }
+        ]
+      },
+      "batch": {
+        "total_count": 1,
+        "completed_count": 1,
+        "completed_image_ids": [
+          "fixture-0"
+        ],
+        "recognized_documents": [
+          {
+            "target_id": "fixture-0",
+            "image_index": 0,
+            "document_type": "permit",
+            "business_scope": "vehicle"
+          }
+        ],
+        "observations": [
+          {
+            "field": "permit.vin",
+            "value": "OTHER123",
+            "source_type": "image",
+            "source_id": "fixture-0",
+            "image_index": 0,
+            "document_type": "permit",
+            "business_scope": "vehicle"
+          }
+        ],
+        "confidences": [
+          0.99
+        ]
+      },
+      "expect": {
+        "recommendation": "REVIEW_REQUIRED",
+        "comparisons": {
+          "permit.vin": "CONFLICT"
+        },
+        "comparison_fields": [
+          "permit.vin"
+        ],
+        "manifest_fields": [
+          "permit.vin"
+        ],
+        "writable_fields": []
+      }
+    },
+    {
+      "name": "材料缺失不能通过",
+      "request": {
+        "page_id": "example_permit",
+        "business_type": "permit_review",
+        "region": "default",
+        "profile_version": "1.0",
+        "page_url": "https://admin.forjtruck.com/example-permit-review",
+        "page_fields": {
+          "permit.vin": "TESTVIN001"
+        },
+        "images": []
+      },
+      "batch": {
+        "total_count": 0
+      },
+      "expect": {
+        "recommendation": "REVIEW_REQUIRED",
+        "comparisons": {
+          "permit.vin": "REVIEW_REQUIRED"
+        },
+        "comparison_fields": [
+          "permit.vin"
+        ],
+        "manifest_fields": [
+          "permit.vin"
+        ],
+        "writable_fields": []
+      }
+    },
+    {
+      "name": "不确定证据需要人工复核",
+      "request": {
+        "page_id": "example_permit",
+        "business_type": "permit_review",
+        "region": "default",
+        "profile_version": "1.0",
+        "page_url": "https://admin.forjtruck.com/example-permit-review",
+        "page_fields": {
+          "permit.vin": "TESTVIN001"
+        },
+        "images": [
+          {
+            "index": 0,
+            "image_id": "fixture-0",
+            "src": "https://example.test/synthetic.jpg",
+            "business_scope": "vehicle",
+            "document_type_hint": "permit"
+          }
+        ]
+      },
+      "batch": {
+        "total_count": 1,
+        "completed_count": 1,
+        "completed_image_ids": [
+          "fixture-0"
+        ],
+        "recognized_documents": [
+          {
+            "target_id": "fixture-0",
+            "image_index": 0,
+            "document_type": "permit",
+            "business_scope": "vehicle"
+          }
+        ],
+        "observations": [
+          {
+            "field": "permit.vin",
+            "value": "TESTVIN001",
+            "source_type": "image",
+            "source_id": "fixture-0",
+            "image_index": 0,
+            "document_type": "permit",
+            "business_scope": "vehicle",
+            "uncertain": true
+          }
+        ],
+        "confidences": [
+          0.99
+        ]
+      },
+      "expect": {
+        "recommendation": "REVIEW_REQUIRED",
+        "comparisons": {
+          "permit.vin": "REVIEW_REQUIRED"
+        },
+        "comparison_fields": [
+          "permit.vin"
+        ],
+        "manifest_fields": [
+          "permit.vin"
+        ],
+        "writable_fields": []
+      }
+    }
+  ]
+}

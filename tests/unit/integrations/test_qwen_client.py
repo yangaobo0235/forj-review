@@ -438,7 +438,7 @@ async def test_qwen_client_logs_duration_and_token_usage(caplog) -> None:
         })
 
     client = QwenClient(CONFIG, transport=httpx.MockTransport(handler))
-    with caplog.at_level("INFO", logger="uvicorn.error"):
+    with caplog.at_level("INFO", logger="forj_review_assistant"):
         await client.classify_document({**IMAGE, "image_id": "old_vehicle-03"})
 
     lines = [
@@ -467,7 +467,7 @@ async def test_qwen_client_logs_rate_limited_failure_without_leaking_body(caplog
 
     client = QwenClient(CONFIG, transport=httpx.MockTransport(handler))
     with (
-        caplog.at_level("INFO", logger="uvicorn.error"),
+        caplog.at_level("INFO", logger="forj_review_assistant"),
         pytest.raises(RuntimeError, match="HTTP 429"),
     ):
         await client.classify_document({**IMAGE, "image_id": "id_card-01"})

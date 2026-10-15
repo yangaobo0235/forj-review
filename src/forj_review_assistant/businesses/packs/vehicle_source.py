@@ -515,10 +515,8 @@ VEHICLE_SOURCE_PACK = BusinessExtensionPack(
     # 字段级回填：审核员可以把材料值写回页面控件。动作本身由浏览器执行，
     # 这里声明的是"这个业务允许提出写回请求"，页面动作注册表校验它存在。
     page_action_ids=("fill_review_fields",),
-    # **只放开文本框**。下拉（车辆类型、使用性质、车型、燃料种类）和日期
-    # 控件（注册日期、发证日期）在写回器里还没有验证过，一律交人工填写；
-    # 声明为可写的字段渲染成这些控件时，字段条目上不会出现回填按钮。
-    writable_control_kinds=("text", "textarea", "number"),
+    # 浏览器适配器支持原生/Ant 下拉与 Ant 单日期日历；逐字段可写范围不变。
+    writable_control_kinds=("text", "textarea", "number", "select", "date"),
     # 页面指纹锚点。车源页面上没有 `old_vehicle.*` / `application.id`，
     # 不声明的话指纹恒为空串，页面写回和原图定位会被全部拒绝。
     identity_anchors=("vehicle.vin", "vehicle.plate_no", "vehicle.owner"),

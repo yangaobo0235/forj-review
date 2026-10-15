@@ -131,13 +131,13 @@ test("材料类型优先按清单声明的关键词判定，不借用别的业�
   assert.equal(manifestHintType("过户资料"), null);
 });
 
-test("写回只放开文本框，指纹用强锚点", () => {
+test("写回支持文本、下拉和日期，指纹用强锚点", () => {
   applyCollectManifest(manifest);
 
   assert.equal(manifestWritableFields()?.has("transfer.plate_no"), true);
-  // 开票日期是日期控件：声明为可写，但控件类型不在白名单里，界面上不会出现按钮。
+  // 开票日期通过日历适配器回填，字段和控件类型必须同时获准。
   assert.equal(manifestWritableFields()?.has("transfer.invoice_date"), true);
-  assert.deepEqual([...manifestWritableControlKinds()], ["text", "textarea", "number"]);
+  assert.deepEqual([...manifestWritableControlKinds()], ["text", "textarea", "number", "select", "date"]);
 
   const anchors = manifestIdentityAnchors();
   assert.equal(anchors.includes("transfer.vin"), true);

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Mapping, Sequence
+from time import perf_counter
 from typing import TYPE_CHECKING
 
 from forj_review_assistant.capabilities.specs import (
@@ -75,9 +76,10 @@ class CapabilityRegistry:
                 raise ValueError(f"能力 {binding.capability_id} 的 required 必须为布尔值")
 
     async def execute(self, spec: CapabilitySpec, plan: CapabilityPlanItem, context: ReviewExecutionContext) -> CapabilityResult:
+        started = perf_counter()
         if plan.status != "READY":
             result = self._unavailable(spec, plan.status, plan.reason, "MATERIAL_MISSING", 0)
-            self._log_outcome(spec, result, context)
+            self._log_outcome(spec, result, context, started)
             return result
         handler = self.handlers[spec.capability_id]
         for attempt in range(1, spec.retries + 2):
@@ -87,36 +89,40 @@ class CapabilityRegistry:
                 if result.capability_id != spec.capability_id:
                     raise ValueError("能力返回了其他能力的标识")
                 outcome = result.model_copy(update={"attempts": attempt})
-                self._log_outcome(spec, outcome, context)
+                self._log_outcome(spec, outcome, context, started)
                 return outcome
             except asyncio.CancelledError:
+                logger.warning("review capability cancelled capability=%s attempt=%d duration_ms=%d trace_id=%s",
+                               spec.capability_id, attempt, int((perf_counter() - started) * 1000), context.request.trace_id or "-")
                 raise
             except Exception as exc:  # noqa: BLE001 - isolate handler failures
-                logger.warning("Capability %s failed: %s", spec.capability_id, type(exc).__name__)
+                logger.warning("review capability attempt failed capability=%s attempt=%d error_type=%s trace_id=%s",
+                               spec.capability_id, attempt, type(exc).__name__, context.request.trace_id or "-")
                 if attempt > spec.retries:
                     code = "EXTERNAL_SERVICE_FAILED" if spec.kind == "EXTERNAL" else "CAPABILITY_FAILED"
                     status = "SKIPPED" if spec.failure_policy in {"SAFE_DEGRADE", "SKIP"} else (
                         "BLOCKED" if spec.failure_policy == "BLOCK" else "FAILED"
                     )
                     outcome = self._unavailable(spec, status, "能力执行超时" if isinstance(exc, TimeoutError) else "能力执行失败，请人工复核", code, attempt)
-                    self._log_outcome(spec, outcome, context)
+                    self._log_outcome(spec, outcome, context, started)
                     return outcome
         raise RuntimeError("能力执行未产生结果")
 
     @staticmethod
-    def _log_outcome(spec: CapabilitySpec, result: CapabilityResult, context: ReviewExecutionContext) -> None:
+    def _log_outcome(spec: CapabilitySpec, result: CapabilityResult, context: ReviewExecutionContext, started: float) -> None:
         """能力执行出口：一条结构化事件，说明这项能力到底跑出了什么。
 
         只记标识、状态和数量。每条 check 的理由仍在响应的
         `capability_results` 里，日志不重复业务结论。
         """
         logger.info(
-            "review capability completed capability=%s status=%s attempts=%d checks=%d trace_id=%s",
+            "review capability completed capability=%s status=%s attempts=%d checks=%d trace_id=%s error_code=%s duration_ms=%d",
             spec.capability_id,
             result.status,
             result.attempts,
             len(result.checks),
             context.request.trace_id or "",
+            result.error_code or "-", int((perf_counter() - started) * 1000),
         )
 
     @staticmethod

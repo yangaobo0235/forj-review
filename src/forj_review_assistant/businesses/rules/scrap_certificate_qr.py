@@ -4,13 +4,9 @@ from forj_review_assistant.businesses.profiles import BusinessProfile
 from forj_review_assistant.businesses.routing import scope_hint_types
 from forj_review_assistant.contracts.recognition import AgentBatchResult
 from forj_review_assistant.contracts.review import (
-    FieldObservation,
-    FieldStatus,
     ImageInput,
-    QrCheck,
     ReviewRequest,
 )
-from forj_review_assistant.evidence.fields.normalize import normalize_value
 
 
 def qr_candidates(
@@ -56,63 +52,3 @@ def qr_candidates(
         ):
             fallback.append(image)
     return preferred, fallback
-
-
-def append_qr_observations(
-    observations: list[FieldObservation],
-    qr_checks: list[QrCheck],
-) -> None:
-    for check in qr_checks:
-        for field, value in check.page_fields.items():
-            mapped_field = (
-                "old_vehicle.vin" if field == "vin" else "scrap_certificate.certificate_no"
-            )
-            observations.append(
-                FieldObservation(
-                    field=mapped_field,
-                    source_type="qr_page",
-                    source_id=f"qr-{check.image_index}",
-                    image_index=check.image_index,
-                    value=value,
-                )
-            )
-
-
-def _comparable_qr_value(field_name: str, value: object) -> str:
-    normalized = normalize_value(field_name, value) or ""
-    # Official certificate numbers may omit the printed separators.
-    if field_name == "scrap_certificate.certificate_no":
-        return "".join(ch for ch in normalized.upper() if ch.isalnum())
-    return normalized
-
-
-def mark_qr_conflicts(
-    observations: list[FieldObservation],
-    qr_checks: list[QrCheck],
-) -> bool:
-    has_conflict = False
-    for check in qr_checks:
-        for page_field, page_value in check.page_fields.items():
-            candidates = [
-                item.value
-                for item in observations
-                if item.image_index == check.image_index
-                and item.source_type == "image"
-                and (
-                    (page_field == "vin" and item.field.endswith(".vin"))
-                    or (page_field == "certificate_no" and item.field.endswith("certificate_no"))
-                )
-                and item.value not in (None, "")
-            ]
-            field_name = (
-                "old_vehicle.vin" if page_field == "vin" else "scrap_certificate.certificate_no"
-            )
-            if any(
-                _comparable_qr_value(field_name, value)
-                != _comparable_qr_value(field_name, page_value)
-                for value in candidates
-            ):
-                check.status = FieldStatus.CONFLICT
-                check.message = "二维码网页字段与图片识别结果冲突"
-                has_conflict = True
-    return has_conflict

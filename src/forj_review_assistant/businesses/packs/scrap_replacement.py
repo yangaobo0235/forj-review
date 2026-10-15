@@ -17,9 +17,11 @@ from forj_review_assistant.businesses.packs.model import (
     FieldDeclaration,
     MaterialDeclaration,
     PageGroupDeclaration,
+    QrFieldBinding,
     RegionDeclaration,
     RouteDeclaration,
     SectionDeclaration,
+    TaskGroupDeclaration,
     TaskPresentation,
 )
 from forj_review_assistant.businesses.replacement_policies import ReplacementPolicy
@@ -365,6 +367,7 @@ SCRAP_REPLACEMENT_PACK = BusinessExtensionPack(
         ),
         FieldDeclaration(
             key="application.owner_type",
+            task_projector="owner_type",
             writable=True,
             label="车辆所有人类型",
             aliases=("车辆所有人类型",),
@@ -388,6 +391,7 @@ SCRAP_REPLACEMENT_PACK = BusinessExtensionPack(
         ),
         FieldDeclaration(
             key="old_vehicle.affiliation",
+            task_projector="old_vehicle_affiliation",
             writable=True,
             label="报废车挂靠",
             aliases=(),
@@ -396,6 +400,7 @@ SCRAP_REPLACEMENT_PACK = BusinessExtensionPack(
         ),
         FieldDeclaration(
             key="new_vehicle.affiliation",
+            task_projector="new_vehicle_affiliation",
             writable=True,
             label="新车挂靠",
             aliases=(),
@@ -745,6 +750,20 @@ SCRAP_REPLACEMENT_PACK = BusinessExtensionPack(
     presentation=TaskPresentation(
         hidden_fields=("old_vehicle.affiliation", "new_vehicle.affiliation"),
         hidden_check_prefixes=("AFFILIATION-",),
+        groups=(
+            TaskGroupDeclaration(
+                "BUSINESS-AFFILIATION-SUBJECT-001",
+                parent_step_id="BUSINESS-AFFILIATION-SUBJECT-001",
+                member_prefixes=("BUSINESS-AFFILIATION-AUX-",),
+                capability_id="affiliation_subject",
+                original_status_detail="affiliation_subject_status",
+            ),
+            TaskGroupDeclaration(
+                "QR-GROUP", label="二维码官网核验",
+                member_prefixes=("QR-",), member_step_ids=("EXTERNAL-scrap_certificate_qr",),
+                capability_id="scrap_certificate_qr",
+            ),
+        ),
     ),
     # 页面指纹锚点：审核单号、新旧车车架号（强锚点）和所有人。与浏览器里
     # 的内置兜底表一致，这里显式声明之后清单就是运行时的唯一来源。
@@ -764,6 +783,10 @@ SCRAP_REPLACEMENT_PACK = BusinessExtensionPack(
         ("POLICY-INVOICE-DATE", "invoice.invoice_date"),
         ("POLICY-DISPOSAL-DEADLINE", "old_vehicle.recycle_date"),
         ("VEHICLE-TYPE-LIGHT-DUTY", "old_vehicle.type"),
+    ),
+    qr_field_bindings=(
+        QrFieldBinding("vin", "old_vehicle.vin"),
+        QrFieldBinding("certificate_no", "scrap_certificate.certificate_no", "alphanumeric"),
     ),
     # 「一键验真」的触发字段：发票号码与页面一致时才值得去点页面上那个按钮。
     invoice_verification_field="invoice.invoice_no",

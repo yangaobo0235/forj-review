@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import contextvars
 import threading
 from collections import deque
 from collections.abc import Awaitable, Callable
@@ -16,6 +17,7 @@ class _WorkItem:
     job_id: str
     factory: Callable[[], Awaitable[Any]]
     future: concurrent.futures.Future[Any]
+    context: contextvars.Context
 
 
 class FairAsyncScheduler:
@@ -54,7 +56,7 @@ class FairAsyncScheduler:
                 return future
             loop.call_soon_threadsafe(
                 self._enqueue,
-                _WorkItem(job_id=job_id, factory=factory, future=future),
+                _WorkItem(job_id=job_id, factory=factory, future=future, context=contextvars.copy_context()),
             )
         return future
 
@@ -175,7 +177,7 @@ class FairAsyncScheduler:
             self._active_total += 1
             self._active_by_job[item.job_id] = self._active_by_job.get(item.job_id, 0) + 1
             self._last_dispatched_job = item.job_id
-            task = asyncio.create_task(self._run(item))
+            task = asyncio.create_task(self._run(item), context=item.context)
             self._tasks.setdefault(item.job_id, set()).add(task)
             task.add_done_callback(
                 lambda completed, current=item: self._finished(current, completed)

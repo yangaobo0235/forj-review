@@ -149,13 +149,12 @@ test("指纹锚点必须由业务声明，否则页面写回和原图定位全�
   assert.equal(buildPageFingerprint({ "vehicle.owner": "某某物流有限公司" }, ["vehicle.owner"]), "");
 });
 
-test("写回白名单由清单下发：13 个字段、只放开文本框", () => {
+test("写回白名单由清单下发：13 个字段及已支持的控件类型", () => {
   applyCollectManifest(manifest);
 
   const writable = manifestWritableFields();
   assert.deepEqual([...writable].sort(), manifest.fields.map((field) => field.key).sort());
-  // 下拉和日期控件在写回器验证之前不放开。
-  assert.deepEqual([...manifestWritableControlKinds()].sort(), ["number", "text", "textarea"]);
+  assert.deepEqual([...manifestWritableControlKinds()].sort(), ["date", "number", "select", "text", "textarea"]);
 
   // 清单不可用时退回内置表，而不是"什么都不允许"。
   applyCollectManifest(null);

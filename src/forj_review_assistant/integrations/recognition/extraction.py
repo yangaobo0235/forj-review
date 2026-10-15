@@ -54,7 +54,7 @@ MAX_CONCURRENT_IMAGES = 6
 IMAGE_TIMEOUT_SECONDS = 50.0
 REVIEW_DEADLINE_SECONDS = 55.0
 CLASSIFICATION_CONFIDENCE_THRESHOLD = 0.70
-logger = logging.getLogger("uvicorn.error")
+logger = logging.getLogger(__name__)
 
 # 上传槽位 → 材料类型来自业务声明；前端也读同一份，不再各写一遍。
 # 槽位键带业务分区，各业务分区互不重叠，可以直接合成一张表。
@@ -236,10 +236,11 @@ class AgentService:
                             ))
                             result.limitations.append(f"图片 {image_name} 满足重试条件但剩余时间不足")
                             retry_result = "skipped"
+                            logger.info("review image retry image_id=%s attempt=2 reason=%s result=skipped duration_ms=0", image_name, reason)
                             if first_error is not None:
                                 raise first_error
                         else:
-                            started = loop.time()
+                            retry_started = loop.time()
                             retry_attempts = 1
                             try:
                                 extraction, policy = await asyncio.wait_for(
@@ -255,15 +256,17 @@ class AgentService:
                                 result.retry_summary.attempts.append(RetryAttempt(
                                     target_id=str(image_name), stage="qwen", attempt_number=2,
                                     reason_code=reason, strategy="focused_extraction", result="failed",
-                                    duration_ms=max(0, int((loop.time() - started) * 1000)),
+                                    duration_ms=max(0, int((loop.time() - retry_started) * 1000)),
                                 ))
+                                logger.warning("review image retry image_id=%s attempt=2 reason=%s result=failed duration_ms=%d", image_name, reason, int((loop.time() - retry_started) * 1000))
                                 raise
                             result.retry_summary.attempts.append(RetryAttempt(
                                 target_id=str(image_name), stage="qwen", attempt_number=2,
                                 reason_code=reason, strategy="focused_extraction", result="succeeded",
-                                duration_ms=max(0, int((loop.time() - started) * 1000)),
+                                duration_ms=max(0, int((loop.time() - retry_started) * 1000)),
                             ))
                             retry_result = "succeeded"
+                            logger.info("review image retry image_id=%s attempt=2 reason=%s result=succeeded duration_ms=%d", image_name, reason, int((loop.time() - retry_started) * 1000))
             except TimeoutError:
                 result.timed_out_count += 1
                 result.timed_out_image_ids.append(str(image_name))

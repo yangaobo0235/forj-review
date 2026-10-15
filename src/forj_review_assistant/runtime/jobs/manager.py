@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from forj_review_assistant.businesses.packs import pack_for_business
 from forj_review_assistant.contracts.recognition import AgentBatchResult
 from forj_review_assistant.contracts.review import (
     ImageInput,
@@ -26,13 +27,12 @@ from forj_review_assistant.contracts.review import (
     ReviewRequest,
     ReviewResponse,
 )
+from forj_review_assistant.observability.context import log_context
 from forj_review_assistant.runtime.scheduling.fair_scheduler import FairAsyncScheduler
 
 JOB_TTL_SECONDS = 600.0
 MAX_IMAGES = 16
-OLD_SCOPES = {"old_vehicle"}
-NEW_SCOPES = {"new_vehicle"}
-logger = logging.getLogger("uvicorn.error")
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -48,6 +48,8 @@ class _StoredJob:
     # 各阶段的单调时钟锚点，用于拆出「识别 / 汇总」各占多久。
     # 只用于日志，不进快照：加进 ReviewJobSnapshot 就是公开协议变更。
     timeline: dict[str, float] = field(default_factory=dict)
+    terminal_logged: bool = False
+    group_scopes: tuple[str, ...] = ()
 
 
 def _peak_rss_mb() -> int:
@@ -145,6 +147,7 @@ class ReviewJobManager:
             batch=AgentBatchResult(total_count=len(request.images)),
             pending_count=len(valid_images),
             timeline={"created_at": now},
+            group_scopes=self._group_scopes(request),
         )
         for image in request.images:
             if image.collection_error:
@@ -152,11 +155,13 @@ class ReviewJobManager:
         self._refresh_snapshot(stored)
         with self._lock:
             self._jobs[job_id] = stored
+        logger.info("review job created job_id=%s trace_id=%s images=%d collected_failed=%d",
+                    job_id, request.trace_id, len(request.images), len(request.images) - len(valid_images))
         try:
             for image in valid_images:
                 future = self.scheduler.submit(
                     job_id,
-                    lambda current=image: self.review_service.extract_image_async(request, current),
+                    lambda current=image: self._extract_image_async(job_id, request, current),
                 )
                 future.add_done_callback(
                     lambda completed, current=image: self._image_finished(
@@ -184,6 +189,8 @@ class ReviewJobManager:
             stored.snapshot.phase = ReviewJobPhase.CANCELLED
             stored.snapshot.message = "审核任务已取消"
             stored.updated_at = time.monotonic()
+            stored.timeline["terminal_at"] = stored.updated_at
+            self._log_job_timing(stored)
             stored.done.set()
             snapshot = stored.snapshot.model_copy(deep=True)
         self.scheduler.cancel(job_id)
@@ -202,6 +209,14 @@ class ReviewJobManager:
         with self._lock:
             stored = self._jobs.get(job_id)
         return bool(stored and stored.done.wait(timeout))
+
+    async def _extract_image_async(self, job_id: str, request: ReviewRequest, image: ImageInput) -> AgentBatchResult:
+        with self._lock:
+            stored = self._jobs.get(job_id)
+            if stored is not None:
+                stored.timeline.setdefault("recognize_started_at", time.monotonic())
+        with log_context(job_id=job_id, trace_id=request.trace_id, image_id=self._image_id(image)):
+            return await self.review_service.extract_image_async(request, image)
 
     def _image_finished(
         self,
@@ -241,7 +256,7 @@ class ReviewJobManager:
     def _begin_finalize_locked(self, stored: _StoredJob) -> bool:
         if stored.pending_count == 0 and not stored.finalize_started and not stored.cancelled:
             stored.finalize_started = True
-            stored.timeline["finalize_started_at"] = time.monotonic()
+            stored.timeline["finalize_queued_at"] = time.monotonic()
             stored.snapshot.phase = ReviewJobPhase.FINALIZING
             return True
         return False
@@ -249,8 +264,17 @@ class ReviewJobManager:
     def _start_finalize(self, job_id: str) -> None:
         self.finalize_scheduler.submit(
             job_id,
-            lambda: self._finalize_async(job_id),
+            lambda: self._finalize_with_context(job_id),
         )
+
+    async def _finalize_with_context(self, job_id: str) -> None:
+        with self._lock:
+            stored = self._jobs.get(job_id)
+            if stored is None:
+                return
+            trace_id = stored.request.trace_id
+        with log_context(job_id=job_id, trace_id=trace_id, image_id="-"):
+            await self._finalize_async(job_id)
 
     async def _finalize_async(self, job_id: str) -> None:
         with self._lock:
@@ -259,6 +283,7 @@ class ReviewJobManager:
                 return
             request = stored.request.model_copy(deep=True)
             batch = stored.batch.model_copy(deep=True)
+            stored.timeline["finalize_started_at"] = time.monotonic()
         try:
             response, final_batch = await self.review_service.assist_with_batch_async(
                 request,
@@ -289,12 +314,16 @@ class ReviewJobManager:
                 if current is not None:
                     current.updated_at = time.monotonic()
                     current.timeline["finalize_done_at"] = current.updated_at
+                    current.timeline["terminal_at"] = current.updated_at
                     # 先记日志再放行等待者：`wait()` 一返回调用方就会去读日志，
                     # 顺序反了会让"任务已完成但 timing 行还没出现"的竞态成立。
                     self._log_job_timing(current)
                     current.done.set()
 
     def _log_job_timing(self, stored: _StoredJob) -> None:
+        if stored.terminal_logged or stored.snapshot.status is JobStatus.RUNNING:
+            return
+        stored.terminal_logged = True
         timeline = stored.timeline
 
         def span(start: str, end: str) -> int:
@@ -303,13 +332,18 @@ class ReviewJobManager:
             return max(0, int((timeline[end] - timeline[start]) * 1000))
 
         logger.info(
-            "review job timing job_id=%s status=%s images=%d recognize_ms=%d finalize_ms=%d total_ms=%d peak_rss_mb=%d",
+            "review job timing job_id=%s trace_id=%s status=%s images=%d completed=%d failed=%d timed_out=%d retries=%d recognize_wait_ms=%d recognize_ms=%d finalize_wait_ms=%d finalize_ms=%d total_ms=%d peak_rss_mb=%d",
             stored.snapshot.job_id,
+            stored.request.trace_id,
             stored.snapshot.status.value,
             stored.batch.total_count,
-            span("created_at", "last_done_at"),
+            stored.batch.completed_count, stored.batch.failed_count, stored.batch.timed_out_count,
+            stored.batch.retry_summary.total_retries,
+            span("created_at", "recognize_started_at"),
+            span("recognize_started_at", "last_done_at"),
+            span("finalize_queued_at", "finalize_started_at"),
             span("finalize_started_at", "finalize_done_at"),
-            span("created_at", "finalize_done_at"),
+            span("created_at", "terminal_at"),
             _peak_rss_mb(),
         )
 
@@ -324,23 +358,28 @@ class ReviewJobManager:
             timed_out_count=stored.batch.timed_out_count,
         )
         stored.snapshot.groups = {
-            "old_vehicle": self._group_progress(
+            scope: self._group_progress(
                 stored.request,
-                OLD_SCOPES,
+                {scope},
                 set(stored.batch.completed_image_ids),
                 set(stored.batch.failed_image_ids),
                 set(stored.batch.timed_out_image_ids),
                 final=False,
-            ),
-            "new_vehicle": self._group_progress(
-                stored.request,
-                NEW_SCOPES,
-                set(stored.batch.completed_image_ids),
-                set(stored.batch.failed_image_ids),
-                set(stored.batch.timed_out_image_ids),
-                final=False,
-            ),
+            )
+            for scope in stored.group_scopes
         }
+
+    def _group_scopes(self, request: ReviewRequest) -> tuple[str, ...]:
+        registry = getattr(self.review_service, "registry", None)
+        pack = (
+            registry.resolve(request.business_type, request.region, request.profile_version,
+                             page_id=request.page_id).pack_declaration
+            if registry is not None else pack_for_business(request.business_type)
+        )
+        return tuple(dict.fromkeys((
+            *(pack.scopes if pack else ()),
+            *(image.business_scope for image in request.images),
+        )))
 
     @staticmethod
     def _image_id(image: ImageInput) -> str:
@@ -393,22 +432,15 @@ class ReviewJobManager:
         failed_ids = set(batch.failed_image_ids)
         timed_out_ids = set(batch.timed_out_image_ids)
         groups = {
-            "old_vehicle": self._group_progress(
+            scope: self._group_progress(
                 stored.request,
-                OLD_SCOPES,
+                {scope},
                 completed_ids,
                 failed_ids,
                 timed_out_ids,
                 final=final,
-            ),
-            "new_vehicle": self._group_progress(
-                stored.request,
-                NEW_SCOPES,
-                completed_ids,
-                failed_ids,
-                timed_out_ids,
-                final=final,
-            ),
+            )
+            for scope in stored.group_scopes
         }
         processed_count = (
             progress.completed_count + progress.failed_count + progress.timed_out_count

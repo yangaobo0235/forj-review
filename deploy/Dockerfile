@@ -31,8 +31,8 @@ ENV PATH="/app/.venv/bin:${PATH}" \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends tzdata \
     && rm -rf /var/lib/apt/lists/* \
-    && groupadd --system review-agent \
-    && useradd --system --gid review-agent --home-dir /app review-agent
+    && groupadd --gid 10001 review-agent \
+    && useradd --uid 10001 --gid review-agent --home-dir /app --no-create-home review-agent
 
 WORKDIR /app
 
@@ -40,6 +40,9 @@ COPY --from=builder --chown=review-agent:review-agent /app /app
 
 USER review-agent
 
+ARG RELEASE_ID=development
+ENV REVIEW_RELEASE_ID=${RELEASE_ID}
+
 EXPOSE 8010
 
-CMD ["uvicorn", "forj_review_assistant.main:app", "--host", "0.0.0.0", "--port", "8010"]
+CMD ["uvicorn", "forj_review_assistant.main:app", "--host", "0.0.0.0", "--port", "8010", "--no-access-log"]

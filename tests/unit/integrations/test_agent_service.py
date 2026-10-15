@@ -270,7 +270,7 @@ def test_image_completion_log_names_the_uncertain_fields(caplog: object) -> None
     )
 
     # 单图完成事件走 uvicorn 的 logger（服务日志直接打到 Uvicorn 控制台）。
-    with caplog.at_level(logging.INFO, logger="uvicorn.error"):
+    with caplog.at_level(logging.INFO, logger="forj_review_assistant"):
         extracted_values(AgentService(fake), [image(category_hint="invoice")])
 
     assert "image=0" in caplog.text
@@ -293,7 +293,7 @@ def test_image_completion_log_marks_an_uncertainty_free_image(caplog: object) ->
     )
 
     # 单图完成事件走 uvicorn 的 logger（服务日志直接打到 Uvicorn 控制台）。
-    with caplog.at_level(logging.INFO, logger="uvicorn.error"):
+    with caplog.at_level(logging.INFO, logger="forj_review_assistant"):
         extracted_values(AgentService(fake), [image(category_hint="invoice")])
 
     assert "uncertain_field_count=0 uncertain_fields=-" in caplog.text

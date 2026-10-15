@@ -17,18 +17,26 @@ services:
       # （3×8=24 需求 > 16 供给，公平调度器按任务轮转，每人约 5 路不饿死）。
       # 上限受 DashScope 账号额度约束，不是本机资源——出现 rate_limited=true
       # 就先降回 12，否则 429 会把"慢"换成"识别失败转人工"。
-      REVIEW_MODEL_GLOBAL_CONCURRENCY: "16"
-      REVIEW_MODEL_JOB_CONCURRENCY: "8"
-      # 汇总侧保持 2：LangGraph 14 节点处理识别结果，
+      REVIEW_MODEL_GLOBAL_CONCURRENCY: "${REVIEW_MODEL_GLOBAL_CONCURRENCY:-16}"
+      REVIEW_MODEL_JOB_CONCURRENCY: "${REVIEW_MODEL_JOB_CONCURRENCY:-8}"
+      # 汇总侧保持 2：通用审核图处理识别结果，
       # 2 核上再提只会互相抢核，吞吐不涨。
-      REVIEW_FINALIZE_CONCURRENCY: "2"
-      # 按天轮转的日志文件写进挂载卷：容器根文件系统是只读的。
-      # 目录不可写时应用只记一条 "Review log file disabled" 告警并照常服务。
+      REVIEW_FINALIZE_CONCURRENCY: "${REVIEW_FINALIZE_CONCURRENCY:-2}"
+      # 按天或大小轮转；归档数量封顶。文件写进挂载卷，根文件系统保持只读。
       REVIEW_LOG_DIR: "/logs"
+      REVIEW_LOG_REQUIRED: "true"
+      REVIEW_LOG_LEVEL: "${REVIEW_LOG_LEVEL:-INFO}"
+      REVIEW_LOG_MAX_MB: "${REVIEW_LOG_MAX_MB:-10}"
+      REVIEW_LOG_BACKUP_COUNT: "${REVIEW_LOG_BACKUP_COUNT:-30}"
     volumes:
       # 与发布包同目录，排查时 cd 一次就能同时看到 tar 和日志。
       # 写权限由 deploy/start-review.sh 准备——容器用户和 ubuntu 不是同一个 uid。
-      - /home/ubuntu/review-agent-deploy/logs:/logs:rw
+      - ${REVIEW_UPLOAD_DIR:-/home/ubuntu/review-agent-deploy}/logs:/logs:rw
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "18110:8010"
     healthcheck:

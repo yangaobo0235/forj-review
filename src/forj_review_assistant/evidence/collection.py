@@ -3,10 +3,6 @@
 from collections.abc import Sequence
 
 from forj_review_assistant.businesses.profiles import BusinessProfile
-from forj_review_assistant.businesses.rules.scrap_certificate_qr import (
-    append_qr_observations,
-    mark_qr_conflicts,
-)
 from forj_review_assistant.contracts.evidence import EvidenceFact, FieldObservation
 from forj_review_assistant.contracts.recognition import AgentBatchResult
 from forj_review_assistant.contracts.review import (
@@ -18,6 +14,10 @@ from forj_review_assistant.contracts.review import (
 from forj_review_assistant.evidence.comparison.aggregate import EVIDENCE_SOURCE_LABELS
 from forj_review_assistant.evidence.comparison.evidence_values import batch_observations
 from forj_review_assistant.evidence.fields.normalize import normalize_value
+from forj_review_assistant.evidence.qr import (
+    append_qr_observations,
+    mark_qr_conflicts,
+)
 
 
 def capability_observations(
@@ -64,8 +64,8 @@ def collect_observations(
         if request.page_fields.get(key) not in (None, "")
     )
     checks = [check.model_copy(deep=True) for check in qr_checks]
-    append_qr_observations(observations, checks)
-    mark_qr_conflicts(observations, checks)
+    append_qr_observations(observations, checks, profile)
+    mark_qr_conflicts(observations, checks, profile)
     return observations, checks
 
 
@@ -73,7 +73,14 @@ def collection_issues(request: ReviewRequest, profile: BusinessProfile) -> list[
     issues = []
     if not request.images and (profile.material_policy is not None or profile.required_fields):
         issues.append("未采集到审核图片")
-    if not request.page_fields and profile.required_fields:
+    required_page_fields = profile.required_fields
+    if profile.pack_declaration is not None:
+        required_page_fields = tuple(
+            field.key for field in profile.pack_declaration.fields
+            if field.key in profile.required_fields
+            and field.page_evidence_required and field.mode != "DERIVED"
+        )
+    if not request.page_fields and required_page_fields:
         issues.append("未采集到右侧申请字段")
     issues.extend(
         f"图片 {image.image_id or image.index} 采集失败：{image.collection_error}"

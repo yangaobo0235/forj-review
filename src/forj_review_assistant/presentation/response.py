@@ -7,10 +7,6 @@
 import logging
 
 from forj_review_assistant.businesses.profiles import BusinessProfile
-from forj_review_assistant.businesses.rules.scrap_certificate_qr import (
-    append_qr_observations,
-    mark_qr_conflicts,
-)
 from forj_review_assistant.contracts.recognition import AgentBatchResult
 from forj_review_assistant.contracts.review import (
     FieldComparison,
@@ -24,9 +20,13 @@ from forj_review_assistant.contracts.review import (
 )
 from forj_review_assistant.evidence.comparison.check_results import unique_checks
 from forj_review_assistant.evidence.comparison.review import build_field_comparisons
+from forj_review_assistant.evidence.qr import (
+    append_qr_observations,
+    mark_qr_conflicts,
+)
 from forj_review_assistant.presentation.assembly import assemble_review_response
 
-logger = logging.getLogger("uvicorn.error")
+logger = logging.getLogger(__name__)
 
 
 def _log_decision(response: ReviewResponse, note: str = "") -> None:
@@ -127,8 +127,8 @@ def build_review_response(
     """把提取结果和确定性检查组装为稳定的审核响应。"""
 
     resolved_qr_checks = qr_checks or []
-    append_qr_observations(observations, resolved_qr_checks)
-    mark_qr_conflicts(observations, resolved_qr_checks)
+    append_qr_observations(observations, resolved_qr_checks, profile)
+    mark_qr_conflicts(observations, resolved_qr_checks, profile)
     comparisons = build_field_comparisons(request, profile, observations)
     cross_checks = unique_checks(business_checks or [])
     response = response_from_results(

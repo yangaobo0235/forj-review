@@ -72,6 +72,33 @@ function collect(collector, root) {
   return collector.collect(root);
 }
 
+test("custom page field additions, alias edits and removals follow the current manifest", () => {
+  const applyFields = (fields) => applyCollectManifest({
+    business_type: "custom_permit", scopes: ["vehicle"], page_groups: [], materials: [], fields,
+  });
+  const field = (key, alias) => ({
+    key, label: alias, aliases: [alias], section: "unknown", reviewable: true,
+    section_required: false, locator_id: "", locator_name: "", occurrence: 1,
+  });
+  const root = fixture(
+    control({ label: "许可证车架号", value: "VIN-A" }),
+    control({ label: "新版车架号", value: "VIN-B" }),
+    control({ label: "许可证所有人", value: "示例所有人" }),
+  );
+  try {
+    applyFields([field("permit.vin", "许可证车架号")]);
+    assert.deepEqual(loadCollector().collect(root).pageFields, { "permit.vin": "VIN-A" });
+    applyFields([field("permit.vin", "新版车架号"), field("permit.owner", "许可证所有人")]);
+    assert.deepEqual(loadCollector().collect(root).pageFields, {
+      "permit.vin": "VIN-B", "permit.owner": "示例所有人",
+    });
+    applyFields([field("permit.owner", "许可证所有人")]);
+    assert.deepEqual(loadCollector().collect(root).pageFields, { "permit.owner": "示例所有人" });
+  } finally {
+    applyCollectManifest(null);
+  }
+});
+
 test("identity collection matches live full collection but skips the review inventory", () => {
   const collector = loadCollector();
   const application = control({ label: "申请单编号", value: "CASE-A" });
@@ -807,6 +834,23 @@ test("keeps read-only known fields in the review catalog without making them wri
   const result = collector.collect(root, "scrap_replacement");
   assert.equal(result.reviewFields[0].label, "报废交车日期");
   assert.equal(result.reviewFields[0].editable, false);
+});
+
+test("readonly Ant calendar inputs are editable dates but disabled picker wrappers are not", () => {
+  for (const disabled of [false, true]) {
+    const date = control({ label: "报废交车日期", value: "2026-10-12", section: "old_vehicle" });
+    date.readOnly = true;
+    const picker = {
+      classList: { contains: name => name === "ant-picker" || disabled && name === "ant-picker-disabled" },
+      getAttribute: () => null,
+      querySelectorAll: () => [date],
+    };
+    date.parentElement = picker;
+    date.closest = selector => selector === ".ant-picker" ? picker : null;
+    const result = loadCollector().collect(fixture(date), "scrap_replacement");
+    assert.equal(result.reviewFields[0].controlType, "date");
+    assert.equal(result.reviewFields[0].editable, !disabled);
+  }
 });
 
 test("does not expose duplicate retired affiliation controls", () => {

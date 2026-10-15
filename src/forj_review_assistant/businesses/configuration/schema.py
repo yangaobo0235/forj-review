@@ -8,7 +8,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, model_validator
 
-from forj_review_assistant.businesses.packs.model import EvidenceMode
+from forj_review_assistant.businesses.packs.model import EvidenceMode, TaskProjectorId
 from forj_review_assistant.contracts.review import BusinessId, Identifier, RegionId
 
 Key = Annotated[
@@ -80,6 +80,7 @@ class FieldConfig(Declaration):
     locator_id: str = ""
     occurrence: int = Field(default=1, ge=1)
     checks: tuple[Text, ...] = ()
+    task_projector: TaskProjectorId = ""
 
 
 class MaterialConfig(Declaration):
@@ -94,6 +95,16 @@ class MaterialConfig(Declaration):
     alternative_group: str = ""
     # Additional values consumed only by a registered business rule.
     extra_fields: tuple[Key, ...] = ()
+    remove_extra_fields: tuple[Key, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_extra_fields(self):
+        if set(self.extra_fields) & set(self.remove_extra_fields):
+            raise ValueError("同一提取字段不能同时增加和删除")
+        for values in (self.extra_fields, self.remove_extra_fields):
+            if len(values) != len(set(values)):
+                raise ValueError("extra_fields/remove_extra_fields 存在重复标识")
+        return self
 
 
 class Section(Declaration):
@@ -125,12 +136,13 @@ class PageDefinition(Declaration):
     materials: tuple[MaterialConfig, ...] = ()
     fields: tuple[FieldConfig, ...] = ()
     remove_fields: tuple[Key, ...] = ()
+    remove_materials: tuple[Identifier, ...] = ()
     enable_rules: tuple[Identifier, ...] = ()
     disable_rules: tuple[Identifier, ...] = ()
     identity_anchors: tuple[Key, ...] = ()
     record_identity_fields: tuple[Key, ...] = ()
     page_actions: tuple[Literal["fill_review_fields"], ...] = ()
-    writable_control_kinds: tuple[Literal["text", "textarea", "number"], ...] = ()
+    writable_control_kinds: tuple[Literal["text", "textarea", "number", "select", "date"], ...] = ()
     review_declared_fields_only: StrictBool = True
 
     @model_validator(mode="after")
@@ -150,6 +162,7 @@ class PageDefinition(Declaration):
             ("sections", [item.key for item in self.sections]),
             ("scopes", self.scopes),
             ("remove_fields", self.remove_fields),
+            ("remove_materials", self.remove_materials),
             ("enable_rules", self.enable_rules),
             ("disable_rules", self.disable_rules),
         ):
@@ -157,6 +170,8 @@ class PageDefinition(Declaration):
                 raise ValueError(f"{name} 存在重复标识")
         if set(self.remove_fields) & {item.key for item in self.fields}:
             raise ValueError("同一字段不能同时修改和删除")
+        if set(self.remove_materials) & {item.document_type for item in self.materials}:
+            raise ValueError("同一材料不能同时修改和删除")
         if set(self.enable_rules) & set(self.disable_rules):
             raise ValueError("同一规则不能同时启用和停用")
         return self

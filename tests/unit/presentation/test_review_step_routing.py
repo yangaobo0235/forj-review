@@ -78,7 +78,7 @@ def test_all_bound_rules_survive_field_projection(reverse: bool, field_first: bo
     if reverse:
         rules.reverse()
     tasks = prepare_display_tasks(
-        [field, *rules], qr_enabled=False,
+        [field, *rules],
         field_check_bindings=(("REQUIRED", "new_vehicle.vin"), ("SECOND", "new_vehicle.vin")),
     )
     assert len(tasks) == 1

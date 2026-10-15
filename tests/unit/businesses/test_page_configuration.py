@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from dataclasses import replace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,7 +20,11 @@ from forj_review_assistant.businesses.context_validation import (
 from forj_review_assistant.businesses.field_policies import field_policy
 from forj_review_assistant.businesses.materials import DOCUMENT_POLICIES
 from forj_review_assistant.businesses.packs import build_collect_manifest
-from forj_review_assistant.businesses.profiles import BUSINESS_PROFILES, VEHICLE_SOURCE_DEFAULT
+from forj_review_assistant.businesses.profiles import (
+    BUSINESS_PROFILES,
+    SCRAP_REPLACEMENT_QINGDAO,
+    VEHICLE_SOURCE_DEFAULT,
+)
 from forj_review_assistant.businesses.registry import BusinessProfileNotFound, BusinessRegistry
 from forj_review_assistant.businesses.routing import route_fields
 from forj_review_assistant.contracts.recognition import (
@@ -27,7 +32,12 @@ from forj_review_assistant.contracts.recognition import (
     QwenExtraction,
     RecognizedDocument,
 )
-from forj_review_assistant.contracts.review import FieldObservation, ImageInput, ReviewRequest
+from forj_review_assistant.contracts.review import (
+    FieldObservation,
+    ImageInput,
+    ReviewFieldSnapshot,
+    ReviewRequest,
+)
 from forj_review_assistant.integrations.recognition.extraction import AgentService
 from forj_review_assistant.runtime.review_service import ReviewService
 
@@ -108,6 +118,21 @@ def test_template_changes_are_partial_and_do_not_mutate_original():
     assert profile.version == "2.0"
 
 
+def test_page_configuration_can_authorize_supported_select_and_date_controls():
+    profile = _patch(writable_control_kinds=["text", "select", "date"])
+    assert profile.allows_field_write("date")
+    assert profile.allows_field_write("select")
+    assert not profile.allows_field_write("file")
+    assert build_collect_manifest(profile.pack_declaration)["writable_control_kinds"] == [
+        "text", "select", "date"
+    ]
+    with pytest.raises(ValidationError):
+        PageDefinition.model_validate({
+            "page_id": "invalid", "business_type": "invalid", "title": "invalid",
+            "paths": ["/invalid"], "writable_control_kinds": ["file"],
+        })
+
+
 def test_deleting_field_prunes_only_its_routes():
     profile = _patch(remove_fields=["vehicle.usage_nature"])
     assert "vehicle.usage_nature" not in {field.key for field in profile.pack_declaration.fields}
@@ -121,9 +146,176 @@ def test_deleting_rule_input_requires_explicit_rule_change():
     with pytest.raises(ValueError, match="vehicle_model_consistency.*vehicle.model_code"):
         _patch(remove_fields=["vehicle.model_code"])
     profile = _patch(
-        remove_fields=["vehicle.model_code"], disable_rules=["vehicle_model_consistency"]
+        remove_fields=["vehicle.model_code"], disable_rules=["vehicle_model_consistency"],
+        fields=[{"key": "vehicle.model", "checks": []}],
     )
     assert "vehicle_model_consistency" not in {item.capability_id for item in profile.capabilities}
+
+
+def test_disabling_rule_requires_resolving_all_inherited_check_bindings():
+    with pytest.raises(ValueError, match="vehicle.model.*生产者"):
+        _patch(disable_rules=["vehicle_model_consistency"])
+    profile = _patch(
+        disable_rules=["vehicle_model_consistency"],
+        fields=[{"key": "vehicle.model", "checks": []}],
+    )
+    assert not profile.field_check_bindings
+
+
+def test_disabling_rule_removes_only_its_presentation_group():
+    template = SCRAP_REPLACEMENT_QINGDAO
+    data = {
+        "page_id": template.page_id, "business_type": template.business_type,
+        "region": template.region, "version": "2.0", "title": "调整主体检查",
+        "paths": ["/synthetic"],
+        "extends": {"page_id": template.page_id, "version": template.version},
+        "disable_rules": ["affiliation_subject"],
+        "fields": [
+            {"key": "application.customer_name", "checks": []},
+            {"key": "old_vehicle.affiliation", "task_projector": ""},
+            {"key": "new_vehicle.affiliation", "task_projector": ""},
+        ],
+    }
+    profile = compile_page(PageDefinition.model_validate(data), template)
+    ReviewService(registry=BusinessRegistry((profile,)))
+    assert [g.capability_id for g in profile.pack_declaration.presentation.groups] == [
+        "scrap_certificate_qr",
+    ]
+
+
+def test_required_rule_only_field_cannot_survive_without_a_producer():
+    template = _patch(fields=[{
+        "key": "vehicle.assessment", "label": "车型评估", "aliases": ["车型评估"],
+        "checks": ["VEHICLE-MODEL-POWER"],
+    }])
+    data = {
+        "page_id": template.page_id, "business_type": "vehicle_source", "title": "车源",
+        "paths": ["/vehicle-source"], "version": "3.0",
+        "extends": {"page_id": template.page_id, "version": "2.0"},
+        "disable_rules": ["vehicle_model_consistency"],
+        "fields": [{"key": "vehicle.model", "checks": []}],
+    }
+    with pytest.raises(ValueError, match="vehicle.assessment.*生产者"):
+        compile_page(PageDefinition.model_validate(data), template)
+    data["fields"].append({"key": "vehicle.assessment", "checks": []})
+    with pytest.raises(ValueError, match="必审字段 vehicle.assessment"):
+        compile_page(PageDefinition.model_validate(data), template)
+
+
+@pytest.mark.parametrize("locator", [{}, {"locator_id": "vin"}, {"locator_name": "vin"}])
+def test_page_fields_require_collectable_bindings(declaration, locator):
+    data = {**declaration, "fields": [{**declaration["fields"][0], "aliases": [], **locator}]}
+    with pytest.raises(ValueError, match="permit.vin.*aliases"):
+        _compile(data)
+
+
+def test_material_only_field_does_not_require_a_page_alias(declaration):
+    data = {**declaration, "fields": [{
+        **declaration["fields"][0], "aliases": [], "page_evidence_required": False,
+    }]}
+    assert _compile(data).required_fields == ("permit.vin",)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("page_field", ["none", "present", "missing"])
+async def test_material_only_field_can_pass_without_a_page_value(declaration, page_field):
+    data = {**declaration, "fields": [{
+        **declaration["fields"][0], "aliases": [], "page_evidence_required": False,
+    }]}
+    if page_field != "none":
+        data["fields"].append({
+            "key": "permit.note", "label": "Note", "aliases": ["Note"], "mode": "SYSTEM",
+        })
+    profile = _compile(data)
+    if page_field == "present":
+        profile = replace(profile, page_interaction=True)
+    service = ReviewService(registry=BusinessRegistry((profile,)))
+    request = ReviewRequest(
+        page_id=profile.page_id, business_type=profile.business_type, region=profile.region,
+        page_url="https://example.test/permit-review",
+        page_fields={"permit.note": "Synthetic note"} if page_field == "present" else {},
+        review_fields=[ReviewFieldSnapshot(
+            field="permit.note", label="Note", value="Synthetic note", order=1,
+            control_type="text", editable=True,
+        )] if page_field == "present" else [],
+        images=[ImageInput(index=0, src="https://example.test/synthetic.jpg", business_scope="vehicle",
+                           document_type_hint="permit")],
+    )
+    batch = AgentBatchResult(
+        total_count=1, completed_count=1,
+        recognized_documents=[RecognizedDocument(target_id="0", document_type="permit", business_scope="vehicle")],
+        observations=[FieldObservation(field="permit.vin", value="SYNTHETIC", source_type="image",
+                                       source_id="0", image_index=0, document_type="permit", business_scope="vehicle")],
+    )
+    response, _ = await service.assist_with_batch_async(request, initial_batch=batch)
+    assert response.recommendation == ("REVIEW_REQUIRED" if page_field == "missing" else "PASS")
+    task = next(item for item in response.review_tasks if item.step_id == "FIELD-permit.vin")
+    assert task.result_status == "MATCH"
+    assert not task.writable
+    assert task.evidence_count == 1
+    assert not task.not_found_sources
+    if page_field == "missing":
+        assert "未采集到右侧申请字段" in response.issues
+    else:
+        assert not response.issues
+
+
+def _derive(template, **changes):
+    return compile_page(PageDefinition.model_validate({
+        "page_id": template.page_id, "business_type": template.business_type,
+        "region": template.region, "title": "新版本", "paths": ["/permit-review"],
+        "version": f"{template.version}.next",
+        "extends": {"page_id": template.page_id, "version": template.version}, **changes,
+    }), template)
+
+
+def test_chained_changes_rebuild_extraction_and_preserve_explicit_inputs(declaration):
+    declaration["materials"][0]["extra_fields"] = ["rule.internal"]
+    declaration["fields"].append({
+        "key": "permit.number", "label": "号码", "aliases": ["号码"],
+        "evidence": [{"material": "permit", "field": "printed.number"}],
+    })
+    first = _compile(declaration)
+    second = _derive(first, remove_fields=["permit.number"], fields=[{
+        "key": "permit.vin", "evidence": [{"material": "permit", "field": "new.vin"}],
+    }])
+    third = _derive(second, fields=[{
+        "key": "permit.vin", "evidence": [{"material": "permit", "field": "latest.vin"}],
+    }])
+    assert third.pack_declaration.material("permit").fields_for_scope("vehicle") == (
+        "rule.internal", "latest.vin",
+    )
+    assert first.pack_declaration.material("permit").fields == (
+        "rule.internal", "license.vin", "printed.number",
+    )
+    fourth = _derive(third, materials=[{
+        "document_type": "permit", "remove_extra_fields": ["rule.internal"],
+    }])
+    assert fourth.pack_declaration.material("permit").fields == ("latest.vin",)
+
+
+def test_removed_page_requirement_stops_extracting_automatic_page_numbers(declaration):
+    declaration["materials"][0]["required_pages"] = [1, 2]
+    profile = _derive(_compile(declaration), materials=[{
+        "document_type": "permit", "required_pages": [],
+    }])
+    assert profile.pack_declaration.material("permit").fields == ("license.vin",)
+
+
+def test_material_removal_requires_updating_references_and_cleans_requirements(declaration):
+    first = _compile(declaration)
+    with pytest.raises(ValueError, match="未声明的材料"):
+        _derive(first, remove_materials=["permit"])
+    second = _derive(first, remove_materials=["permit"], materials=[{
+        "document_type": "other_permit", "label": "新许可证", "required": True,
+    }], fields=[{
+        "key": "permit.vin", "evidence": [{"material": "other_permit", "field": "printed.vin"}],
+    }])
+    assert [m.document_type for m in second.pack_declaration.materials] == ["other_permit"]
+    assert [r.document_type for r in second.material_policy.materials] == ["other_permit"]
+    assert [m.document_type for m in second.pack_declaration.material_extraction_seeds] == [
+        "other_permit",
+    ]
 
 
 def test_material_label_edit_preserves_requiredness():

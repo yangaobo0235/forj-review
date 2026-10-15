@@ -1,4 +1,6 @@
 import type { DomElement, DomRoot } from "../dom.ts";
+import { antDatePicker, formControlKind } from "../form-controls.ts";
+import { calendarDate, selectCalendarDate } from "./date-picker.ts";
 import type { PageWriteAction, PageWriteGroupAction } from "../../../shared/contracts/review.ts";
 type Guard = (() => boolean) | undefined;
 interface PopupControl { control: DomElement; trigger?: DomElement | null; listboxId?: string | null; }
@@ -72,11 +74,12 @@ type GroupPreparationFailure = {
   };
   const disabled = (element: DomElement | null | undefined) => {
     for (let node = element; node; node = node.parentElement) {
-      if (node.disabled === true || node.getAttribute?.("aria-disabled") === "true") return true;
+      if (node.disabled === true || node.getAttribute?.("aria-disabled") === "true"
+        || node.classList?.contains("ant-picker-disabled") || node.classList?.contains("ant-select-disabled")) return true;
     }
     return false;
   };
-  const writable = (element: DomElement | null | undefined, custom = false) => connected(element) && !hidden(element) && !disabled(element) && (custom || (element?.readOnly !== true && element?.getAttribute?.("readonly") == null));
+  const writable = (element: DomElement | null | undefined, custom = false) => connected(element) && !hidden(element) && !disabled(element) && (custom || Boolean(antDatePicker(element)) || (element?.readOnly !== true && element?.getAttribute?.("readonly") == null));
 
   // 生产页的列表详情和审核弹窗可能同时保留两份表单。只在当前可见的
   // 详情弹窗内定位输入控件，避免后台列表/预览副本把目标判成“重复”。
@@ -175,16 +178,26 @@ type GroupPreparationFailure = {
 
   async function selectCustomOption(root: DomRoot, resolved: PopupControl, targetLabel: string, label: string, guard: Guard) {
     if (!resolved.listboxId) return `${targetLabel}未关联选项列表，请手工填写`;
-    toggleCustomControl(resolved);
+    if (resolved.control.getAttribute?.("aria-expanded") !== "true") toggleCustomControl(resolved);
     let target = null;
-    for (let attempt = 0; attempt < 3 && !target; attempt += 1) {
+    for (let attempt = 0; attempt < 20 && !target; attempt += 1) {
       await settle();
       if (!sameCollectedRecord(guard)) return guardError;
-      const listbox = root?.getElementById?.(resolved.listboxId || "");
-      const options = (listbox && connected(listbox) && !hidden(listbox) ? queryAll(listbox, OPTION_SELECTOR) : [])
+      // Ant's aria-controls points to a zero-sized accessibility list. Its
+      // actual clickable options are siblings inside the same owned dropdown.
+      // Never widen this search to other dropdowns in the document.
+      const ids = [resolved.control.getAttribute?.("aria-controls"), resolved.control.getAttribute?.("aria-owns"), resolved.listboxId]
+        .filter((id): id is string => Boolean(id)).flatMap(id => id.split(/\s+/));
+      const listbox = ids.map(id => root.getElementById?.(id)).find(Boolean);
+      const dropdown = listbox?.closest?.<DomElement>(".ant-select-dropdown, .el-select-dropdown");
+      const scope = dropdown || listbox;
+      const visualOptions = queryAll(scope, ".ant-select-item-option, .ant-select-dropdown-menu-item, .el-select-dropdown__item");
+      const options = (scope && connected(scope) && !hidden(scope)
+        ? (visualOptions.length ? visualOptions : queryAll(scope, OPTION_SELECTOR)) : [])
         .map((item) => item.closest?.<DomElement>(OPTION_SELECTOR) || item)
         .filter((item, index, all) => all.indexOf(item) === index)
-        .filter((item) => writable(item) && normalize(text(item)) === normalize(label));
+        .filter((item) => writable(item) && !item.classList?.contains("ant-select-item-option-disabled")
+          && !item.classList?.contains("is-disabled") && normalize(text(item)) === normalize(label));
       if (options.length > 1) {
         toggleCustomControl(resolved);
         return `${targetLabel}选项存在歧义，请手工填写`;
@@ -227,6 +240,19 @@ type GroupPreparationFailure = {
     return null;
   }
 
+  async function writeControl(root: DomRoot, resolved: PopupControl, field: string, value: string, guard: Guard) {
+    if (antDatePicker(resolved.control)) {
+      return selectCalendarDate(root, resolved.control, value, {
+        visible: element => connected(element) && !hidden(element),
+        enabled: element => connected(element) && !disabled(element),
+        pause: settle,
+        guard: () => sameCollectedRecord(guard),
+      });
+    }
+    if (resolved.control.getAttribute?.("role") === "combobox") return selectCustomOption(root, resolved, field, value, guard);
+    return dispatchValue(resolved.control, value, root);
+  }
+
   function readValueControl(control: DomElement) {
     if (control.tagName === "SELECT") return nativeCurrent(control).label;
     if (control.getAttribute?.("role") === "combobox") {
@@ -244,13 +270,7 @@ type GroupPreparationFailure = {
 
   // 控件类型判定必须和采集器一致：采集器决定控件能不能写，这里决定写回器
   // 是否支持这种控件。两处用同一套取值，业务声明才能同时约束采集和写回。
-  const controlKind = (control: DomElement | null | undefined) => {
-    const role = String(control?.getAttribute?.("role") || "").toLowerCase();
-    if (role === "combobox" || control?.tagName === "SELECT") return "select";
-    if (control?.tagName === "TEXTAREA") return "textarea";
-    if (control?.getAttribute?.("contenteditable") === "true") return "contenteditable";
-    return String(control?.getAttribute?.("type") || "text").toLowerCase() || "text";
-  };
+  const controlKind = formControlKind;
 
   /**
    * 写回策略：后端下发的字段与控件类型白名单。
@@ -277,6 +297,7 @@ type GroupPreparationFailure = {
       return { ok: false, message: "该控件类型暂不支持自动回填，请手工填写" };
     }
     if (!String(action.value ?? "").trim()) return { ok: false, message: "回填值不能为空" };
+    if (antDatePicker(control) && !calendarDate(action.value)) return { ok: false, message: "日期格式无效，请使用有效的 YYYY-MM-DD 日期" };
     const original = readValueControl(control);
     const originalRaw = control.tagName === "SELECT" ? String(control.value ?? "") : original;
     if (action.expectedValue != null && normalizeFieldValue(action.field, original) !== normalizeFieldValue(action.field, action.expectedValue)) {
@@ -287,17 +308,15 @@ type GroupPreparationFailure = {
       control, trigger: customTrigger(control),
       listboxId: control.getAttribute?.("aria-controls") || control.getAttribute?.("aria-owns"),
     };
-    const error = custom
-      ? await selectCustomOption(root, resolved, action.field, action.value, guard)
-      : dispatchValue(control, action.value, root);
+    const error = await writeControl(root, resolved, action.field, action.value, guard);
     if (error) return { ok: false, message: error };
     await settle();
     if (!sameCollectedRecord(guard) || !connected(control)) return { ok: false, message: guardError };
     const after = readValueControl(control);
     if (normalizeFieldValue(action.field, after) !== normalizeFieldValue(action.field, action.value)) {
       if (sameCollectedRecord(guard)) {
-        if (custom) {
-          const restoreError = await selectCustomOption(root, resolved, action.field, original, guard);
+        if (custom || antDatePicker(control)) {
+          const restoreError = await writeControl(root, resolved, action.field, original, guard);
           if (restoreError) return { ok: false, message: `回填后回读失败；${restoreError}` };
         } else if (control.tagName === "SELECT") {
           control.value = originalRaw;
@@ -314,7 +333,8 @@ type GroupPreparationFailure = {
       return { ok: false, message: "回填后回读失败" };
     }
     try { control.scrollIntoView?.({ behavior: "smooth", block: "center", inline: "nearest" }); } catch { control.scrollIntoView?.(); }
-    control.focus?.({ preventScroll: true });
+    // Refocusing an Ant selector after committing can reopen its dropdown.
+    if (!custom && !antDatePicker(control)) control.focus?.({ preventScroll: true });
     const highlightTarget = control.closest?.<DomElement>(".ant-input-affix-wrapper, .ant-select, .ant-picker, .el-input, .el-select, .el-date-editor") || control;
     highlightTarget.animate?.([
       { outline: "3px solid #1677ff", outlineOffset: "3px", backgroundColor: "#e6f4ff" },
@@ -367,9 +387,7 @@ type GroupPreparationFailure = {
       const errors: string[] = [];
       if (!sameCollectedRecord(guard)) return { ok: false, message: `${message}；页面身份已失效，已停止回滚写入`, actions: [] };
       for (const item of [...written].reverse()) {
-        const restoreError = item.custom
-          ? await selectCustomOption(root, item.resolved, item.field, item.original, guard)
-          : dispatchValue(item.control, item.original, root);
+        const restoreError = await writeControl(root, item.resolved, item.field, item.original, guard);
         if (restoreError) errors.push(String(restoreError));
       }
       await settle();
@@ -385,9 +403,7 @@ type GroupPreparationFailure = {
     };
     for (const item of successful) {
       if (!sameCollectedRecord(guard)) return await rollback("页面身份已失效，已停止组合回填");
-      const error = item.custom
-        ? await selectCustomOption(root, item.resolved, item.field, action.value, guard)
-        : dispatchValue(item.control, action.value, root);
+      const error = await writeControl(root, item.resolved, item.field, action.value, guard);
       if (error) return await rollback(String(error));
       written.push(item);
       await settle();

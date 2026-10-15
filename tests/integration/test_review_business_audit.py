@@ -117,7 +117,7 @@ def test_task_downgrade_is_not_masked_by_a_matching_underlying_check():
 
 @pytest.mark.asyncio
 async def test_final_decision_log_matches_the_completed_business_result(caplog):
-    with caplog.at_level("INFO", logger="uvicorn.error"):
+    with caplog.at_level("INFO", logger="forj_review_assistant"):
         response = await ReviewService().assist_async(ReviewRequest(
             page_url="https://example.test/review", business_type="scrap_replacement", region="qingdao"))
     decisions = [record.getMessage() for record in caplog.records if "review decision" in record.getMessage()]

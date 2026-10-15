@@ -244,7 +244,9 @@
   "writable_control_kinds": [
     "text",
     "textarea",
-    "number"
+    "number",
+    "select",
+    "date"
   ],
   "identity_anchors": [
     "vehicle.vin",

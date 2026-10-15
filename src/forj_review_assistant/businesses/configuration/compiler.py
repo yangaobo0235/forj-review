@@ -17,12 +17,44 @@ from forj_review_assistant.businesses.packs.model import (
     validate_pack_references,
 )
 from forj_review_assistant.businesses.profiles import BusinessProfile, build_profile
-from forj_review_assistant.businesses.rules.catalog import RULE_DEFINITIONS, RULE_FIELDS, rule_spec
+from forj_review_assistant.businesses.rules.catalog import (
+    REPLACEMENT_POLICY_CHECKS,
+    RULE_DEFINITIONS,
+    RULE_FIELDS,
+    TASK_PROJECTOR_RULES,
+    rule_spec,
+)
 from forj_review_assistant.capabilities.specs import CapabilityBinding, CapabilitySpec
 
 
 def _unique(values):
     return tuple(dict.fromkeys(values))
+
+
+def _extraction_seeds(pack: BusinessExtensionPack) -> dict[str, MaterialDeclaration]:
+    if pack.material_extraction_seeds is not None:
+        return {item.document_type: item for item in pack.material_extraction_seeds}
+    # Native packs predate provenance. A route owns its extraction input;
+    # un-routed values remain explicit inputs for native handlers.
+    result = {}
+    for material in pack.materials:
+        routes = [r for r in pack.routes if r.document_type == material.document_type]
+        page_fields = {"registration.covered_pages"} if pack.material_policy and any(
+            r.document_type == material.document_type and r.required_pages
+            for r in pack.material_policy.materials
+        ) else set()
+        generated = {r.source_field for r in routes} | page_fields
+        result[material.document_type] = replace(
+            material,
+            fields=tuple(f for f in material.fields if f not in generated),
+            scoped_fields=tuple(
+                (scope, tuple(f for f in values if f not in page_fields and not any(
+                    r.source_field == f and (not r.scope or r.scope == scope) for r in routes
+                )))
+                for scope, values in material.scoped_fields
+            ),
+        )
+    return result
 
 
 def compile_page(
@@ -121,8 +153,14 @@ def compile_page(
             bindings = [binding for binding in bindings if binding[1] != item.key]
             bindings.extend((check_id, item.key) for check_id in item.checks)
 
-    materials = {item.document_type: item for item in base.materials}
+    materials = _extraction_seeds(base)
+    unknown_materials = set(definition.remove_materials) - materials.keys()
+    if unknown_materials:
+        raise ValueError(f"删除了不存在的材料：{', '.join(sorted(unknown_materials))}")
+    for document_type in definition.remove_materials:
+        del materials[document_type]
     requirements = list(base.material_policy.materials if base.material_policy else ())
+    requirements = [r for r in requirements if r.document_type not in definition.remove_materials]
     for item in definition.materials:
         existing = materials.get(item.document_type)
         material_scopes = item.scopes or (existing.allowed_scopes if existing else ()) or scopes
@@ -131,12 +169,18 @@ def compile_page(
         if item.label is None and (existing is None or "label" in item.model_fields_set):
             raise ValueError(f"材料 {item.document_type} 必须声明非空 label")
         label = item.label or existing.display_name
+        explicit_fields = set(existing.fields if existing else ()) | {
+            f for _, values in (existing.scoped_fields if existing else ()) for f in values
+        }
+        if set(item.remove_extra_fields) - explicit_fields:
+            raise ValueError(f"材料 {item.document_type} 删除了不存在的显式提取字段")
+        retained = tuple(
+            f for f in (existing.fields if existing else ()) if f not in item.remove_extra_fields
+        )
         materials[item.document_type] = MaterialDeclaration(
             document_type=item.document_type,
             display_name=label,
-            fields=_unique((*existing.fields, *item.extra_fields))
-            if existing
-            else item.extra_fields,
+            fields=_unique((*retained, *item.extra_fields)),
             guidance=item.guidance
             if "guidance" in item.model_fields_set or not existing
             else existing.guidance,
@@ -146,7 +190,13 @@ def compile_page(
             allowed_scopes=material_scopes,
             # Template details (slots, scoped prompts, derived values) survive
             # unless this declaration explicitly replaces their corresponding data.
-            scoped_fields=existing.scoped_fields if existing else (),
+            scoped_fields=tuple(
+                (scope, _unique((
+                    *(f for f in values if f not in item.remove_extra_fields), *item.extra_fields,
+                )))
+                for scope, values in (existing.scoped_fields if existing else ())
+                if scope in material_scopes
+            ),
             scoped_guidance=existing.scoped_guidance
             if existing and "guidance" not in item.model_fields_set
             else (),
@@ -179,6 +229,7 @@ def compile_page(
             requirement = prior or MaterialRequirement(item.document_type, scope)
             requirements.append(replace(requirement, display_name=label, **changes))
 
+    extraction_seeds = tuple(materials.values())
     # Extraction allowlists are generated from field-owned evidence routes.
     # Template-only values used by custom handlers are retained.
     for document_type, material in tuple(materials.items()):
@@ -234,9 +285,14 @@ def compile_page(
         if rule_id in RULE_DEFINITIONS
         for check in RULE_DEFINITIONS[rule_id].checks
     }
-    for field in definition.fields:
-        if set(field.checks) - declared_checks:
-            raise ValueError(f"字段 {field.key} 的 checks 没有已启用的规则生产者")
+    if template and template.replacement_policy:
+        declared_checks.update(REPLACEMENT_POLICY_CHECKS)
+    for check_id, field_key in bindings:
+        if check_id not in declared_checks:
+            raise ValueError(
+                f"字段 {field_key} 的 checks {check_id} 没有已启用的规则生产者；"
+                "请显式修改该字段的 checks 或补充替代规则"
+            )
 
     material_policy = None
     if requirements or (base.material_policy and base.material_policy.field_sources):
@@ -271,6 +327,7 @@ def compile_page(
         scopes=scopes,
         fields=tuple(fields.values()),
         materials=tuple(materials.values()),
+        material_extraction_seeds=extraction_seeds,
         routes=tuple(routes),
         sections=tuple(SectionDeclaration(**item.model_dump()) for item in definition.sections)
         if "sections" in definition.model_fields_set
@@ -295,6 +352,10 @@ def compile_page(
         capability_specs=tuple(specs.values()),
         binding_declarations=tuple(capability_bindings.values()),
         field_check_bindings=tuple(bindings),
+        presentation=replace(base.presentation, groups=tuple(
+            group for group in base.presentation.groups
+            if group.capability_id not in definition.disable_rules
+        )),
         identity_anchors=definition.identity_anchors
         if "identity_anchors" in definition.model_fields_set
         else base.identity_anchors,
@@ -317,6 +378,14 @@ def compile_page(
     validate_pack_references(pack)
     material_ids = materials.keys()
     for field in pack.fields:
+        projector_rule = TASK_PROJECTOR_RULES.get(field.task_projector)
+        if projector_rule and projector_rule not in specs:
+            raise ValueError(f"字段 {field.key} 的任务投影依赖未启用规则 {projector_rule}")
+        needs_page = field.mode not in (None, "DERIVED") and field.page_evidence_required
+        if (
+            needs_page or field.locator_id or field.locator_name or field.key in pack.identity_anchors
+        ) and not field.aliases:
+            raise ValueError(f"页面字段 {field.key} 缺少 aliases；定位 ID/name 不能代替页面别名")
         if set(field.sources) - material_ids:
             raise ValueError(f"字段 {field.key} 引用了未声明的材料")
         if field.mode not in (None, "SYSTEM", "DERIVED") and not field.sources:
@@ -335,6 +404,13 @@ def compile_page(
     for route in pack.routes:
         if route.document_type not in material_ids:
             raise ValueError(f"evidence 引用了未声明的材料：{route.document_type}")
+    if pack.material_policy:
+        for requirement in pack.material_policy.field_sources:
+            selectors = (*requirement.all_of, *(
+                selector for group in requirement.any_of_groups for selector in group
+            ))
+            if any(s.document_type and s.document_type not in material_ids for s in selectors):
+                raise ValueError(f"字段 {requirement.field} 的材料证据要求引用了未声明的材料")
     for group in pack.page_groups:
         inherited_independent_scopes = {
             item.scope for item in base.page_groups if item.scope not in base.scopes

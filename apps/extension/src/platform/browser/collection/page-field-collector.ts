@@ -1,4 +1,5 @@
 import type { DomElement, DomRoot, FieldDefinition, FieldCandidate } from "../dom.ts";
+import { antDatePicker, formControlKind } from "../form-controls.ts";
 import { manifestFieldDefinitions, manifestSectionFromText } from "../catalog/collect-manifest.ts";
 import type { ReviewFieldSnapshot } from "../../../shared/contracts/review.ts";
 
@@ -382,17 +383,17 @@ const isDomElement = (value: unknown): value is DomElement => {
   const isEditableControl = (control: DomElement | null | undefined) => {
     if (!isVisibleControl(control) || control?.disabled === true || control?.getAttribute?.("aria-disabled") === "true") return false;
     const role = String(control?.getAttribute?.("role") || "").toLowerCase();
-    const customEditable = role === "combobox" || control?.getAttribute?.("contenteditable") === "true";
+    // readonly picker inputs are still editable through their calendar. Disabled
+    // wrappers remain non-editable, including controls disabled by a fieldset.
+    for (let node = control; node; node = node.parentElement) {
+      if (node.disabled === true || node.getAttribute?.("aria-disabled") === "true"
+        || node.classList?.contains("ant-picker-disabled") || node.classList?.contains("ant-select-disabled")) return false;
+    }
+    const customEditable = role === "combobox" || Boolean(antDatePicker(control)) || control?.getAttribute?.("contenteditable") === "true";
     return customEditable || (control?.readOnly !== true && control?.getAttribute?.("readonly") == null);
   };
 
-  const controlType = (control: DomElement | null | undefined) => {
-    const role = String(control?.getAttribute?.("role") || "").toLowerCase();
-    if (role === "combobox" || control?.tagName === "SELECT") return "select";
-    if (control?.tagName === "TEXTAREA") return "textarea";
-    if (control?.getAttribute?.("contenteditable") === "true") return "contenteditable";
-    return String(control?.getAttribute?.("type") || "text").toLowerCase() || "text";
-  };
+  const controlType = formControlKind;
 
   const displayLabel = (label: string) => String(label || "")
     .replace(/[＊*]/g, "")

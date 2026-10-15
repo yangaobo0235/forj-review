@@ -191,7 +191,7 @@ class SteadyClient:
 async def test_image_without_a_retry_reason_reports_no_retry(caplog) -> None:
     client = SteadyClient()
 
-    with caplog.at_level(logging.INFO, logger="uvicorn.error"):
+    with caplog.at_level(logging.INFO, logger="forj_review_assistant"):
         await AgentService(client).extract_async(
             [invoice_image()], retry_policy=DEFAULT_RETRY_POLICY
         )
@@ -205,7 +205,7 @@ async def test_uncertain_fields_surviving_the_reread_are_reported_as_retried(cap
     """重读跑过但仍不确定 —— 与"第一次就不确定"必须能在日志里区分。"""
     client = SteadyClient(uncertain=["invoice.amount"])
 
-    with caplog.at_level(logging.INFO, logger="uvicorn.error"):
+    with caplog.at_level(logging.INFO, logger="forj_review_assistant"):
         result = await AgentService(client).extract_async(
             [invoice_image()], retry_policy=DEFAULT_RETRY_POLICY
         )
@@ -221,7 +221,7 @@ async def test_retry_skipped_for_lack_of_time_is_not_counted_as_an_attempt(caplo
     client = SteadyClient(uncertain=["invoice.amount"])
     service = AgentService(client)
 
-    with caplog.at_level(logging.INFO, logger="uvicorn.error"):
+    with caplog.at_level(logging.INFO, logger="forj_review_assistant"):
         result = await service.extract_async(
             [invoice_image()],
             retry_policy=DEFAULT_RETRY_POLICY,

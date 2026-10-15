@@ -43,6 +43,13 @@ def test_official_ssl_context_keeps_certificate_verification_enabled():
     context = create_official_ssl_context()
     assert context.verify_mode == ssl.CERT_REQUIRED
     assert context.check_hostname is True
+    assert context.minimum_version == ssl.TLSVersion.TLSv1_2
+    assert context.maximum_version == ssl.TLSVersion.MAXIMUM_SUPPORTED
+    compatibility = create_official_ssl_context(tls12_only=True)
+    assert compatibility.minimum_version == ssl.TLSVersion.TLSv1_2
+    assert compatibility.maximum_version == ssl.TLSVersion.TLSv1_2
+    assert compatibility.verify_mode == ssl.CERT_REQUIRED
+    assert compatibility.check_hostname is True
 
 
 def test_qr_result_preserves_existing_positional_constructor_order():
@@ -159,6 +166,108 @@ async def test_web_retry_reuses_one_http_client(monkeypatch):
     assert result.status == "MATCH"
     assert len(attempts) == 2
     assert client_count == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error", [httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError])
+async def test_transient_connection_failures_retry_and_keep_safe_diagnostics(error, caplog, monkeypatch):
+    calls = 0
+    contexts = []
+    real_async_client = httpx.AsyncClient
+
+    def recording_client(*args, **kwargs):
+        contexts.append(kwargs["verify"])
+        return real_async_client(*args, **kwargs)
+
+    monkeypatch.setattr(qr_module.httpx, "AsyncClient", recording_client)
+
+    def handler(request):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise error("sensitive-token-must-not-be-logged", request=request)
+        return httpx.Response(200, text="回收证明编号：A1 车架号：LSVAA123456789012")
+
+    verifier = QrWebVerifier(allowed_hosts=["qclt.mofcom.gov.cn"], transport=httpx.MockTransport(handler))
+    with caplog.at_level("INFO", logger="forj_review_assistant"):
+        result, attempts = await verifier.verify_with_retry("https://qclt.mofcom.gov.cn/sensitive-token", 4)
+    assert result.status == "MATCH"
+    assert calls == len(attempts) == 2
+    assert result.http_status == 200
+    assert attempts[0].reason_code == ("timeout" if error is httpx.ReadTimeout else "connection_error")
+    assert attempts[1].reason_code == "completed"
+    assert attempts[1].strategy == ("official_page" if error is httpx.ReadTimeout else "official_page_tls12")
+    assert len(contexts) == (1 if error is httpx.ReadTimeout else 2)
+    if len(contexts) == 2:
+        assert contexts[-1].maximum_version == ssl.TLSVersion.TLSv1_2
+        assert contexts[-1].verify_mode == ssl.CERT_REQUIRED
+        assert contexts[-1].check_hostname is True
+    assert "sensitive-token" not in caplog.text
+    assert "host=qclt.mofcom.gov.cn" in caplog.text
+    assert "attempt=2" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_network_failure_has_bounded_retries_and_actionable_message():
+    calls = 0
+
+    def handler(request):
+        nonlocal calls
+        calls += 1
+        raise httpx.ConnectError("network failed", request=request)
+
+    verifier = QrWebVerifier(allowed_hosts=["qclt.mofcom.gov.cn"], transport=httpx.MockTransport(handler))
+    result, attempts = await verifier.verify_with_retry("https://qclt.mofcom.gov.cn/proof", retry_count=99)
+    assert calls == len(attempts) == 2
+    assert result.status == "REVIEW_REQUIRED"
+    assert result.accessible is False
+    assert result.error_code == "connection_error"
+    assert "连接官网失败" in result.message
+
+
+@pytest.mark.asyncio
+async def test_certificate_failure_is_not_retried_or_hidden():
+    calls = 0
+
+    def handler(request):
+        nonlocal calls
+        calls += 1
+        raise httpx.ConnectError("certificate failed", request=request) from ssl.SSLCertVerificationError("bad certificate")
+
+    verifier = QrWebVerifier(allowed_hosts=["qclt.mofcom.gov.cn"], transport=httpx.MockTransport(handler))
+    result, attempts = await verifier.verify_with_retry("https://qclt.mofcom.gov.cn/proof")
+    assert calls == len(attempts) == 1
+    assert result.error_code == "tls_certificate_error"
+    assert result.retryable is False
+    assert "证书校验失败" in result.message
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [403, 404, 429, 503])
+async def test_http_status_failures_preserve_reason_and_retry_policy(status):
+    verifier = QrWebVerifier(allowed_hosts=["qclt.mofcom.gov.cn"],
+                             transport=httpx.MockTransport(lambda request: httpx.Response(status)))
+    result, attempts = await verifier.verify_with_retry("https://qclt.mofcom.gov.cn/proof")
+    assert result.http_status == status
+    assert result.error_code == "http_status"
+    assert str(status) in result.message
+    assert len(attempts) == (2 if status in {429, 503} else 1)
+
+
+@pytest.mark.asyncio
+async def test_accessible_page_with_missing_fields_does_not_claim_extraction_success():
+    service = ReviewService()
+    service.qr_web = QrWebVerifier(allowed_hosts=["qclt.mofcom.gov.cn"],
+                                 transport=httpx.MockTransport(lambda request: httpx.Response(200, text="回收证明编号：A1")))
+    request = ReviewRequest(page_url="https://example.test", region="qingdao", images=[
+        ImageInput(index=1, src="https://images.example.test/synthetic.jpg", categoryHint="scrap_certificate", businessScope="old_vehicle")
+    ])
+    batch = decoded_batch(service, 1, "https://qclt.mofcom.gov.cn/proof")
+    checks = await service._collect_qr_checks(request, batch)
+    assert checks[0].accessible is True
+    assert checks[0].status == FieldStatus.REVIEW_REQUIRED
+    assert "未提取到完整" in checks[0].message
+    assert batch.retry_summary.attempts[0].reason_code == "fields_missing"
 
 
 @pytest.mark.asyncio

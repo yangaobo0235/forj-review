@@ -470,10 +470,8 @@ TRANSFER_PACK = BusinessExtensionPack(
     review_declared_fields_only=True,
     page_interaction=True,
     page_action_ids=("fill_review_fields",),
-    # **只放开文本框**。开票日期是日期控件，写回器对它的验证程度和文本框不同，
-    # 没验证过的一律交人工填写——声明为可写的字段渲染成日期控件时，条目上
-    # 不会出现回填按钮。
-    writable_control_kinds=("text", "textarea", "number"),
+    # 开票日期通过浏览器单日期日历适配器写回，仍需字段与记录身份校验。
+    writable_control_kinds=("text", "textarea", "number", "select", "date"),
     # 页面指纹锚点。`transfer.vin` 是强锚点，没有它指纹恒为空串，页面写回和
     # 原图定位会被全部拒绝。证件号是个人隐私，不放进指纹。
     identity_anchors=("transfer.vin", "transfer.plate_no"),

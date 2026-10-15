@@ -1,4 +1,5 @@
 import { collectPageData } from "../api/collect-page";
+import { logDiagnostic } from "../../../shared/diagnostics";
 import { executePageActions } from "../../../platform/extension/execute-page-actions";
 /**
  * 功能：管理页面采集、任务轮询和部分结果生命周期。
@@ -153,15 +154,13 @@ export function useReviewWorkflow(
       if (data.collectionIssues?.length) {
         setNotice(data.collectionIssues.join("；"));
       }
-      console.info(
-        "[ReviewAgent][panel] page collected",
-        data.collectionDiagnostics,
-      );
+      logDiagnostic("panel.collected", { collectionId: data.collectionId, imageCount: data.images.length, fieldCount: data.reviewFields?.length ?? 0 });
       setStageMessage(
         `已发现 ${data.images.length} 张图片，正在创建审核任务……`,
       );
       const created = await createUrlReviewJob(data);
       activeJobId = created.job_id;
+      logDiagnostic("job.created", { collectionId: data.collectionId, job_id: created.job_id });
       run.jobId = created.job_id;
       if (!isCurrent()) {
         void cancelReviewJob(created.job_id);
@@ -182,9 +181,10 @@ export function useReviewWorkflow(
         },
       );
       const finalSnapshot = await polling;
+      logDiagnostic("job.completed", { job_id: created.job_id, status: finalSnapshot.status });
       if (!isCurrent()) return;
       if (finalSnapshot.status === "FAILED") {
-        console.warn("[ReviewAgent] 审核任务执行失败", finalSnapshot.message);
+        logDiagnostic("job.failed", { job_id: created.job_id, status: finalSnapshot.status });
         throw new Error(
           "本次审核未能完成，请重新审核；仍失败请查看原图人工核对并联系管理员",
         );

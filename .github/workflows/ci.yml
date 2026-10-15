@@ -84,6 +84,19 @@ jobs:
       - name: Check extension architecture
         run: node ../../scripts/ci/check-extension-architecture.mjs
 
+  container:
+    name: Production container smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build production image
+        run: docker build --file deploy/Dockerfile --tag forj-review-api:ci .
+      - name: Validate deployment Compose
+        run: docker compose --env-file .env.example -f docker-compose.server.yml config --quiet
+      - name: Verify health and persistent application logs
+        run: python3 scripts/ci/smoke-container.py forj-review-api:ci
+
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest

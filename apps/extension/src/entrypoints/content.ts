@@ -11,6 +11,7 @@ import { ReviewPageFieldCollector } from "../platform/browser/collection/page-fi
 import { ReviewPageFieldWriter } from "../platform/browser/actions/page-field-writer.ts";
 import { BUILTIN_IDENTITY_ANCHORS, buildPageFingerprint, createPageInstanceId, sameRecordExceptFields } from "../platform/browser/identity/page-identity.ts";
 import type { BusinessSelection, PageImage, PageWriteGroupAction } from "../shared/contracts/review.ts";
+import { logDiagnostic } from "../shared/diagnostics.ts";
 /**
  * 功能：协调页面字段、图片地址采集和原图定位消息。
  * 职责边界：复杂识别逻辑委托给独立公共脚本；DOM 元素不跨消息传输。
@@ -189,6 +190,15 @@ const isCollectionMessage = (message: ReviewMessage) =>
   || message?.type === MESSAGE_TYPES.collectPageManifest;
 
 chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendResponse) => {
+  if (message.type === MESSAGE_TYPES.applyPageFieldValue || message.type === MESSAGE_TYPES.applyPageFieldGroupValue) {
+    const reply = sendResponse;
+    const started = Date.now();
+    sendResponse = (response) => {
+      logDiagnostic("write.complete", { collectionId: message.expectedCollectionId, field: message.action?.field,
+        ok: Boolean(response?.ok), code: response?.code, durationMs: Date.now() - started });
+      reply(response);
+    };
+  }
   if (message.type === MESSAGE_TYPES.verifyInvoice) {
     if (!sameReviewIdentity(message)) {
       sendResponse({ ok: false, message: "页面已变化，请重新审核" });
@@ -298,7 +308,7 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
         ].filter((reason): reason is string => Boolean(reason)),
       }))
       .filter((item) => item.reasons.length);
-    console.info("[ReviewAgent][write] group", { fields, problems });
+    logDiagnostic("write.group.start", { collectionId: activeCollectionId, fieldCount: fields.length, problemCount: problems.length });
     if (problems.length) {
       sendResponse({
         ok: false,
@@ -329,10 +339,10 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
           }
         }
       }
-        console.info("[ReviewAgent][write] group result", { ok: result.ok, code: result.code, actionCount: result.actions?.length ?? 0 });
+      logDiagnostic("write.group.complete", { collectionId: activeCollectionId, ok: result.ok, code: result.code, actionCount: result.actions?.length ?? 0 });
       sendResponse(result);
     }).catch((error) => {
-        console.info("[ReviewAgent][write] group threw", { errorType: error instanceof Error ? error.name : "unknown" });
+      logDiagnostic("write.group.failed", { collectionId: activeCollectionId, errorType: error instanceof Error ? error.name : "unknown" });
       sendResponse({ ok: false, message: error instanceof Error ? error.message : "组合字段回填失败", actions: [] });
     });
     return true;
@@ -349,9 +359,9 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
   latestCollectionId = collectionId;
 
   const log = (event: string, details: Record<string, unknown> = {}) => {
-    console.info("[ReviewAgent][collect]", event, details);
+    logDiagnostic(`collect.${event}`, { collectionId, ...details });
   };
-  log("start", { url: window.location.href, title: document.title });
+  log("start");
 
   const allText = document.body.innerText || "";
   // 页面识别清单要先应用：识别发生在按业务类型取采集清单之前，识别不出来
@@ -364,20 +374,16 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
     message.businessSelection as BusinessSelection | null | undefined,
   );
   const business = businessResolution.business;
-  // 识别错和识别不出来都不报错，只会静静地把审核交给另一个业务的规则。
-  // 这行日志是排查的唯一入口：列出地址命中的候选、特征命中的候选，以及每条
-  // 候选各缺哪个词。没有这行就说明页面里的内容脚本还是旧的（刷新页面即可）。
+  // Record identity resolution counts, without page paths or page text.
   const diagnostics = explainPageIdentity(appliedPageCatalog(), window.location.href, allText);
   log("business", {
     business: business?.businessType ?? null,
     region: business?.region ?? null,
     mode: business?.selectionMode ?? null,
-    error: businessResolution.error,
+    failed: Boolean(businessResolution.error),
     catalogApplied: Boolean(appliedPageCatalog()?.identities.length),
-    path: diagnostics.path,
-    candidates: diagnostics.byPath,
-    matchedAnchors: diagnostics.matched,
-    missingAnchors: diagnostics.missingAnchors,
+    candidateCount: diagnostics.byPath.length,
+    matchedCount: diagnostics.matched.length,
   });
   // 采集清单按业务类型选择；没有可用清单时清空并退回内置表。
   applyCollectManifest(
@@ -406,9 +412,9 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
     scannedControls: fieldCollection.scannedControls,
     matchedFields: Object.keys(pageFields).length,
     reviewFieldCount: reviewFields.length,
-    unmatchedLabels,
+    unmatchedLabelCount: unmatchedLabels.length,
     candidateCount: fieldCollection.candidateCount,
-    ambiguousFields: fieldCollection.ambiguousFields
+    ambiguousFieldCount: fieldCollection.ambiguousFields.length
   });
 
   const pageImages = Array.from(document.images);
@@ -474,18 +480,12 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
     };
   });
   const selection = ReviewImageCandidates.select(imageCandidates, MAX_REVIEW_IMAGES);
-  // 类型提示是"直接提取还是先分类"的唯一开关：判成 unknown 就静默多烧一次分类
-  // 调用，页面上什么都看不出来。把每张图取到的文本和判定结果打出来，线上排查
-  // 不用再猜 DOM 结构。
+  // Counts only; labels can contain document values and must not enter Console.
   log("images", {
     scanned: selection.scannedCount,
     eligible: selection.eligibleCount,
-    selected: selection.selected.map((candidate) => ({
-      imageId: candidate.imageId,
-      label: candidate.labelHint || "-",
-      hintLength: candidate.hint.length,
-      categoryHint: candidate.categoryHint,
-    })),
+    selectedCount: selection.selected.length,
+    unknownTypeCount: selection.selected.filter((candidate) => candidate.categoryHint === "unknown").length,
   });
   const images = selection.selected;
   Promise.resolve(images.map(imageAssetMetadata))
@@ -569,7 +569,7 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
       });
     })
     .catch((error) => {
-      log("failed", { message: error instanceof Error ? error.message : "unknown" });
+      log("failed", { errorType: error instanceof Error ? error.name : "unknown" });
       sendResponse({
       ...(business || {}),
       pageUrl: window.location.href,
