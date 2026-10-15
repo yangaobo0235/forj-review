@@ -78,10 +78,16 @@ import {
   const assign = (items: ({ kind: "label"; text: string } | { kind: "image"; index: number })[]) => {
     let active = { scope: "unknown", title: "未分类资料" };
     const counters = new Map();
+    const labelCounters = new Map<string, number>();
     const assigned = [];
     for (const item of items) {
       if (item.kind === "label") {
-        const next = scopeForLabel(item.text);
+        const label = normalize(item.text);
+        const occurrence = (labelCounters.get(label) || 0) + 1;
+        labelCounters.set(label, occurrence);
+        const declared = manifestGroupLabelEntries()?.filter(([text]) => normalize(text) === label);
+        const next = declared?.find(([, group]) => (group.occurrence || 1) === occurrence)?.[1]
+          || (declared?.some(([, group]) => group.occurrence) ? null : scopeForLabel(item.text));
         if (next) active = next;
         continue;
       }

@@ -33,10 +33,8 @@ def normalize_document_type(document_type: str) -> str:
 def scope_hint_types(pack: BusinessExtensionPack, scope: str) -> frozenset[str]:
     """「可能表示该分区材料」的类型集合：声明的材料类型 ＋ 指向它们的旧版角色别名。
 
-    这个集合是「二维码扫哪些图」和「哪些图的正文必须留到核验结束」的共同依据。
-    以前这两处各自手抄了一份 `{old_vehicle, vehicle_license, registration_certificate,
-    scrap_certificate}`，改一处漏一处的后果是静默的：该留的图被提前释放，最终二维码
-    核验拿不到正文，审核员只看到「未识别到二维码」。
+    这个集合决定分类缺失时哪些图片 URL 可以作为二维码扫描候选，
+    不负责保留图片正文；原图仅在专用解码器运行期间存在于内存。
 
     别名取**名字就等于该分区**的那一个（`old_vehicle` / `new_vehicle`）：旧版前端
     把业务角色当作材料类型提交，角色名本身就是分区名。不能按「别名映射到的材料
@@ -71,6 +69,8 @@ def route_fields(
     document_type: str,
     fields: Mapping[str, Any],
     pack: BusinessExtensionPack | None = None,
+    *,
+    group_order: int | None = None,
 ) -> tuple[dict[str, Any], str | None]:
     """按页面确定的业务范围路由字段，并返回需要人工复核的限制说明。
 
@@ -108,6 +108,7 @@ def route_fields(
         for rule in resolved_pack.routes
         if rule.document_type == normalized_type
         and (not rule.scope or rule.scope == business_scope)
+        and (rule.group_order is None or rule.group_order == group_order)
     ]
 
     routed: dict[str, Any] = {}
@@ -121,7 +122,6 @@ def route_fields(
             for target in rule.targets:
                 routed[target.replace("{scope}", business_scope)] = value
             matched = True
-            break
         if matched:
             continue
         suffix = _vehicle_suffix(material, field_name)

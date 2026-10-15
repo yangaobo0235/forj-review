@@ -18,6 +18,10 @@ const contentSource = readFileSync(
 );
 
 function runContent(context) {
+  const collector = context.globalThis?.ReviewPageFieldCollector;
+  if (collector && !collector.collectIdentity) {
+    collector.collectIdentity = (root) => collector.collect(root, null);
+  }
   const cache = new Map();
   const load = (file) => {
     const absolute = path.resolve(file);
@@ -34,7 +38,6 @@ function runContent(context) {
         "./business-scope.ts": "ReviewBusinessScope",
         "./image-candidates.ts": "ReviewImageCandidates",
         "./image-focus.ts": "ReviewImageFocus",
-        "./image-normalization.ts": "ReviewImageNormalization",
         "./page-field-collector.ts": "ReviewPageFieldCollector",
         "./page-field-writer.ts": "ReviewPageFieldWriter",
       }[specifier];
@@ -88,7 +91,7 @@ test("content script sends writable target snapshots", () => {
   assert.match(contentSource, /writableTargets/);
   assert.match(contentSource, /pageInstanceId/);
   assert.match(contentSource, /expectedPageInstanceId/);
-  assert.match(contentSource, /APPLY_PAGE_FILL_INTENT/);
+  assert.match(contentSource, /APPLY_PAGE_FIELD_VALUE/);
 });
 
 test("content script keeps field elements in a map replaced only by the active collection", () => {
@@ -156,7 +159,7 @@ test("content script rejects a mismatched page identity before calling the write
     document: {},
     window: { location: { href: "https://admin.forjtruck.com/scrap-replace-qingdao?case=next" } },
     globalThis: {
-      ReviewPageFieldWriter: { execute() { writes += 1; } },
+      ReviewPageFieldWriter: { executeValue() { writes += 1; } },
       ReviewPageFieldCollector: { collect() { return { pageFields: {} }; } },
     },
   };
@@ -164,8 +167,8 @@ test("content script rejects a mismatched page identity before calling the write
   const responses = [];
 
   const asynchronous = handler({
-    type: "APPLY_PAGE_FILL_INTENT",
-    actions: [],
+    type: "APPLY_PAGE_FIELD_VALUE",
+    action: { field: "old_vehicle.vin", value: "NEW-VIN", expectedValue: "OLD-A" },
     expectedPageUrl: "https://admin.forjtruck.com/scrap-replace-qingdao?case=old",
     expectedPageInstanceId: "old-instance",
   }, null, (response) => responses.push(response));
@@ -187,7 +190,7 @@ test("content script rejects a same-URL SPA record change by page fingerprint", 
     window: { location: { href: "https://admin.forjtruck.com/scrap-replace-qingdao?showPageModel=1" } },
     globalThis: {
       crypto: { randomUUID: () => "page-instance" },
-      ReviewPageFieldWriter: { execute() { writes += 1; return Promise.resolve({ ok: true }); } },
+      ReviewPageFieldWriter: { executeValue() { writes += 1; return Promise.resolve({ ok: true }); } },
       ReviewPageFieldCollector: { collect() { return { pageFields: currentFields }; } },
     },
   };
@@ -195,8 +198,8 @@ test("content script rejects a same-URL SPA record change by page fingerprint", 
   const responses = [];
 
   handler({
-    type: "APPLY_PAGE_FILL_INTENT",
-    actions: [],
+    type: "APPLY_PAGE_FIELD_VALUE",
+    action: { field: "old_vehicle.vin", value: "NEW-VIN", expectedValue: "OLD-A" },
     expectedPageUrl: context.window.location.href,
     expectedPageInstanceId: "page-instance",
     expectedPageFingerprint: '[["application.id","case-a"],["old_vehicle.vin","OLD-A"]]',
@@ -217,7 +220,7 @@ test("content script rejects an owner-only page fingerprint before writer execut
     window: { location: { href: "https://admin.forjtruck.com/scrap-replace-qingdao?showPageModel=1" } },
     globalThis: {
       crypto: { randomUUID: () => "page-instance" },
-      ReviewPageFieldWriter: { execute() { writes += 1; return Promise.resolve({ ok: true }); } },
+      ReviewPageFieldWriter: { executeValue() { writes += 1; return Promise.resolve({ ok: true }); } },
       ReviewPageFieldCollector: { collect() { return { pageFields: fields }; } },
     },
   };
@@ -225,8 +228,8 @@ test("content script rejects an owner-only page fingerprint before writer execut
   const responses = [];
 
   handler({
-    type: "APPLY_PAGE_FILL_INTENT",
-    actions: [],
+    type: "APPLY_PAGE_FIELD_VALUE",
+    action: { field: "old_vehicle.vin", value: "NEW-VIN", expectedValue: "OLD-A" },
     expectedPageUrl: context.window.location.href,
     expectedPageInstanceId: "page-instance",
     expectedPageFingerprint: '[["old_vehicle.owner","张三"]]',
@@ -389,7 +392,7 @@ test("content rejects a mapped image when its source changes after collection", 
     chrome: {
       runtime: {
         onMessage: { addListener(listener) { handler = listener; } },
-        sendMessage: async () => ({ ok: true, mimeType: "image/jpeg", sizeBytes: 1, dataUrl: "data:image/jpeg;base64,AA==" }),
+        sendMessage: async () => { throw new Error("Image bytes must never be requested"); },
       },
     },
     document: {
@@ -462,7 +465,7 @@ test("framework re-render 换掉 <img> 节点后按图片地址重新定位", as
     chrome: {
       runtime: {
         onMessage: { addListener(listener) { handler = listener; } },
-        sendMessage: async () => ({ ok: true, mimeType: "image/jpeg", sizeBytes: 1, dataUrl: "data:image/jpeg;base64,AA==" }),
+        sendMessage: async () => { throw new Error("Image bytes must never be requested"); },
       },
     },
     document: {
@@ -506,6 +509,212 @@ test("framework re-render 换掉 <img> 节点后按图片地址重新定位", as
 
   assert.equal(responses[0]?.ok, true);
   assert.equal(clicks, 1);
+});
+
+async function repeatedVinFillFixture(initialVin = "LFWSRXDN0T1F1") {
+  let handler, focusCalls = 0;
+  const controls = Object.fromEntries(["new_vehicle.vin", "page_ocr.new_vehicle_vin"].map(field =>
+    [field, { tagName: "INPUT", value: initialVin, isConnected: true }]));
+  const fields = { "application.id": "CASE-A" };
+  const pageFields = () => ({ ...fields, ...Object.fromEntries(Object.entries(controls).map(([field, node]) => [field, node.value])) });
+  const image = {
+    isConnected: true, src: "https://images.test/vin-proof", currentSrc: "https://images.test/vin-proof",
+    alt: "新车登记证书", className: "", naturalWidth: 100, naturalHeight: 80,
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 80 }),
+    closest: () => null, getAttribute: () => null,
+  };
+  const context = {
+    chrome: { runtime: { onMessage: { addListener(fn) { handler = fn; } } } },
+    document: { title: "审核页", images: [image], body: { innerText: "", querySelectorAll: () => [] } },
+    window: {
+      location: { href: "https://admin.forjtruck.com/scrap-replace-qingdao?showPageModel=1" },
+      getComputedStyle: () => ({ display: "block", visibility: "visible" }),
+    },
+    console: { info() {} },
+    globalThis: {
+      crypto: { randomUUID: () => "page-instance" },
+      ReviewBusinessDetector: { resolve: () => ({ business: { businessType: "scrap_replacement" } }) },
+      ReviewPageFieldCollector: {
+        collect: () => ({ pageFields: pageFields(), fieldTargets: Object.entries(controls).map(([field, element]) => ({ field, element })),
+          writableTargets: [], unmatchedLabels: [], scannedControls: 2, candidateCount: 2, ambiguousFields: [] }),
+        collectIdentity: () => ({ pageFields: pageFields(), fieldTargets: [{ field: "new_vehicle.vin", element: controls["new_vehicle.vin"] }] }),
+      },
+      ReviewPageFieldWriter: {
+        defaultWritableFields: new Set(Object.keys(controls)),
+        captureValue: node => ({ control: node, value: node.value }),
+        executeValue: async (_root, node, action, guard) => {
+          assert.equal(node.value, action.expectedValue);
+          assert.equal(guard(), true);
+          node.value = action.value;
+          assert.equal(guard(), true);
+          return { ok: true, actions: [{ field: action.field, value: node.value }] };
+        },
+        executeValueGroup: async (_root, entries, action, guard) => {
+          for (const entry of entries) {
+            assert.equal(entry.element.value, entry.expectedValue);
+            assert.equal(guard(), true);
+            entry.element.value = action.value;
+          }
+          assert.equal(guard(), true);
+          return { ok: true, actions: entries.map(entry => ({ field: entry.field, value: entry.element.value })) };
+        },
+      },
+      ReviewBusinessScope: { scopeForLabel: () => null, assign: () => [] },
+      ReviewImageCandidates: { select: candidates => ({ selected: candidates, scannedCount: candidates.length, overflow: false }) },
+      ReviewImageFocus: { focus: () => { focusCalls++; return { ok: true }; } },
+    },
+  };
+  runContent(context);
+  const send = message => new Promise(resolve => handler(message, null, resolve));
+  const collect = () => send({ type: "COLLECT_PAGE_DATA" });
+  const collected = await collect();
+  const identity = snapshot => ({
+    expectedPageUrl: snapshot.pageUrl, expectedPageInstanceId: snapshot.pageInstanceId,
+    expectedCollectionId: snapshot.collectionId, expectedPageFingerprint: snapshot.pageFingerprint,
+  });
+  return {
+    controls, fields, collect, get focusCalls() { return focusCalls; },
+    fill: (value, kind = "group", snapshot = collected) => send({ ...identity(snapshot),
+      type: kind === "group" ? "APPLY_PAGE_FIELD_GROUP_VALUE" : "APPLY_PAGE_FIELD_VALUE",
+      action: kind === "group"
+        ? { fields: Object.keys(controls), value, expectedValues: Object.fromEntries(Object.entries(controls).map(([field, node]) => [field, node.value])) }
+        : { field: "new_vehicle.vin", value, expectedValue: controls["new_vehicle.vin"].value },
+    }),
+    focus: (snapshot = collected) => send({ ...identity(snapshot), type: "FOCUS_REVIEW_IMAGE", imageId: snapshot.images[0].imageId }),
+  };
+}
+
+test("repeated VIN group fills keep image focus bound to the original collection", async () => {
+  for (const values of [["VIN-A", "VIN-A"], ["VIN-A", "VIN-B", "LFWSRXDN0T1F1"]]) {
+    const fixture = await repeatedVinFillFixture();
+    for (const value of values) {
+      assert.equal((await fixture.fill(value)).ok, true);
+      assert.equal((await fixture.focus()).ok, true, "successful writes must preserve the collection identity");
+    }
+    assert.equal(fixture.focusCalls, values.length);
+  }
+});
+
+test("mixed single and group VIN fills and an initially empty VIN preserve the first baseline", async () => {
+  for (const initial of ["LFWSRXDN0T1F1", ""]) {
+    const fixture = await repeatedVinFillFixture(initial);
+    for (const [kind, value] of [["group", "VIN-A"], ["single", "VIN-B"], ["group", "VIN-C"]]) {
+      assert.equal((await fixture.fill(value, kind)).ok, true);
+      assert.equal((await fixture.focus()).ok, true);
+    }
+  }
+});
+
+test("repeated fills still reject image focus after an unverified VIN or record change", async () => {
+  for (const changedField of ["new_vehicle.vin", "application.id"]) {
+    const fixture = await repeatedVinFillFixture();
+    assert.equal((await fixture.fill("VIN-A")).ok, true);
+    assert.equal((await fixture.fill("VIN-B")).ok, true);
+    if (changedField === "new_vehicle.vin") fixture.controls[changedField].value = "MANUALLY-CHANGED";
+    else fixture.fields[changedField] = "CASE-B";
+    assert.equal((await fixture.focus()).ok, false);
+    assert.equal(fixture.focusCalls, 0);
+    if (changedField === "application.id") assert.equal((await fixture.fill("VIN-C")).code, "PAGE_IDENTITY_CHANGED");
+  }
+});
+
+test("a fresh collection replaces the VIN baseline and expires old image focus", async () => {
+  const fixture = await repeatedVinFillFixture();
+  assert.equal((await fixture.fill("VIN-A")).ok, true);
+  const fresh = await fixture.collect();
+  assert.equal((await fixture.focus()).ok, false);
+  for (const value of ["VIN-B", "VIN-C"]) {
+    assert.equal((await fixture.fill(value, "group", fresh)).ok, true);
+    assert.equal((await fixture.focus(fresh)).ok, true);
+  }
+});
+
+test("changed write targets require a surviving independent strong identity anchor", async () => {
+  for (const [initial, current, expectedOk] of [
+    [{ "application.id": "CASE-A", "old_vehicle.vin": "OLD" }, { "old_vehicle.vin": "CHANGED" }, false],
+    [{ "old_vehicle.vin": "OLD" }, { "old_vehicle.vin": "CHANGED" }, false],
+    [{ "old_vehicle.vin": "OLD", "old_vehicle.owner": "OWNER" }, { "old_vehicle.vin": "CHANGED", "old_vehicle.owner": "OWNER" }, false],
+    [{ "application.id": "CASE-A", "old_vehicle.vin": "OLD" }, { "application.id": "CASE-A", "old_vehicle.vin": "CHANGED" }, true],
+  ]) {
+    let handler, writes = 0;
+    let fields = initial;
+    const element = { tagName: "INPUT", value: "OLD", isConnected: true };
+    const context = {
+      chrome: { runtime: { onMessage: { addListener(fn) { handler = fn; } } } },
+      document: { title: "审核页", images: [], body: { innerText: "", querySelectorAll: () => [] } },
+      window: { location: { href: "https://admin.forjtruck.com/scrap-replace-qingdao?showPageModel=1" } },
+      console: { info() {} },
+      globalThis: {
+        crypto: { randomUUID: () => "page-instance" },
+        ReviewBusinessDetector: { resolve: () => ({ business: { businessType: "scrap_replacement" } }) },
+        ReviewPageFieldCollector: { collect: () => ({ pageFields: fields, fieldTargets: [{ field: "old_vehicle.vin", element }],
+          writableTargets: [], unmatchedLabels: [], scannedControls: 1, candidateCount: 1, ambiguousFields: [] }) },
+        ReviewPageFieldWriter: { defaultWritableFields: new Set(["old_vehicle.vin"]),
+          captureValue: () => ({ control: element, value: element.value }),
+          executeValue: async () => { writes++; return { ok: true }; } },
+        ReviewBusinessScope: { scopeForLabel: () => null, assign: () => [] },
+        ReviewImageCandidates: { select: () => ({ selected: [], scannedCount: 0, overflow: false }) },
+      },
+    };
+    runContent(context);
+    const collected = await new Promise(resolve => handler({ type: "COLLECT_PAGE_DATA" }, null, resolve));
+    fields = current;
+    element.value = String(current["old_vehicle.vin"] ?? "");
+    const result = await new Promise(resolve => handler({ type: "APPLY_PAGE_FIELD_VALUE",
+      action: { field: "old_vehicle.vin", value: "NEW", expectedValue: "OLD" },
+      expectedPageUrl: collected.pageUrl, expectedPageInstanceId: collected.pageInstanceId,
+      expectedCollectionId: collected.collectionId, expectedPageFingerprint: collected.pageFingerprint,
+    }, null, resolve));
+    assert.equal(result.ok, expectedOk);
+    assert.equal(writes, expectedOk ? 1 : 0);
+  }
+});
+
+test("field writes use one live identity sample per guard without rebuilding the whole form", async () => {
+  let handler, fullReads = 0, identityReads = 0;
+  const element = { tagName: "INPUT", value: "OLD", isConnected: true };
+  const pageFields = () => ({ "application.id": "CASE-A", "old_vehicle.vin": element.value });
+  const context = {
+    chrome: { runtime: { onMessage: { addListener(fn) { handler = fn; } } } },
+    document: { title: "审核页", images: [], body: { innerText: "", querySelectorAll: () => [] } },
+    window: { location: { href: "https://admin.forjtruck.com/scrap-replace-qingdao?showPageModel=1" } },
+    console: { info() {} },
+    globalThis: {
+      crypto: { randomUUID: () => "page-instance" },
+      ReviewBusinessDetector: { resolve: () => ({ business: { businessType: "scrap_replacement" } }) },
+      ReviewPageFieldCollector: {
+        collect: () => { fullReads++; return { pageFields: pageFields(), fieldTargets: [{ field: "old_vehicle.vin", element }], writableTargets: [], unmatchedLabels: [], scannedControls: 1, candidateCount: 1, ambiguousFields: [] }; },
+        collectIdentity: (_root, anchors) => {
+          identityReads++;
+          assert.ok(anchors.includes("application.id"));
+          assert.ok(anchors.includes("old_vehicle.vin"));
+          return { pageFields: pageFields(), fieldTargets: [{ field: "old_vehicle.vin", element }] };
+        },
+      },
+      ReviewPageFieldWriter: {
+        defaultWritableFields: new Set(["old_vehicle.vin"]),
+        captureValue: () => ({ control: element, value: element.value }),
+        executeValue: async (_root, _target, action, guard) => {
+          assert.equal(guard(), true);
+          element.value = action.value;
+          assert.equal(guard(), true);
+          return { ok: true, actions: [{ field: action.field, value: action.value }] };
+        },
+      },
+      ReviewBusinessScope: { scopeForLabel: () => null, assign: () => [] },
+      ReviewImageCandidates: { select: () => ({ selected: [], scannedCount: 0, overflow: false }) },
+    },
+  };
+  runContent(context);
+  const collected = await new Promise(resolve => handler({ type: "COLLECT_PAGE_DATA" }, null, resolve));
+  const result = await new Promise(resolve => handler({ type: "APPLY_PAGE_FIELD_VALUE",
+    action: { field: "old_vehicle.vin", value: "NEW", expectedValue: "OLD" },
+    expectedPageUrl: collected.pageUrl, expectedPageInstanceId: collected.pageInstanceId,
+    expectedCollectionId: collected.collectionId, expectedPageFingerprint: collected.pageFingerprint,
+  }, null, resolve));
+  assert.equal(result.ok, true);
+  assert.equal(fullReads, 1, "only initial review collection builds the whole form");
+  assert.equal(identityReads, 3, "preflight, prewrite and postwrite each take one sample");
 });
 
 test("manifest grants access to the production review host", () => {

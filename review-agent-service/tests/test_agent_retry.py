@@ -22,7 +22,7 @@ def invoice_policy():
 
 
 def invoice_image() -> ImageInput:
-    return ImageInput(index=0, src="image", data_url="data:image/jpeg;base64,AA==", category_hint="invoice", business_scope="new_vehicle")
+    return ImageInput(index=0, src="https://images.example.test/synthetic.jpg", category_hint="invoice", business_scope="new_vehicle")
 
 
 class SequencedClient:

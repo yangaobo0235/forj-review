@@ -101,7 +101,7 @@ def transfer_request(page_fields: dict[str, str] | None = None) -> ReviewRequest
         images=[
             ImageInput(
                 index=0,
-                src="data:image/jpeg;base64,AA==",
+                src="https://images.example.test/synthetic.jpg",
                 business_scope="transfer",
                 document_type_hint="invoice",
                 group_title="过户资料",
@@ -109,7 +109,7 @@ def transfer_request(page_fields: dict[str, str] | None = None) -> ReviewRequest
             ),
             ImageInput(
                 index=1,
-                src="data:image/jpeg;base64,AA==",
+                src="https://images.example.test/synthetic.jpg",
                 business_scope="transfer",
                 document_type_hint="registration_certificate",
                 group_title="过户资料",

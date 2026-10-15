@@ -88,14 +88,13 @@ def _readable_values(
     observations: list[FieldObservation],
     field: str,
 ) -> list[FieldObservation]:
-    """取某个材料字段的可读观察，**每份材料一个值**。
+    """取某个材料字段的可读观察，合并相同读值并保留不同读值。
 
     登记证书第 1、2 页与第 3、4 页、铭牌的正反两面、以及用户重复上传的图片，
     都是同一份材料的多次读取。不先合并的话，马力会推成「488、488」、
     型号会列出两条一模一样的字符串，审核员看到的是一堆重复值而不是结论。
 
-    合并策略与字段比较一致（优先保留与页面值一致的候选，否则取置信度最高者），
-    因此这里复用 `deduplicate_sources`。
+    合并策略与字段比较一致，不按页面值挑选证据。
     """
     sources = [
         item
@@ -195,6 +194,9 @@ def _result(
     values: list[CheckResultValue],
     details: dict[str, object],
 ) -> CheckResult:
+    if status == "MATCH" and any(item.uncertain for item in sources):
+        status = "INSUFFICIENT"
+        reason = f"{reason}；材料识别不确定，请核对原图"
     return CheckResult(
         check_id=check_id,
         label=label,
@@ -292,7 +294,7 @@ def _power_check(context: ReviewExecutionContext) -> CheckResult:
             check_id, label, "INSUFFICIENT",
             "材料未提供可推导马力的发动机型号或发动机功率，请人工核对", sources, values, details,
         )
-    matched = any(_power_matches(page_power, power) for power, _, _ in candidates)
+    matched = all(_power_matches(page_power, power) for power, _, _ in candidates)
     material_text = "、".join(str(power) for power, _, _ in concluded)
     return _result(
         check_id, label, "MATCH" if matched else "CONFLICT",

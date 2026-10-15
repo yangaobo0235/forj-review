@@ -5,14 +5,11 @@
 修改人：wuyi
 """
 
-import asyncio
-import base64
 import logging
 import os
 from logging.handlers import TimedRotatingFileHandler
-from typing import Annotated
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
+from fastapi import FastAPI, HTTPException, status
 
 from app.businesses.context_validation import BusinessContextMismatch
 from app.businesses.packs import build_collect_manifest, pack_for_business
@@ -21,7 +18,6 @@ from app.businesses.registry import BusinessProfileNotFound
 from app.contracts.review_schema import review_contract_schema
 from app.models.review import (
     BusinessType,
-    ImageInput,
     ReviewJobCreated,
     ReviewJobSnapshot,
     ReviewRequest,
@@ -86,9 +82,6 @@ logger = logging.getLogger("uvicorn.error")
 configure_log_file(logger)
 review_service = ReviewService()
 review_jobs = ReviewJobManager(review_service)
-MAX_STREAM_IMAGE_BYTES = 5 * 1024 * 1024
-UPLOAD_GLOBAL_LIMIT = max(1, int(os.getenv("REVIEW_UPLOAD_GLOBAL_CONCURRENCY", "8")))
-upload_slots = asyncio.Semaphore(UPLOAD_GLOBAL_LIMIT)
 
 
 def validate_business_profile(request: ReviewRequest) -> None:
@@ -116,16 +109,29 @@ def review_schema() -> dict[str, object]:
 
 
 @app.get("/api/review/collect-manifest")
-def collect_manifest(business_type: BusinessType) -> dict[str, object]:
+def collect_manifest(business_type: BusinessType, region: str | None = None, profile_version: str | None = None, page_id: str | None = None) -> dict[str, object]:
     """下发页面采集清单：字段别名、图片分组标题和材料分组关键词。
 
-    采集清单只随业务类型变化（同一业务的各地区共用），因此不需要地区参数。
-    前端据此完成字段匹配和图片归组；尚未声明清单的业务返回 404，前端退回内置表。
+    采集清单通常按业务包共用；传入地区、版本或 page_id 时会精确解析对应 Profile，
+    让同业务多页面不会拿错清单。尚未声明清单的业务返回 404，前端退回内置表。
     """
     pack = pack_for_business(business_type)
+    if region is not None or profile_version is not None or page_id is not None:
+        from app.businesses.profiles import BUSINESS_PROFILES
+        candidates = [p for p in BUSINESS_PROFILES if p.business_type == business_type and
+                      (region is None or p.region.value == region) and
+                      (profile_version is None or p.version == profile_version) and
+                      (page_id is None or not page_id or p.page_id == page_id)]
+        if not candidates:
+            raise HTTPException(status_code=404, detail="该业务地区版本不存在")
+        profile = candidates[-1]
+        pack = profile.pack_declaration
     if pack is None:
         raise HTTPException(status_code=404, detail="该业务尚未声明采集清单")
-    return build_collect_manifest(pack)
+    result = build_collect_manifest(pack)
+    if region is not None or profile_version is not None or page_id is not None:
+        result.update(region=profile.region.value, profile_version=profile.version)
+    return result
 
 
 @app.get("/api/review/page-catalog")
@@ -176,83 +182,26 @@ def create_review_job(request: ReviewRequest) -> ReviewJobCreated:
     try:
         created = review_jobs.create(request)
     except ValueError as exc:
-        # 与 /jobs/stream 保持一致：请求本身不合法返回 422，不要冒成 500。
+        # 请求本身不合法返回 422。
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     logger.info("Review job created: job_id=%s", created.job_id)
     return created
 
 
 @app.post(
-    "/api/review/jobs/stream",
+    "/api/review/jobs/urls",
     response_model=ReviewJobCreated,
     status_code=status.HTTP_202_ACCEPTED,
 )
-def create_stream_review_job(request: ReviewRequest) -> ReviewJobCreated:
-    """先创建任务；图片由后续接口逐张上传并立即识别。"""
-
+def create_url_review_job(request: ReviewRequest) -> ReviewJobCreated:
+    """直接提交 DOM 采集的图片地址，不下载、压缩或接收图片正文。"""
     validate_business_profile(request)
     try:
-        created = review_jobs.create_stream(request)
+        created = review_jobs.create_urls(request)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    logger.info(
-        "Stream review job created: job_id=%s expected_images=%d",
-        created.job_id,
-        len(request.images),
-    )
+    logger.info("URL review job created: job_id=%s image_count=%d", created.job_id, len(request.images))
     return created
-
-
-@app.post(
-    "/api/review/jobs/{job_id}/images",
-    response_model=ReviewJobSnapshot,
-    status_code=status.HTTP_202_ACCEPTED,
-)
-async def upload_stream_review_image(
-    job_id: str,
-    metadata: Annotated[str, Form()],
-    file: Annotated[UploadFile | None, File()] = None,
-) -> ReviewJobSnapshot:
-    """接收一张规范化图片；无文件时 metadata 必须携带采集错误。"""
-
-    await upload_slots.acquire()
-    try:
-        try:
-            image = ImageInput.model_validate_json(metadata)
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail="图片元数据格式无效") from exc
-        if file is not None:
-            content = await file.read(MAX_STREAM_IMAGE_BYTES + 1)
-            if len(content) > MAX_STREAM_IMAGE_BYTES:
-                raise HTTPException(status_code=413, detail="单张图片不能超过 5 MB")
-            mime_type = file.content_type or image.mime_type or "image/jpeg"
-            image = image.model_copy(update={
-                "mime_type": mime_type,
-                "size_bytes": len(content),
-                "data_url": f"data:{mime_type};base64,{base64.b64encode(content).decode('ascii')}",
-                "collection_error": None,
-            })
-        elif not image.collection_error:
-            raise HTTPException(status_code=422, detail="图片文件缺失且没有采集错误")
-        try:
-            return review_jobs.add_stream_image(job_id, image)
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail="审核任务不存在或已过期") from exc
-        except (RuntimeError, ValueError) as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-    finally:
-        upload_slots.release()
-
-
-@app.post(
-    "/api/review/jobs/{job_id}/complete",
-    response_model=ReviewJobSnapshot,
-)
-def complete_stream_review_upload(job_id: str) -> ReviewJobSnapshot:
-    try:
-        return review_jobs.complete_stream(job_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="审核任务不存在或已过期") from exc
 
 
 @app.delete(

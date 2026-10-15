@@ -14,6 +14,9 @@ import type { BusinessSelection, BusinessType, Region } from "../types/review";
 export interface PageIdentityDeclaration {
   business_type: string;
   region: string;
+  profile_version?: string;
+  title?: string;
+  page_id?: string;
   /** 该页面的 URL 路径，可多条。 */
   paths: string[];
   /** 页面特征文案，要求**全部**出现才算命中；空数组表示不看特征。 */
@@ -62,7 +65,7 @@ export async function fetchPageCatalog(
   fetcher: typeof fetch = fetch,
 ): Promise<PageCatalog | null> {
   try {
-    const response = await fetcher(`${baseUrl}/api/review/page-catalog`);
+    const response = await fetcher(`${baseUrl}/api/review/page-catalog`, { signal: AbortSignal.timeout(10_000) });
     if (!response.ok) return null;
     const catalog = await response.json();
     return isValid(catalog) ? catalog : null;
@@ -84,9 +87,10 @@ function anchorsPresent(anchors: string[], text: string): boolean {
 
 function toSelection(identity: PageIdentityDeclaration): BusinessSelection {
   return {
+    ...(identity.page_id ? { pageId: identity.page_id } : {}),
     businessType: identity.business_type as BusinessType,
     region: identity.region as Region,
-    profileVersion: "1.0",
+    profileVersion: identity.profile_version || "1.0",
     workflowStage: identity.business_type as BusinessType,
     selectionMode: "AUTO",
     detectionStatus: "CONFIRMED",

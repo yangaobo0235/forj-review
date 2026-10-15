@@ -25,6 +25,10 @@ FIELD_LABELS = {
     "business_license.legal_representative": "法定代表人",
     "business_license.unified_social_credit_code": "统一社会信用代码",
 }
+from app.businesses.context import ContextMapping
+
+FIELD_LABELS = ContextMapping(FIELD_LABELS, lambda p: {**FIELD_LABELS.fallback, **p.labels()})
+
 SOURCE_LABELS = {
     "page": "申请页面",
     "invoice": "机动车销售发票",
@@ -170,6 +174,10 @@ def _matches(selector: SourceSelector, observation: FieldObservation, batch: Age
         return False
     if selector.business_scope and observation.business_scope != selector.business_scope:
         return False
+    if selector.source_field and observation.source_field != selector.source_field:
+        return False
+    if selector.group_order is not None and observation.group_order != selector.group_order:
+        return False
     if selector.required_page is None:
         return observation.value not in (None, "")
     for document in batch.recognized_documents:
@@ -216,7 +224,7 @@ def _missing_source_reason(
     if selector.source_type == "page":
         return "page_field_missing", "申请页面未采集到该字段，请检查页面字段是否为空或未加载"
     documents = _documents_for_selector(selector, batch)
-    if any(_field_is_uncertain(document, field) for document in documents):
+    if any(_field_is_uncertain(document, selector.source_field or field) for document in documents):
         return "recognition_uncertain", "图片可能模糊、遮挡或关键信息不可辨认"
     image_ids = _image_ids_for_selector(selector, request)
     if any(
@@ -406,23 +414,31 @@ def evaluate_extracted(request: ReviewRequest, profile: BusinessProfile, batch: 
             details = []
             for raw_field in dict.fromkeys(document.uncertain_fields):
                 routed, _ = route_fields(document.business_scope, document.document_type, {raw_field: "待核对"})
-                field = next(iter(routed), raw_field)
                 candidates = [item for item in batch.observations
-                              if item.source_type == "image" and item.field in {field, raw_field}
+                              if item.source_type == "image"
+                              and (item.source_field == raw_field or item.field in {*routed, raw_field})
                               and (document.target_id in {item.source_id, item.image_id}
                                    or document.image_index is not None and item.image_index == document.image_index)]
+                targets = list(dict.fromkeys(item.field for item in candidates))
+                targets += [requirement.field for requirement in policy.field_sources
+                            if requirement.field not in targets and any(
+                                selector.source_field == raw_field
+                                and (not selector.document_type or selector.document_type == document.document_type)
+                                and (not selector.business_scope or selector.business_scope == document.business_scope)
+                                for selector in requirement.all_of)]
+                targets = targets or list(routed) or [raw_field]
                 value = document.uncertain_values.get(raw_field)
                 if raw_field not in document.uncertain_values and candidates:
                     value = candidates[0].value
                 image = next((item for item in request.images
                               if str(item.image_id or item.index) == document.target_id
                               or document.image_index is not None and item.index == document.image_index), None)
-                details.append(MaterialFieldDetail(
+                details.extend(MaterialFieldDetail(
                     field=field, field_label=FIELD_LABELS.get(field, "未明确的识别字段"),
                     material_name=material_name, value=value,
                     image_id=str(image.image_id or image.index) if image else document.target_id,
                     image_index=image.index if image else document.image_index,
-                ))
+                ) for field in targets)
             if matching_issue is not None:
                 matching_issue.field_details.extend(details)
             else:

@@ -69,6 +69,20 @@ def test_vehicle_model_produces_three_independent_conclusions() -> None:
     assert all(item.status == "INSUFFICIENT" for item in checks.values())
 
 
+def test_one_matching_power_candidate_cannot_hide_another_conflicting_material():
+    checks = run(observations=[observation("vehicle.engine_model", "CA4DK1-22E5", REGISTRATION),
+                              observation("vehicle.power_kw", "359 kw", NAMEPLATE, index=2)])
+    assert checks["VEHICLE-MODEL-POWER"].status == "CONFLICT"
+
+
+def test_uncertain_engine_model_cannot_automatically_pass_derived_checks():
+    engine = observation("vehicle.engine_model", "CA4DK1-22E5", REGISTRATION)
+    engine.uncertain = True
+    checks = run(observations=[engine])
+    assert checks["VEHICLE-MODEL-POWER"].status == "INSUFFICIENT"
+    assert checks["VEHICLE-MODEL-EMISSION"].status == "INSUFFICIENT"
+
+
 def test_vehicle_model_matches_when_materials_agree() -> None:
     checks = run(observations=[
         # 发动机型号尾部 22 → 220 马力；整车型号来自行驶证；铭牌给出排放标准。
@@ -186,7 +200,7 @@ def test_vehicle_model_takes_the_last_number_when_displacement_shares_the_column
     assert checks["VEHICLE-MODEL-POWER"].details["material_powers"] == [488]
 
 
-def test_one_material_uploaded_several_times_yields_one_value_per_check() -> None:
+def test_one_material_submitted_several_times_yields_one_value_per_check() -> None:
     """登记证书重复上传、正反面分开上传都不能把结论撑成重复值。
 
     规则读的是原始观察，不走字段比较的合并；不先按材料合并的话，马力会推成

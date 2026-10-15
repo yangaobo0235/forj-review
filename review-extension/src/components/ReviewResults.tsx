@@ -1,6 +1,6 @@
 /**
  * 功能：按业务 Profile 分流审核结果展示。
- * 职责边界：目标报废置换 Profile 走字段优先助手；未配置业务
+ * 职责边界：已注册业务 Profile 走字段优先助手；未配置业务
  * 继续使用现有结果界面和行为（LegacyReviewResults，保持原样）。
  * 修改日期：2026-09-11
  * 修改人：wuyi
@@ -18,7 +18,6 @@ import { fieldLabel, groupStatusLabel, statusLabel } from "../reviewPanelConfig"
 import type { EvidenceFact, FieldComparison, JobStatus, PageData, ReviewJobSnapshot, ReviewResponse } from "../types/review";
 import { diffValue, diffValueByPosition } from "../valueDiff";
 import { ReviewAdvice } from "./ReviewAdvice";
-import { MaterialCompleteness } from "./MaterialCompleteness";
 import { ReviewTaskList } from "./ReviewTaskList";
 import { resolveWorkbenchRenderer } from "./workbenchRenderers";
 import type { PageFillResult } from "../pageFillClient";
@@ -58,10 +57,6 @@ function LegacyReviewResults({ review, job, pageData, exceptionFilter, onExcepti
     <section className="review-result">
       <ReviewTaskList tasks={review.review_tasks || []} />
       <ReviewAdvice review={review} />
-      <MaterialCompleteness
-        report={review.material_completeness || job?.material_completeness}
-        retrySummary={review.retry_summary || job?.retry_summary}
-      />
       {review.business_type === "scrap_replacement" ? <QrResults review={review} /> : null}
       <section className="result-card exception-card">
         <div className="group-heading"><h2>需要处理</h2><small>{exceptionCounts.ALL} 项</small></div>
@@ -188,7 +183,7 @@ interface EvidenceSourceProps {
 }
 
 function EvidenceSource({ evidence, highlightPlan, compareByPosition = false, image, compact = false, onFocusImage }: EvidenceSourceProps) {
-  const thumbnail = compact ? undefined : image?.dataUrl || image?.src;
+  const thumbnail = compact ? undefined : image?.src;
   const presentation = evidencePresentation(evidence);
   const className = `evidence-source ${presentation.kind}-evidence${evidence.conflicting ? " evidence-conflicting" : ""}${presentation.kind === "image" && thumbnail ? " has-thumbnail" : ""}`;
   const parts = highlightPlan.markAll

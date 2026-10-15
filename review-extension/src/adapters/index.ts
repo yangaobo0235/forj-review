@@ -6,8 +6,6 @@ import { VehicleSourcePageAdapter } from "./vehicleSourceAdapter.ts";
 export {
   PageAdapterRegistry,
   type PageAdapter,
-  type PageIdentity,
-  type PageLocator,
 } from "./pageAdapter.ts";
 export { ScrapReplacementPageAdapter } from "./scrapReplacementAdapter.ts";
 export { VehicleSourcePageAdapter } from "./vehicleSourceAdapter.ts";
@@ -17,8 +15,8 @@ export { pagePath, pageSelection, pathMatches } from "./selection.ts";
 /**
  * 全应用的页面识别表。新增页面 = 写一个适配器并在这里注册。
  *
- * 适配器只负责页面特有的事：识别、可写控件、受控写回。字段采集是通用的，
- * 依据后端下发的采集清单完成。
+ * 适配器只负责页面特有的识别。字段采集和受控写回是通用能力，依据后端下发
+ * 的采集清单完成。
  */
 export function buildPageAdapterRegistry(): PageAdapterRegistry {
   const registry = new PageAdapterRegistry();

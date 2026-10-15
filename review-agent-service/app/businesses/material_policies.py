@@ -10,6 +10,8 @@ class SourceSelector:
     document_type: str | None = None
     business_scope: str | None = None
     required_page: int | None = None
+    source_field: str | None = None
+    group_order: int | None = None
 
 
 @dataclass(frozen=True)
@@ -37,7 +39,6 @@ class RetryPolicy:
     semantic_retry_count: int = 1
     confidence_threshold: float = 0.70
     minimum_retry_window_seconds: float = 2.0
-    qr_decode_max_rounds: int = 3
     qr_web_retry_count: int = 1
 
 

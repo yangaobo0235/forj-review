@@ -19,6 +19,7 @@ export class PageActionRegistry {
 
   public async executeAll(actions: readonly PageActionIntent[], page: PageData): Promise<string[]> {
     const messages: string[] = [];
+    const executed = new Set<string>();
     for (const action of actions) {
       const executor = this.executors.get(action.action_id);
       if (!executor) {
@@ -28,7 +29,17 @@ export class PageActionRegistry {
         messages.push(`页面动作「${action.action_id}」尚未在前端注册，已跳过`);
         continue;
       }
-      messages.push(await executor(action, page));
+      if (action.requires_authorization !== false) {
+        messages.push(`页面动作「${action.action_id}」需要操作人员确认，未自动执行`);
+        continue;
+      }
+      if (executed.has(action.action_id)) continue;
+      executed.add(action.action_id);
+      try {
+        messages.push(await executor(action, page));
+      } catch {
+        messages.push(`页面动作「${action.action_id}」未能执行，请在原页面人工操作`);
+      }
     }
     return messages;
   }

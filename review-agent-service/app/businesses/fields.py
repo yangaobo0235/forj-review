@@ -35,4 +35,6 @@ def _merge_labels() -> dict[str, str]:
 
 
 # 页面字段的中文标签；任务展示和材料异常说明都用这一份。
-PAGE_FIELD_LABELS = _merge_labels()
+from app.businesses.context import ContextMapping
+
+PAGE_FIELD_LABELS = ContextMapping(_merge_labels(), lambda pack: pack.labels())

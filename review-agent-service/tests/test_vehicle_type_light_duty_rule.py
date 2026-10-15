@@ -83,7 +83,7 @@ def test_any_one_material_is_enough() -> None:
     assert "机动车行驶证" not in checks[0].reason
 
 
-def test_one_material_uploaded_twice_is_named_once() -> None:
+def test_one_material_submitted_twice_is_named_once() -> None:
     """正反面、重复上传是同一份材料的多次读取，不该点名两遍。"""
     checks = run([
         observation("轻型厢式货车", "vehicle_license", 1),

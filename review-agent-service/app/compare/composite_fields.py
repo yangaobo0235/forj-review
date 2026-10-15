@@ -24,7 +24,7 @@ class CompositeFieldSpec:
     secondary_label: str
 
 
-def _declared_composites() -> tuple[CompositeFieldSpec, ...]:
+def _declared_composites(packs=None) -> tuple[CompositeFieldSpec, ...]:
     """从业务扩展包合成组合字段表。
 
     和材料策略、字段证据策略同样的做法：**字段键是业务知识，声明在
@@ -42,7 +42,7 @@ def _declared_composites() -> tuple[CompositeFieldSpec, ...]:
             primary_label=item.primary_label,
             secondary_label=item.secondary_label,
         )
-        for pack in BUSINESS_PACKS.values()
+        for pack in (BUSINESS_PACKS.values() if packs is None else packs)
         for item in pack.page_field_composites
     )
 
@@ -54,6 +54,13 @@ COMPOSITE_FIELDS_BY_MEMBER = {
     for spec in PAGE_FIELD_COMPOSITES
     for field in (spec.primary_field, spec.secondary_field)
 }
+
+
+from app.businesses.context import ContextMapping, ContextSequence
+
+PAGE_FIELD_COMPOSITES = ContextSequence(PAGE_FIELD_COMPOSITES, lambda p: _declared_composites((p,)))
+COMPOSITE_FIELDS_BY_MEMBER = ContextMapping(COMPOSITE_FIELDS_BY_MEMBER,
+    lambda p: {f: s for s in _declared_composites((p,)) for f in (s.primary_field, s.secondary_field)})
 
 
 def build_page_composite_check(

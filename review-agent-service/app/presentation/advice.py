@@ -9,16 +9,14 @@ from app.businesses.fields import PAGE_FIELD_LABELS
 from app.compare.check_results import qr_review_checks, unique_checks
 from app.compare.composite_fields import PAGE_FIELD_COMPOSITES
 from app.models.checks import CheckResultValue
-from app.models.review import FieldComparison, FieldStatus, QrCheck
+from app.models.review import FieldComparison, FieldStatus, QrCheck, ReviewTask
 from app.workflow.models import (
     AgentAdvice,
     CheckResult,
     MaterialCompletenessReport,
 )
 
-FIELD_LABELS = {
-    **PAGE_FIELD_LABELS,
-}
+FIELD_LABELS = PAGE_FIELD_LABELS
 
 
 def _field_finding(comparison: FieldComparison) -> CheckResult:
@@ -33,6 +31,8 @@ def _field_finding(comparison: FieldComparison) -> CheckResult:
             detail=item.detail,
             derived_from=item.derived_from,
             evidence_region=item.evidence_region,
+            uncertain=item.uncertain,
+            group_title=item.group_title,
         )
         for item in comparison.evidence
         if item.value not in (None, "")
@@ -58,6 +58,7 @@ def build_final_advice(
     confidences: list[float],
     *,
     completeness: MaterialCompletenessReport | None = None,
+    review_tasks: list[ReviewTask] | None = None,
 ) -> tuple[str, AgentAdvice]:
     composite_check_ids = {item.check_id for item in cross_checks}
     superseded_fields = {
@@ -105,6 +106,22 @@ def build_final_advice(
         for index, limitation in enumerate(dict.fromkeys(limitations), start=1)
     )
 
+    represented = {item.check_id for item in findings}
+    represented.update(f"FIELD-{item.field}" for item in comparisons if item.status is not FieldStatus.MATCH)
+    for task in review_tasks or []:
+        if task.result_status == "MATCH":
+            continue
+        ids = {task.step_id, *task.check_ids, *task.details.get("check_ids", [])}
+        if task.step_id.startswith("BUSINESS-"):
+            ids.add(task.step_id.removeprefix("BUSINESS-"))
+        if ids & represented:
+            continue
+        # 控件未映射、页面歧义或系统字段异常也必须影响整单建议。
+        findings.append(CheckResult(
+            check_id=task.step_id, label=task.label, status=task.result_status,
+            reason=task.reason, values=task.values, evidence=task.evidence,
+        ))
+        represented.update(ids)
     findings = unique_checks(findings)
     decision = "REVIEW_REQUIRED" if findings else "PASS"
     confidence = sum(confidences) / len(confidences) if confidences else None

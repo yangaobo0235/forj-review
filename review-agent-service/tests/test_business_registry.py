@@ -1,6 +1,12 @@
+from dataclasses import replace
+
 import pytest
 
-from app.businesses.registry import BusinessProfileNotFound, build_business_registry
+from app.businesses.registry import (
+    BusinessProfileNotFound,
+    BusinessRegistry,
+    build_business_registry,
+)
 from app.models.review import BusinessType, Region, ReviewRequest
 
 
@@ -115,3 +121,15 @@ def test_registry_rejects_unknown_profile_version() -> None:
             Region.QINGDAO,
             "9.9",
         )
+
+
+def test_registry_keeps_same_business_region_profiles_separate_by_page_id() -> None:
+    base = build_business_registry().resolve(BusinessType.VEHICLE_SOURCE, Region.DEFAULT, "1.0")
+    registry = BusinessRegistry(
+        (replace(base, page_id="vehicle-source-a"), replace(base, page_id="vehicle-source-b"))
+    )
+
+    assert registry.resolve(BusinessType.VEHICLE_SOURCE, Region.DEFAULT, "1.0", page_id="vehicle-source-a").page_id == "vehicle-source-a"
+    assert registry.resolve(BusinessType.VEHICLE_SOURCE, Region.DEFAULT, "1.0", page_id="vehicle-source-b").page_id == "vehicle-source-b"
+    with pytest.raises(BusinessProfileNotFound, match="page_id is required"):
+        registry.resolve(BusinessType.VEHICLE_SOURCE, Region.DEFAULT, "1.0")

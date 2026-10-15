@@ -170,7 +170,7 @@ def test_missing_material_on_one_side_asks_for_human_review() -> None:
     assert "新车" in check.reason
 
 
-def test_one_material_uploaded_several_times_yields_one_value() -> None:
+def test_one_material_submitted_several_times_yields_one_value() -> None:
     """重复上传、正反面分开上传都算同一份材料的多次读取。"""
     observations = [
         observation("old_vehicle.owner", COMPANY, "vehicle_license", OLD, index=1),

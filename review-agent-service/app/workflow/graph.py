@@ -17,10 +17,8 @@ from uuid import uuid4
 from langgraph.graph import END, START, StateGraph
 
 from app.businesses.completeness import evaluate_collected, evaluate_extracted
+from app.businesses.context import with_business_context
 from app.businesses.context_validation import validate_request_route
-from app.businesses.packs import pack_for_business
-from app.businesses.packs.model import material_types_for_scope
-from app.businesses.packs.scrap_replacement import OLD_SECTION
 from app.businesses.profiles import BusinessProfile
 from app.businesses.rules.affiliation import run_affiliation_subject
 from app.businesses.rules.invoice_verification import run_verify_invoice
@@ -49,6 +47,7 @@ from app.capabilities.subgraphs import build_capability_subgraph
 from app.compare.check_results import qr_review_checks, unique_checks
 from app.compare.composite_fields import build_page_composite_checks
 from app.compare.evidence_values import batch_observations
+from app.models.evidence import FieldObservation
 from app.models.review import (
     BusinessType,
     CapabilityPlanEntry,
@@ -62,6 +61,7 @@ from app.models.review import (
 )
 from app.presentation.routing import build_review_tasks
 from app.services.review_assembly import assemble_review_response
+from app.services.review_response import _log_decision
 from app.workflow.models import (
     AgentAdvice,
     AgentBatchResult,
@@ -178,7 +178,7 @@ class ReviewWorkflow:
                 writable_fields=("old_vehicle.affiliation", "new_vehicle.affiliation"),
             )}
         builtin_page_specs["verify_invoice"] = PageActionSpec(
-            "verify_invoice", reversible=False, requires_authorization=True,
+            "verify_invoice", reversible=False, requires_authorization=False,
             writable_fields=(),
         )
         # writable_fields 留空：可写字段是业务知识，由扩展包的字段声明给出，
@@ -392,19 +392,37 @@ class ReviewWorkflow:
         return {"degradation_reasons": reasons}
 
     @staticmethod
-    def _plan_capabilities(state: ReviewState) -> dict[str, Any]:
+    def _available_facts(state: ReviewState) -> set[str]:
         available = {image.business_scope for image in state["request"].images if not image.collection_error}
         available.update(image.category_hint for image in state["request"].images if not image.collection_error)
         available.update(document.business_scope for document in state["batch"].recognized_documents)
-        # 出现旧车材料时补上旧车分区，让依赖它的能力（二维码核验）能进入计划。
-        # 集合从报废置换的材料声明推导——二维码核验只存在于这个业务，旧实现也是
-        # 所有业务共用这一份名单。漏改一处会让旧车能力被判成「材料不足」，不报错。
-        scrap_pack = pack_for_business(BusinessType.SCRAP_REPLACEMENT)
-        if scrap_pack is not None and available & material_types_for_scope(
-            scrap_pack, OLD_SECTION
-        ):
-            available.add(OLD_SECTION)
-        return {"capability_plan": plan_capabilities(state["profile"], available), "capability_results": []}
+        # 只有材料声明能唯一确定分区时才补全；不把新车材料冒充旧车依赖。
+        pack = state["profile"].pack_declaration
+        if pack:
+            for image in state["request"].images:
+                if image.collection_error or image.business_scope not in {"unknown", ""}:
+                    continue
+                material = pack.material(image.document_type_hint) or pack.material(image.category_hint)
+                if material and len(material.allowed_scopes) == 1:
+                    available.add(material.allowed_scopes[0])
+        available.update(
+            observation.field for observation in batch_observations(state["batch"])
+            if observation.value is not None and observation.value != "" and not observation.uncertain
+        )
+        return available
+
+    @classmethod
+    def _plan_capabilities(cls, state: ReviewState) -> dict[str, Any]:
+        return {"capability_plan": plan_capabilities(state["profile"], cls._available_facts(state)), "capability_results": []}
+
+    @staticmethod
+    def _capability_observations(profile: BusinessProfile, results: Sequence[CapabilityResult]) -> tuple[FieldObservation, ...]:
+        outputs = {spec.capability_id: set(spec.output_facts) for spec in profile.capabilities}
+        return tuple(
+            FieldObservation.model_validate({**fact.model_dump(), "source_type": "capability", "source_id": result.capability_id})
+            for result in results if result.status == "SUCCEEDED"
+            for fact in result.evidence if fact.field in outputs.get(result.capability_id, ())
+        )
 
     def _execution_context(self, state: ReviewState) -> ReviewExecutionContext:
         batch = state.get("batch")
@@ -415,7 +433,7 @@ class ReviewWorkflow:
             request=state["request"],
             profile=state["profile"],
             batch=batch,
-            observations=tuple(batch_observations(batch)),
+            observations=(*batch_observations(batch), *self._capability_observations(state["profile"], state.get("capability_results", []))),
             comparisons=tuple(response.comparisons if response else ()),
             qr_checks=tuple(state.get("qr_checks", ())),
         )
@@ -474,32 +492,36 @@ class ReviewWorkflow:
         context = self._execution_context(state)
         capability_plan = state.get("capability_plan")
         if capability_plan is None:
-            available = {
-                image.business_scope
-                for image in state["request"].images
-                if not image.collection_error
-            }
-            available.update(
-                document.business_scope
-                for document in context.batch.recognized_documents
-            )
-            capability_plan = plan_capabilities(state["profile"], available)
+            capability_plan = plan_capabilities(state["profile"], self._available_facts(state))
         plans = {item.capability_id: item for item in capability_plan}
         bindings = {binding.capability_id: binding for binding in context.profile.bindings}
-        specs = []
-        for spec in context.profile.capabilities:
-            if spec.stage not in stages:
+        specs = {spec.capability_id: spec for spec in context.profile.capabilities}
+        results = []
+        for item in capability_plan:
+            spec = specs.get(item.capability_id)
+            if spec is None or spec.stage not in stages:
                 continue
             binding = bindings.get(spec.capability_id)
             if binding is not None and binding.required is not None:
                 spec = replace(spec, required=binding.required)
-            specs.append(spec)
-        external_ids = {spec.capability_id for spec in specs if spec.kind == "EXTERNAL"}
-        results = [
-            await self.capabilities.execute(spec, plans[spec.capability_id], context)
-            for spec in specs
-        ]
+            actual_facts = {
+                observation.field for observation in context.observations
+                if observation.value is not None and observation.value != "" and not observation.uncertain
+            }
+            missing = set(spec.input_facts) - actual_facts
+            if item.status == "READY" and missing:
+                item = replace(item, status="BLOCKED" if spec.required else "SKIPPED",
+                               reason="依赖事实未实际产出：" + "、".join(sorted(missing)),
+                               missing_dependencies=tuple(sorted(missing)))
+                plans[spec.capability_id] = item
+            result = await self.capabilities.execute(spec, item, context)
+            results.append(result)
+            context = replace(context, observations=(
+                *context.observations, *self._capability_observations(context.profile, [result]),
+            ), qr_checks=(*context.qr_checks, *result.qr_checks))
+        external_ids = {spec.capability_id for spec in specs.values() if spec.kind == "EXTERNAL"}
         return {
+            "capability_plan": tuple(plans[item.capability_id] for item in capability_plan),
             "capability_results": results,
             "qr_checks": [check for item in results for check in item.qr_checks],
             "external_results": unique_checks(
@@ -682,7 +704,7 @@ class ReviewWorkflow:
         facts = list(state.get("evidence_facts", [])) or [
             fact for comparison in current_response.comparisons for fact in comparison.evidence
         ]
-        return {"response": current_response.model_copy(update={
+        final_response = current_response.model_copy(update={
             "trace_id": state.get("trace_id", current_response.trace_id),
             "capability_plan": [CapabilityPlanEntry(
                 capability_id=item.capability_id,
@@ -701,8 +723,11 @@ class ReviewWorkflow:
                     if reason not in current_response.issues
                 ],
             ],
-        })}
+        })
+        _log_decision(final_response, "final")
+        return {"response": final_response}
 
+    @with_business_context
     async def run(
         self,
         request: ReviewRequest,

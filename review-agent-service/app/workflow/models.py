@@ -19,6 +19,7 @@ class RecognizedDocument(BaseModel):
     covered_pages: list[int] = Field(default_factory=list)
     uncertain_fields: list[str] = Field(default_factory=list)
     uncertain_values: dict[str, Any] = Field(default_factory=dict)
+    qr_codes: list[str] = Field(default_factory=list)
 
 
 class MaterialFieldDetail(BaseModel):
@@ -83,7 +84,7 @@ RETRYABLE_UNCERTAIN_PREFIX = "uncertain_field:"
 
 class RetryAttempt(BaseModel):
     target_id: str
-    stage: Literal["qwen", "qr_decode", "qr_web"]
+    stage: Literal["qwen", "qr_web"]
     attempt_number: int = Field(ge=1)
     reason_code: str
     strategy: str
@@ -98,11 +99,6 @@ class RetrySummary(BaseModel):
     @property
     def qwen_retries(self) -> int:
         return sum(item.stage == "qwen" and item.attempt_number > 1 for item in self.attempts)
-
-    @computed_field
-    @property
-    def qr_decode_rounds(self) -> int:
-        return sum(item.stage == "qr_decode" for item in self.attempts)
 
     @computed_field
     @property
@@ -139,6 +135,7 @@ class QwenExtraction(BaseModel):
     confidence: float | None = Field(default=None, ge=0, le=1)
     evidence_regions: list[EvidenceRegion] = Field(default_factory=list)
     uncertain_fields: list[str] = Field(default_factory=list)
+    qr_codes: list[str] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod

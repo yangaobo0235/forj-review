@@ -27,34 +27,37 @@ const steps = [
   },
 ];
 
-const scrapPolicy = { materialTasksVisible: false };
-const vehicleSourcePolicy = { materialTasksVisible: true };
 
-test("field-first presentation policy hides affiliation tasks by stable identity", () => {
+
+test("visibility follows the backend declaration rather than business field or task names", () => {
   const hidden = [
     { ...steps[0], step_id: "BUSINESS-AFFILIATION-SUBJECT-001" },
     { ...steps[0], step_id: "BUSINESS-AFFILIATION-AUX-CUSTOMER-NAME" },
     { ...steps[0], step_id: "FIELD-old_vehicle.affiliation", category: "FIELD", page_target_field: "old_vehicle.affiliation" },
   ];
 
-  assert.equal(hidden.every((step) => !isFieldFirstTaskVisible(step, scrapPolicy)), true);
-  assert.equal(isFieldFirstTaskVisible(steps[1], scrapPolicy), true);
+  assert.equal(hidden.every((step) => isFieldFirstTaskVisible(step)), true);
+  assert.equal(hidden.every((step) => !isFieldFirstTaskVisible({ ...step, visible: false })), true);
+  assert.equal(isFieldFirstTaskVisible(steps[1]), true);
 });
 
-test("material tasks are hidden only for profiles that place them elsewhere", () => {
+test("retired material tasks stay hidden while field and external failures remain visible", () => {
   const material = [
     { ...steps[0], step_id: "MATERIAL-GROUP", category: "MATERIAL" },
     { ...steps[0], step_id: "MATERIAL-MISSING_MATERIAL-1", category: "MATERIAL" },
-    { ...steps[0], step_id: "BUSINESS-MATERIAL-COMPLETENESS", category: "MATERIAL" },
+    { ...steps[0], step_id: "BUSINESS-MATERIAL-COMPLETENESS", category: "BUSINESS_RULE" },
   ];
 
-  assert.equal(material.every((step) => !isFieldFirstTaskVisible(step, scrapPolicy)), true);
-  // 车源审核的“行驶证必须有、登记证书与铭牌二选一”必须能被审核员看到。
-  assert.equal(material.every((step) => isFieldFirstTaskVisible(step, vehicleSourcePolicy)), true);
+  for (const status of ["MATCH", "CONFLICT", "INSUFFICIENT"]) {
+    assert.equal(material.every((step) => !isFieldFirstTaskVisible({ ...step, visible: true, result_status: status })), true);
+  }
+  for (const step_id of ["FIELD-old_vehicle.vin", "BUSINESS-QR-001", "BUSINESS-OWNER-001", steps[1].step_id]) {
+    assert.equal(isFieldFirstTaskVisible({ ...steps[1], step_id }), true);
+  }
 });
 
 test("keeps step text readable in a narrow panel", () => {
-  const stylesheet = readFileSync(new URL("../src/App.css", import.meta.url), "utf8");
+  const stylesheet = (readFileSync(new URL("../src/App.css", import.meta.url), "utf8") + readFileSync(new URL("../src/components/EvidenceReviewWorkbench.css", import.meta.url), "utf8"));
 
   // 侧边栏只有几百像素宽，长理由/长字段值必须能断行，否则会横向溢出。
   // 断言只能落在 CSS 文本上——这里没有布局引擎，样式本身没法做行为测试。

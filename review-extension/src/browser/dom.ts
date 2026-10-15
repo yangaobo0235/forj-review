@@ -19,6 +19,9 @@ export interface FieldDefinition {
   section: string;
   reviewable?: boolean;
   sectionRequired?: boolean;
+  locatorName?: string;
+  locatorId?: string;
+  occurrence?: number;
 }
 
 export interface FieldCandidate {

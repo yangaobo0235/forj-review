@@ -13,9 +13,13 @@ export interface ManifestField {
   section: string;
   section_required: boolean;
   reviewable: boolean;
+  locator_name?: string;
+  locator_id?: string;
+  occurrence?: number;
 }
 
 export interface ManifestPageGroup {
+  occurrence?: number;
   label: string;
   scope: string;
   title: string;
@@ -31,8 +35,12 @@ export interface ManifestMaterial {
 
 export interface CollectManifest {
   business_type: string;
+  region?: string;
+  profile_version?: string;
   /** 该业务认定的材料分区，如旧车 / 新车。 */
   scopes: string[];
+  /** 页面控件区域，与材料业务分区独立；旧清单缺省时沿用历史识别。 */
+  page_sections?: { key: string; title: string }[];
   page_groups: ManifestPageGroup[];
   fields: ManifestField[];
   materials: ManifestMaterial[];
@@ -42,6 +50,8 @@ export interface CollectManifest {
   writable_control_kinds?: string[];
   /** 页面指纹锚点：能唯一标识这条审核记录的字段。缺省时退回内置表。 */
   identity_anchors?: string[];
+  /** Explicit record identifiers; an empty list intentionally disables identity-dependent actions. */
+  record_identity_fields?: string[];
 }
 
 export interface ManifestImageProfile {
@@ -101,6 +111,7 @@ export function toFieldDefinitions(manifest: CollectManifest): Record<string, Fi
   for (const field of manifest.fields) {
     const definition: FieldDefinition = {
       aliases: [...field.aliases],
+      locatorName: field.locator_name, locatorId: field.locator_id, occurrence: field.occurrence,
       section: field.section,
     };
     // 与内置表保持同样的写法：只在偏离默认值时写出这两个标记。
@@ -113,15 +124,15 @@ export function toFieldDefinitions(manifest: CollectManifest): Record<string, Fi
 
 export function toGroupLabelEntries(
   manifest: CollectManifest,
-): [string, { scope: string; title: string }][] {
+): [string, { scope: string; title: string; occurrence?: number }][] {
   return manifest.page_groups.map((group) => [
     group.label,
-    { scope: group.scope, title: group.title },
+    { scope: group.scope, title: group.title, ...(group.occurrence ? {occurrence: group.occurrence} : {}) },
   ]);
 }
 
 let appliedFields: Record<string, FieldDefinition> | null = null;
-let appliedGroups: [string, { scope: string; title: string }][] | null = null;
+let appliedGroups: [string, { scope: string; title: string; occurrence?: number }][] | null = null;
 let appliedImageProfile: ManifestImageProfile | null = null;
 let appliedSlots: [string, string][] | null = null;
 let appliedFieldLabels: Record<string, string> | null = null;
@@ -129,6 +140,8 @@ let appliedMaterialLabels: Record<string, string> | null = null;
 let appliedWritableFields: Set<string> | null = null;
 let appliedWritableKinds: Set<string> | null = null;
 let appliedIdentityAnchors: string[] | null = null;
+let appliedRecordIdentityFields: string[] | null = null;
+let appliedSections: { key: string; title: string }[] = [];
 
 const isValid = (manifest: unknown): manifest is CollectManifest => {
   const candidate = manifest as CollectManifest | null;
@@ -137,7 +150,12 @@ const isValid = (manifest: unknown): manifest is CollectManifest => {
       && Array.isArray(candidate.scopes)
       && Array.isArray(candidate.fields)
       && Array.isArray(candidate.page_groups)
-      && Array.isArray(candidate.materials),
+      && Array.isArray(candidate.materials)
+      && (candidate.record_identity_fields === undefined || (
+        Array.isArray(candidate.record_identity_fields)
+        && Array.isArray(candidate.identity_anchors)
+        && candidate.record_identity_fields.every(field => typeof field === "string" && candidate.identity_anchors!.includes(field))
+      )),
   );
 };
 
@@ -152,12 +170,17 @@ export function applyCollectManifest(manifest: unknown): boolean {
     appliedSlots = null;
     appliedFieldLabels = null;
     appliedMaterialLabels = null;
-    appliedWritableFields = null;
-    appliedWritableKinds = null;
-    appliedIdentityAnchors = null;
+    // Explicit identity metadata that fails validation must never enable legacy writes.
+    const invalidIdentity = Boolean(manifest && typeof manifest === "object" && "record_identity_fields" in manifest);
+    appliedWritableFields = invalidIdentity ? new Set() : null;
+    appliedWritableKinds = invalidIdentity ? new Set() : null;
+    appliedIdentityAnchors = invalidIdentity ? [] : null;
+    appliedRecordIdentityFields = invalidIdentity ? [] : null;
+    appliedSections = [];
     return false;
   }
   appliedFields = toFieldDefinitions(manifest);
+  appliedSections = manifest.page_sections ?? [];
   appliedGroups = toGroupLabelEntries(manifest);
   appliedImageProfile = buildImageProfile(manifest);
   appliedSlots = manifest.materials.flatMap((item) =>
@@ -179,15 +202,23 @@ export function applyCollectManifest(manifest: unknown): boolean {
   appliedWritableKinds = Array.isArray(manifest.writable_control_kinds)
     ? new Set(manifest.writable_control_kinds)
     : new Set();
-  appliedIdentityAnchors = Array.isArray(manifest.identity_anchors) && manifest.identity_anchors.length
+  appliedIdentityAnchors = Array.isArray(manifest.identity_anchors)
     ? manifest.identity_anchors
     : null;
+  appliedRecordIdentityFields = Array.isArray(manifest.record_identity_fields) ? manifest.record_identity_fields : null;
   return true;
 }
 
 /** 已应用的上传槽位表；没有应用清单时返回 null，调用方退回内置表。 */
 export function manifestSlotEntries(): [string, string][] | null {
   return appliedSlots;
+}
+
+/** 唯一命中的原始区域标题；多个区域同时出现时保留歧义。 */
+export function manifestSectionFromText(text: string): string | null {
+  const matching = appliedSections.filter(section => section.title && text.includes(section.title));
+  const keys = new Set(matching.map(section => section.key));
+  return keys.size === 1 ? matching[0].key : null;
 }
 
 /** 已应用的图片筛选依据；没有应用清单时返回 null，调用方退回内置规则。 */
@@ -216,7 +247,7 @@ export function manifestFieldDefinitions(): Record<string, FieldDefinition> | nu
 }
 
 /** 已应用的页面分组标题表；没有应用清单时返回 null。 */
-export function manifestGroupLabelEntries(): [string, { scope: string; title: string }][] | null {
+export function manifestGroupLabelEntries(): [string, { scope: string; title: string; occurrence?: number }][] | null {
   return appliedGroups;
 }
 
@@ -265,15 +296,21 @@ export function manifestIdentityAnchors(): string[] | null {
   return appliedIdentityAnchors;
 }
 
+export function manifestRecordIdentityFields(): string[] | null {
+  return appliedRecordIdentityFields;
+}
+
 /** 拉取某个业务的采集清单；失败返回 null，调用方退回内置表。 */
 export async function fetchCollectManifest(
   baseUrl: string,
   businessType: string,
   fetcher: typeof fetch = fetch,
+  context?: {region: string; profile_version?: string; page_id?: string},
 ): Promise<CollectManifest | null> {
   try {
     const response = await fetcher(
-      `${baseUrl}/api/review/collect-manifest?business_type=${encodeURIComponent(businessType)}`,
+      `${baseUrl}/api/review/collect-manifest?business_type=${encodeURIComponent(businessType)}${context ? `&region=${encodeURIComponent(context.region)}&profile_version=${encodeURIComponent(context.profile_version || "1.0")}&page_id=${encodeURIComponent(context.page_id || "")}` : ""}`,
+      { signal: AbortSignal.timeout(10_000) },
     );
     if (!response.ok) return null;
     const manifest = await response.json();

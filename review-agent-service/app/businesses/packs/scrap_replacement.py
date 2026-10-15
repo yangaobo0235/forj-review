@@ -17,6 +17,7 @@ from app.businesses.packs.model import (
     RegionDeclaration,
     RouteDeclaration,
     SectionDeclaration,
+    TaskPresentation,
 )
 from app.businesses.replacement_policies import ReplacementPolicy
 from app.capabilities.specs import CapabilityBinding, CapabilitySpec
@@ -88,6 +89,7 @@ SCRAP_REPLACEMENT_MATERIAL_POLICY = MaterialPolicy(
 
 SCRAP_REPLACEMENT_PACK = BusinessExtensionPack(
     business_type="scrap_replacement",
+    title="报废置换审核",
     scopes=(OLD_SECTION, NEW_SECTION),
     sections=(
         SectionDeclaration(OLD_SECTION, "报废车辆信息"),
@@ -696,22 +698,21 @@ SCRAP_REPLACEMENT_PACK = BusinessExtensionPack(
     capability_specs=(
         CapabilitySpec(
             "material_completeness", kind="MATERIAL", stage="INPUT_COVERAGE",
-            output_facts=("material.coverage",), failure_policy="MANUAL_REVIEW",
+            failure_policy="MANUAL_REVIEW",
         ),
         CapabilitySpec(
             "scrap_certificate_qr", kind="EXTERNAL", stage="EVIDENCE",
             required=True, dependencies=("old_vehicle",), timeout_seconds=60,
-            output_facts=("qr.valid", "scrap_certificate.verified"),
             failure_policy="MANUAL_REVIEW",
         ),
         CapabilitySpec(
             "affiliation_subject", kind="RULE", stage="FINAL_REVIEW",
-            output_facts=("subject.relation",), failure_policy="MANUAL_REVIEW",
+            failure_policy="MANUAL_REVIEW",
         ),
         # 只提出页面动作，不产出检查项；失败不应产生人工复核任务。
         CapabilitySpec(
             "verify_invoice", kind="RULE", stage="POST_COMPARE",
-            required=False, output_facts=("invoice.verification",),
+            required=False,
             failure_policy="SAFE_DEGRADE",
         ),
         # 新旧车所有人一致性。独立于 `affiliation_subject`：那条判断的是
@@ -719,13 +720,13 @@ SCRAP_REPLACEMENT_PACK = BusinessExtensionPack(
         # 里不展示；这条判断的是"是不是同一个主体"，审核员要看。
         CapabilitySpec(
             "owner_consistency", kind="RULE", stage="POST_COMPARE",
-            output_facts=("owner.consistency",), failure_policy="MANUAL_REVIEW",
+            failure_policy="MANUAL_REVIEW",
         ),
         # 报废车辆类型的档位复核。规则本身地区无关，关键词由地区政策声明，
         # 未配置关键词的地区不产出检查项（与产地关键词同一套做法）。
         CapabilitySpec(
             "vehicle_type_light_duty", kind="RULE", stage="POST_COMPARE",
-            output_facts=("vehicle.type.light_duty",), failure_policy="MANUAL_REVIEW",
+            failure_policy="MANUAL_REVIEW",
         ),
     ),
     binding_declarations=(
@@ -738,6 +739,10 @@ SCRAP_REPLACEMENT_PACK = BusinessExtensionPack(
     ),
     page_action_ids=("fill_affiliation_fields",),
     page_interaction=True,
+    presentation=TaskPresentation(
+        hidden_fields=("old_vehicle.affiliation", "new_vehicle.affiliation"),
+        hidden_check_prefixes=("AFFILIATION-",),
+    ),
     # 页面指纹锚点：审核单号、新旧车车架号（强锚点）和所有人。与浏览器里
     # 的内置兜底表一致，这里显式声明之后清单就是运行时的唯一来源。
     identity_anchors=(
@@ -747,6 +752,7 @@ SCRAP_REPLACEMENT_PACK = BusinessExtensionPack(
         "old_vehicle.owner",
         "new_vehicle.owner",
     ),
+    record_identity_fields=("application.id", "old_vehicle.vin", "new_vehicle.vin"),
     # 规则结论并进哪个字段行。日期政策的两条并进对应日期字段、档位核验并进
     # 报废车辆类型（合并由 `prepare_display_tasks` 按这张表做，取最坏状态），
     # 主体关系辅助检查并进客户名称。

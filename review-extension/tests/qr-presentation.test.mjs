@@ -63,7 +63,7 @@ test("valid qr domain requiring review keeps the warning presentation", () => {
 });
 
 test("qr field layout isolates itself from the global definition list grid", () => {
-  const css = readFileSync(new URL("../src/App.css", import.meta.url), "utf8");
+  const css = (readFileSync(new URL("../src/App.css", import.meta.url), "utf8") + readFileSync(new URL("../src/components/EvidenceReviewWorkbench.css", import.meta.url), "utf8"));
 
   assert.match(css, /\.qr-fields\s*{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s);
   assert.match(css, /\.qr-fields dd\s*{[^}]*word-break:\s*normal/s);
@@ -74,7 +74,7 @@ test("qr field layout isolates itself from the global definition list grid", () 
 });
 
 test("qr conflict explanation is rendered in the failure color", () => {
-  const css = readFileSync(new URL("../src/App.css", import.meta.url), "utf8");
+  const css = (readFileSync(new URL("../src/App.css", import.meta.url), "utf8") + readFileSync(new URL("../src/components/EvidenceReviewWorkbench.css", import.meta.url), "utf8"));
 
   assert.match(css, /\.status-conflict strong\s*{[^}]*color:\s*#cf1322/s);
   assert.match(css, /\.qr-check\.status-conflict small\s*{[^}]*color:\s*#cf1322/s);

@@ -160,7 +160,7 @@ test("共用地址的两个业务特征文案不重叠", () => {
   }
 });
 
-test("过户审核注册到字段优先工作台并显示材料要求", () => {
+test("过户审核使用完整证据工作台且不展示旧材料任务", () => {
   const renderer = resolveWorkbenchRenderer({
     business_type: "transfer",
     region: "default",
@@ -184,7 +184,7 @@ test("过户审核注册到字段优先工作台并显示材料要求", () => {
         sections: [],
         review_tasks: [
           step("FIELD-transfer.plate_no", 1, "FIELD", "车牌号", "字段一致", "MATCH"),
-          // 未完成的任务才进「待处理」视图；材料齐全会显示成一致，不进待处理。
+          // 旧后端响应的材料任务不再展示或参与统计。
           step("MATERIAL-GROUP", 2, "MATERIAL", "材料完整性", "缺少登记证书第 3、4 页", "INSUFFICIENT"),
         ],
       },
@@ -196,8 +196,11 @@ test("过户审核注册到字段优先工作台并显示材料要求", () => {
     }),
   );
 
-  // 登记证书第 3、4 页缺了就没有买家名称和证件号的来源，材料要求必须让审核员看到。
-  assert.match(markup, /材料完整性/);
+  assert.doesNotMatch(markup, /缺少登记证书|材料完整性/);
+  assert.match(markup, /待处理 \(0\)/);
+  assert.match(markup, /自动通过 1/);
+  assert.match(markup, /页面外核验 \(0\)/);
+  assert.match(markup, /全部字段 \(1\)/);
 });
 
 test("过户审核不再是「未配置」，下拉里能手动选", () => {

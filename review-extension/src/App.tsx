@@ -6,9 +6,12 @@
  * 修改人：wuyi
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { fetchPageCatalog } from "./browser/page-catalog";
+import { agentBaseUrl } from "./reviewClient";
 
 import "./App.css";
+import "./components/EvidenceReviewWorkbench.css";
 import forjLogo from "./assets/forj-logo.png";
 import { ReviewProgress } from "./components/ReviewProgress";
 import { ReviewResults } from "./components/ReviewResults";
@@ -33,6 +36,20 @@ function App() {
   const [businessSelection, setBusinessSelection] = useState<BusinessChoice>("AUTO");
   const [exceptionFilter, setExceptionFilter] = useState<ExceptionFilter>("ALL");
   const workflow = useReviewWorkflow(businessSelection);
+  const [dynamicChoices, setDynamicChoices] = useState<Record<string,string>>({});
+  useEffect(() => {
+    let live = true;
+    void fetchPageCatalog(agentBaseUrl).then(catalog => {
+      if (!live) return;
+      setDynamicChoices(Object.fromEntries((catalog?.identities || [])
+        .filter(i => (i.profile_version || "1.0") !== "1.0")
+        .map(i => {
+          const key = `config:${encodeURIComponent(JSON.stringify({ businessType: i.business_type, region: i.region, profileVersion: i.profile_version || "1.0", pageId: i.page_id }))}`;
+          return [key, `${i.title || i.business_type} · ${i.region} · 已配置`];
+        })));
+    });
+    return () => { live = false; };
+  }, []);
 
   const changeBusinessSelection = (selection: BusinessChoice) => {
     workflow.reset();
@@ -59,7 +76,7 @@ function App() {
           onChange={(event) => changeBusinessSelection(event.target.value as BusinessChoice)}
           disabled={workflow.loading}
         >
-          {Object.entries(businessLabels).map(([value, label]) => (
+          {Object.entries({...businessLabels, ...dynamicChoices}).map(([value, label]) => (
             <option value={value} key={value}>{label}</option>
           ))}
         </select>
@@ -84,7 +101,7 @@ function App() {
 
       {workflow.error ? <div className="error-message">{workflow.error}</div> : null}
       {workflow.notice ? <div className="notice-message">{workflow.notice}</div> : null}
-      {workflow.job ? <ReviewProgress job={workflow.job} /> : null}
+      {workflow.job ? <ReviewProgress job={workflow.job} pageData={workflow.pageData} onFocusImage={workflow.focusOriginalImage} /> : null}
       {workflow.review ? (
         <ReviewResults
           review={workflow.review}

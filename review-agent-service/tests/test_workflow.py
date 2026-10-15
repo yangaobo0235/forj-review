@@ -1,12 +1,58 @@
+from dataclasses import replace
+
 import pytest
 
-from app.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
+from app.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO, VEHICLE_SOURCE_DEFAULT
 from app.businesses.rules.invoice_verification import run_verify_invoice
-from app.capabilities.specs import ReviewExecutionContext
-from app.models.review import FieldObservation, ReviewRequest
+from app.capabilities.specs import CapabilitySpec, ReviewExecutionContext
+from app.models.evidence import EvidenceFact
+from app.models.review import CapabilityResult, FieldObservation, ReviewRequest
 from app.services.review import ReviewService
 from app.workflow.graph import WORKFLOW_NODE_ORDER, ReviewState
 from app.workflow.models import AgentBatchResult
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("output", ["valid", "missing", "uncertain", "failed"])
+@pytest.mark.parametrize("separate_stages", [False, True])
+async def test_capability_consumers_require_actual_successful_output(output, separate_stages):
+    workflow = ReviewService().workflow
+    profile = replace(VEHICLE_SOURCE_DEFAULT, material_policy=None,
+                      capability_specs=(CapabilitySpec("a_consumer", input_facts=("verified",)),
+                                        CapabilitySpec("z_producer", stage="PRE_COMPARE", output_facts=("verified",))),
+                      binding_declarations=())
+    calls = []
+
+    async def producer(context, spec):
+        calls.append(spec.capability_id)
+        return CapabilityResult(
+            capability_id=spec.capability_id, status="FAILED" if output == "failed" else "SUCCEEDED",
+            evidence=[] if output == "missing" else [EvidenceFact(
+                source="capability", field="verified", value=True, uncertain=output == "uncertain",
+            )],
+        )
+
+    async def consumer(context, spec):
+        calls.append(spec.capability_id)
+        assert next(o for o in context.observations if o.field == "verified").value is True
+        return CapabilityResult(capability_id=spec.capability_id, status="SUCCEEDED")
+
+    workflow.capabilities.handlers.update(z_producer=producer, a_consumer=consumer)
+    state = {"request": ReviewRequest(page_url="https://example.test/review"),
+             "profile": profile, "batch": AgentBatchResult()}
+    state.update(workflow._plan_capabilities(state))
+    if separate_stages:
+        state.update(await workflow._execute_stage(state, {"PRE_COMPARE"}))
+        result = await workflow._execute_stage(state, {"POST_COMPARE"})
+    else:
+        result = await workflow._execute_stage(state, {"PRE_COMPARE", "POST_COMPARE"})
+    status = next(r.status for r in result["capability_results"] if r.capability_id == "a_consumer")
+    assert status == ("SUCCEEDED" if output == "valid" else "BLOCKED")
+    assert calls == (["z_producer", "a_consumer"] if output == "valid" else ["z_producer"])
+    if output != "valid":
+        plan = next(p for p in result["capability_plan"] if p.capability_id == "a_consumer")
+        assert plan.missing_dependencies == ("verified",)
+        assert "未实际产出" in plan.reason
 
 INVOICE_NO = "26320000000801433801"
 

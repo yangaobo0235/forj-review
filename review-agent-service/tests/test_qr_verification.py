@@ -14,7 +14,7 @@ from app.services.qr import (
     validate_qr_url,
 )
 from app.services.review import ReviewService
-from app.workflow.models import AgentBatchResult
+from app.workflow.models import AgentBatchResult, RecognizedDocument
 
 
 def test_qr_url_requires_exact_official_https_host():
@@ -155,25 +155,21 @@ async def test_web_retry_reuses_one_http_client(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_review_keeps_an_untrusted_qr_for_manual_review():
-    class FakeQr:
-        def decode_data_url(self, data_url, image_index):
-            return [QrCodeResult(image_index=image_index, raw_value="https://evil.example/deal/1")]
-
-    service = ReviewService(qr=FakeQr())
+    service = ReviewService()
     request = ReviewRequest(
         page_url="https://example.test",
         region="qingdao",
         images=[
             ImageInput(
                 index=1,
-                src="data:image/jpeg;base64,AA==",
+                src="https://images.example.test/synthetic.jpg",
                 categoryHint="scrap_certificate",
                 businessScope="old_vehicle",
             )
         ],
     )
 
-    checks = await service._collect_qr_checks(request, AgentBatchResult())
+    checks = await service._collect_qr_checks(request, decoded_batch(service, 1, "https://evil.example/deal/1"))
 
     assert len(checks) == 1
     assert checks[0].domain_valid is False
@@ -183,11 +179,7 @@ async def test_review_keeps_an_untrusted_qr_for_manual_review():
 
 @pytest.mark.asyncio
 async def test_review_scans_image_when_agent_identifies_scrap_certificate():
-    class FakeQr:
-        def decode_data_url(self, data_url, image_index):
-            return [QrCodeResult(image_index=image_index, raw_value="http://qclt.mofcom.gov.cn:80/x")]
-
-    service = ReviewService(qr=FakeQr())
+    service = ReviewService()
     service.qr_web = QrWebVerifier(
         allowed_hosts=["qclt.mofcom.gov.cn"],
         transport=httpx.MockTransport(lambda request: httpx.Response(
@@ -198,12 +190,13 @@ async def test_review_scans_image_when_agent_identifies_scrap_certificate():
     request = ReviewRequest(
         page_url="https://example.test",
         region="qingdao",
-        images=[ImageInput(index=1, src="data:image/jpeg;base64,AA==", businessScope="old_vehicle")],
+        images=[ImageInput(index=1, src="https://images.example.test/synthetic.jpg", businessScope="old_vehicle")],
     )
     batch = AgentBatchResult(observations=[FieldObservation(
         field="vehicle.vin", source_type="image", source_id="1", image_index=1, value="LSVAA123456789012",
         document_type="scrap_certificate",
     )])
+    batch.recognized_documents = decoded_batch(service, 1, "http://qclt.mofcom.gov.cn:80/x").recognized_documents
     checks = await service._collect_qr_checks(request, batch)
     assert len(checks) == 1
     assert checks[0].url == "https://qclt.mofcom.gov.cn/x"
@@ -219,18 +212,7 @@ async def test_one_decoded_qr_does_not_create_missing_results_for_other_old_imag
     additional REVIEW_REQUIRED cards once one QR has been found.
     """
 
-    class FakeQr:
-        def decode_data_url(self, data_url, image_index):
-            if image_index == 3:
-                return [
-                    QrCodeResult(
-                        image_index=image_index,
-                        raw_value="http://qclt.mofcom.gov.cn:80/x",
-                    )
-                ]
-            return []
-
-    service = ReviewService(qr=FakeQr())
+    service = ReviewService()
     service.qr_web = QrWebVerifier(
         allowed_hosts=["qclt.mofcom.gov.cn"],
         transport=httpx.MockTransport(
@@ -246,26 +228,26 @@ async def test_one_decoded_qr_does_not_create_missing_results_for_other_old_imag
         images=[
             ImageInput(
                 index=1,
-                src="data:image/jpeg;base64,AA==",
+                src="https://images.example.test/synthetic.jpg",
                 categoryHint="vehicle_license",
                 businessScope="old_vehicle",
             ),
             ImageInput(
                 index=2,
-                src="data:image/jpeg;base64,AA==",
+                src="https://images.example.test/synthetic.jpg",
                 categoryHint="registration_certificate",
                 businessScope="old_vehicle",
             ),
             ImageInput(
                 index=3,
-                src="data:image/jpeg;base64,AA==",
+                src="https://images.example.test/synthetic.jpg",
                 categoryHint="scrap_certificate",
                 businessScope="old_vehicle",
             ),
         ],
     )
 
-    checks = await service._collect_qr_checks(request, AgentBatchResult())
+    checks = await service._collect_qr_checks(request, decoded_batch(service, 3, "http://qclt.mofcom.gov.cn:80/x"))
 
     assert len(checks) == 1
     assert checks[0].image_index == 3
@@ -273,18 +255,8 @@ async def test_one_decoded_qr_does_not_create_missing_results_for_other_old_imag
 
 
 @pytest.mark.asyncio
-async def test_qr_uses_legacy_src_data_url_when_data_url_is_missing():
-    class FakeQr:
-        def decode_data_url(self, data_url, image_index):
-            assert data_url.startswith("data:image/")
-            return [
-                QrCodeResult(
-                    image_index=image_index,
-                    raw_value="http://qclt.mofcom.gov.cn:80/x",
-                )
-            ]
-
-    service = ReviewService(qr=FakeQr())
+async def test_qr_decodes_original_for_unknown_scope_with_scrap_hint():
+    service = ReviewService()
     service.qr_web = QrWebVerifier(
         allowed_hosts=["qclt.mofcom.gov.cn"],
         transport=httpx.MockTransport(
@@ -300,14 +272,20 @@ async def test_qr_uses_legacy_src_data_url_when_data_url_is_missing():
         images=[
             ImageInput(
                 index=4,
-                src="data:image/png;base64,AA==",
+                src="https://images.example.test/synthetic.jpg",
                 categoryHint="scrap_certificate",
                 businessScope="unknown",
             )
         ],
     )
 
-    checks = await service._collect_qr_checks(request, AgentBatchResult())
+    checks = await service._collect_qr_checks(request, decoded_batch(service, 4, "http://qclt.mofcom.gov.cn:80/x"))
 
     assert len(checks) == 1
     assert checks[0].status is FieldStatus.MATCH
+
+
+def decoded_batch(service, index, url):
+    return AgentBatchResult(recognized_documents=[RecognizedDocument(
+        target_id=str(index), image_index=index, document_type="scrap_certificate", qr_codes=[url],
+    )])

@@ -72,6 +72,7 @@ function resolve(
   return {
     business: {
       ...manualSelection,
+      profileVersion: appliedPageCatalog()?.identities.find(i => i.business_type === manualSelection.businessType && i.region === manualSelection.region)?.profile_version || manualSelection.profileVersion,
       selectionMode: "MANUAL" as const,
       detectionStatus: "CONFIRMED",
     },

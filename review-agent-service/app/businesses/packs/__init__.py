@@ -33,6 +33,10 @@ PACK_BY_SCOPE: dict[str, BusinessExtensionPack] = {
 
 def pack_for_business(business_type: BusinessType) -> BusinessExtensionPack | None:
     """返回该业务的声明；尚未声明的业务返回 None。"""
+    from app.businesses.context import current_pack
+    pack = current_pack()
+    if pack is not None and pack.business_type == business_type:
+        return pack
     return BUSINESS_PACKS.get(business_type)
 
 
@@ -43,6 +47,10 @@ def pack_for_scope(business_scope: str) -> BusinessExtensionPack | None:
     字段路由只有分区可用时靠它选中正确的声明，否则会拿报废置换的路由表去
     处理车源材料，把全部字段静默丢弃。
     """
+    from app.businesses.context import current_pack
+    pack = current_pack()
+    if pack is not None:
+        return pack if business_scope in pack.scopes else None
     return PACK_BY_SCOPE.get(business_scope)
 
 

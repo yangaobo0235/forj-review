@@ -16,6 +16,7 @@ class DifferenceRange(BaseModel):
 
 class EvidenceFact(BaseModel):
     source: str
+    source_field: str | None = None
     source_id: str | None = None
     field: str | None = None
     uncertain: bool = False
@@ -48,6 +49,7 @@ class FieldObservation(BaseModel):
     """One independently observed value and its review-document source."""
 
     field: str
+    source_field: str | None = None
     source_type: str
     source_id: str
     value: Any = None

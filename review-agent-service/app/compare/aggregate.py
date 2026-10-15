@@ -36,44 +36,44 @@ def deduplicate_sources(
     或者用户把同一张图重复上传。它们是**同一份材料**的多次读取，不是多个互相
     独立的来源，因此按（业务分区，材料类型）合并，而不是按图片合并。
 
-    合并策略与同一张图内部的重复行完全一致：优先保留与页面值一致的候选，
-    否则取置信度最高者。材料之间的比较仍然发生在不同材料类型之间
-    （例如行驶证与登记证书），那才是真正的两个来源。
+    只合并规范化后相同的读值，保留置信度最高的原图引用。不同读值必须保留，
+    不能用待审核的页面值筛选材料证据，否则会把真实冲突变成通过。
     """
-    grouped: dict[tuple[str, str], list[FieldObservation]] = {}
-    order: list[tuple[str, str]] = []
+    grouped: dict[tuple[str, str, str | None], list[FieldObservation]] = {}
+    order: list[tuple[str, str, str | None]] = []
     for item in observations:
         # 材料类型是这份材料在请求中的稳定身份；只有类型缺失时才退回
         # image_index——兼容 OCR 层可能同时产生 ``ocr-1`` 和 ``1`` 两行。
         if item.source_type == "image" and item.document_type:
             source_key = f"material:{item.business_scope or 'unknown'}:{item.document_type}"
+            if item.source_field:
+                source_key += f":{item.group_order}:{item.source_field}"
         elif item.source_type == "image" and item.image_index is not None:
             source_key = f"image-index:{item.image_index}"
         else:
             source_key = item.image_id or item.source_id or "page"
-        key = (item.source_type, str(source_key))
+        key = (item.source_type, str(source_key), normalize_value(field_name, item.value))
         current = grouped.get(key)
         if current is None:
             grouped[key] = [item]
             order.append(key)
             continue
         current.append(item)
-    page_values = [item.value for item in observations if item.source_type == "page"]
-    page_normalized = {normalize_value(field_name, value) for value in page_values}
     result: list[FieldObservation] = []
     for key in order:
         candidates = grouped[key]
-        # 发票票面可能同时被通用 OCR 和专用 OCR 读出。页面已有值时，
-        # 优先保留同页面值的候选，避免另一条低质量 OCR 把一致结果误报冲突。
-        matching = [item for item in candidates if normalize_value(field_name, item.value) in page_normalized]
-        pool = matching or candidates
-        result.append(max(
-            pool,
+        selected = max(
+            candidates,
             key=lambda item: (
                 item.confidence if item.confidence is not None else -1.0,
                 bool(item.image_id) and not str(item.source_id).startswith("ocr-"),
             ),
-        ))
+        )
+        # 相同值去重不能同时抹掉识别不确定性。
+        result.append(selected.model_copy(update={
+            "uncertain": any(item.uncertain for item in candidates),
+            "retried": any(item.retried for item in candidates),
+        }))
     return result
 
 
@@ -113,6 +113,8 @@ def aggregate_field(
     *,
     uncertain_requires_review: bool = False,
     single_evidence_requires_review: bool = True,
+    page_evidence_required: bool = False,
+    required_document_types: tuple[str, ...] = (),
 ) -> FieldComparison:
     """Compare all non-empty sources without discarding conflicting values."""
     valid = deduplicate_sources(
@@ -126,6 +128,7 @@ def aggregate_field(
             source=EVIDENCE_SOURCE_LABELS.get(item.source_type, item.source_type),
             source_id=item.source_id,
             field=item.field,
+            source_field=item.source_field,
             uncertain=item.uncertain,
             image_index=item.image_index,
             detail=item.source_id,
@@ -157,6 +160,14 @@ def aggregate_field(
     elif len(valid) == 1 and valid[0].source_type == "page":
         status = FieldStatus.REVIEW_REQUIRED
         message = "页面字段已采集，但未从材料中取得可核验值"
+    elif page_evidence_required and not page_values:
+        status = FieldStatus.REVIEW_REQUIRED
+        message = "页面字段未采集或未填写，无法与材料比对，请人工核对"
+    elif required_document_types and not set(required_document_types).issubset(
+        {item.document_type for item in valid if item.source_type == "image"}
+    ) and len({normalize_value(field_name, item.value) for item in valid}) == 1:
+        status = FieldStatus.REVIEW_REQUIRED
+        message = "需要互相印证的材料来源未齐全，页面填写值不能替代材料证据"
     elif len(valid) == 1 and single_evidence_requires_review:
         status = FieldStatus.REVIEW_REQUIRED
         message = "仅有一个有效来源，证据不足"
@@ -262,6 +273,7 @@ def _authority_evidence(
         source=EVIDENCE_SOURCE_LABELS.get(item.source_type, item.source_type),
         source_id=item.source_id,
         field=item.field,
+        source_field=item.source_field,
         uncertain=item.uncertain,
         image_index=item.image_index,
         detail=item.source_id,
@@ -302,6 +314,7 @@ def aggregate_by_authority(
     authority: tuple[AuthorityRule, ...],
     *,
     uncertain_requires_review: bool = False,
+    page_evidence_required: bool = False,
 ) -> FieldComparison:
     """按业务声明的权威链裁决字段。
 
@@ -355,6 +368,9 @@ def aggregate_by_authority(
     elif benchmark is None:
         status = FieldStatus.REVIEW_REQUIRED
         message = f"未取得{head.label}值，无法建立权威比较基准"
+    elif page_evidence_required and page_item is None:
+        status = FieldStatus.REVIEW_REQUIRED
+        message = "页面字段未采集或未填写，无法与材料比对，请人工核对"
     elif missing_required:
         status = FieldStatus.REVIEW_REQUIRED
         message = f"{missing_required[0].label}缺失，无法建立比较基准"

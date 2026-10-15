@@ -88,14 +88,13 @@ def test_image_input_keeps_asset_metadata_and_collection_error() -> None:
         src="https://example.test/image.jpg",
         image_id="img-0001",
         category_hint="scrap_certificate",
-        mime_type="image/jpeg",
-        size_bytes=1234,
         collection_error=None,
     )
 
     assert image.image_id == "img-0001"
     assert image.category_hint == "scrap_certificate"
-    assert image.size_bytes == 1234
+    assert image.recognition_source == "https://example.test/image.jpg"
+    assert image.collection_error is None
 
 
 def test_review_request_accepts_extension_camel_case_payload() -> None:

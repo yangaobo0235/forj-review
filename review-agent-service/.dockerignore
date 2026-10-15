@@ -10,3 +10,5 @@ tests/
 htmlcov/
 .coverage
 README.md
+.tmp/
+logs/

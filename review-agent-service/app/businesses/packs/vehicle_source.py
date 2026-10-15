@@ -228,6 +228,7 @@ def _material_routes() -> tuple[RouteDeclaration, ...]:
 
 VEHICLE_SOURCE_PACK = BusinessExtensionPack(
     business_type="vehicle_source",
+    title="车源审核",
     scopes=(VEHICLE_SCOPE,),
     sections=(SectionDeclaration(VEHICLE_SCOPE, VEHICLE_SECTION_TITLE),),
     fields=(
@@ -484,18 +485,12 @@ VEHICLE_SOURCE_PACK = BusinessExtensionPack(
             "material_completeness",
             kind="MATERIAL",
             stage="INPUT_COVERAGE",
-            output_facts=("material.coverage",),
             failure_policy="MANUAL_REVIEW",
         ),
         CapabilitySpec(
             "vehicle_model_consistency",
             kind="RULE",
             stage="POST_COMPARE",
-            output_facts=(
-                "vehicle.model_power",
-                "vehicle.model_code",
-                "vehicle.emission_standard",
-            ),
             failure_policy="MANUAL_REVIEW",
         ),
     ),
@@ -524,5 +519,6 @@ VEHICLE_SOURCE_PACK = BusinessExtensionPack(
     # 页面指纹锚点。车源页面上没有 `old_vehicle.*` / `application.id`，
     # 不声明的话指纹恒为空串，页面写回和原图定位会被全部拒绝。
     identity_anchors=("vehicle.vin", "vehicle.plate_no", "vehicle.owner"),
+    record_identity_fields=("vehicle.vin",),
     material_policy=VEHICLE_SOURCE_MATERIAL_POLICY,
 )

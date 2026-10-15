@@ -1,11 +1,11 @@
 /**
  * 功能：管理页面采集、任务轮询和部分结果生命周期。
- * 职责边界：不渲染审核结果，不解释后端规则；挂靠写入只通过受控动作触发。
+ * 职责边界：不渲染审核结果，不解释后端规则；页面写入只通过受控动作触发。
  * 修改日期：2026-09-11
  * 修改人：wuyi
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { applyCollectManifest, fetchCollectManifest } from "../browser/collect-manifest.ts";
 import type { CollectManifest } from "../browser/collect-manifest.ts";
@@ -15,13 +15,11 @@ import {
   agentBaseUrl,
   cancelReviewJob,
   completionNotice,
-  completeStreamReviewJob,
-  createStreamReviewJob,
+  createUrlReviewJob,
   fetchReviewJob,
-  uploadStreamReviewImage,
 } from "../reviewClient";
 import { pollReviewJob } from "../reviewJobs";
-import { applyPageFieldGroupValue, applyPageFieldValue, applyPageFillIntent, verifyInvoice, type PageFillResult } from "../pageFillClient";
+import { applyPageFieldGroupValue, applyPageFieldValue, verifyInvoice, type PageFillResult } from "../pageFillClient";
 import { focusReviewImage, type ImageFocusResult } from "../imageFocusClient";
 import { PageActionRegistry } from "../session/pageActionRegistry";
 import {
@@ -31,7 +29,6 @@ import {
 } from "../reviewPanelConfig";
 import type {
   PageData,
-  PageFillAction,
   ReviewJobSnapshot,
   ReviewResponse,
   PageActionIntent,
@@ -39,20 +36,15 @@ import type {
 
 const reviewDeadlineMs = 120_000;
 const reviewPollIntervalMs = 1_000;
-// 上传是"喂料速度"，识别是"加工能力"。并发 2 时 16 张要 8 批才能全部到达，
-// 后端 6 路识别大部分时间在等图，提识别并发并不会变快。提到 4 让喂料追上加工。
-// **必须与 `image-normalization.ts` 的压缩并发一起调**：worker 同步等压缩完成，
-// 压缩并发更低时多出来的 worker 只是在队列外干等。
-const imageUploadConcurrency = 4;
 
 /**
  * 拉取各业务的采集清单。某个业务拉不到就跳过——Content Script 会退回内置表，
  * 采集不会因为清单不可用而中断。
  */
-async function loadCollectManifests(): Promise<CollectManifest[]> {
-  const results = await Promise.all(
-    manifestBusinessTypes.map((business) => fetchCollectManifest(agentBaseUrl, business)),
-  );
+async function loadCollectManifests(catalog: PageCatalog | null): Promise<CollectManifest[]> {
+  const results = await Promise.all(catalog?.identities.length
+    ? catalog.identities.map(identity => fetchCollectManifest(agentBaseUrl, identity.business_type, fetch, identity))
+    : manifestBusinessTypes.map(business => fetchCollectManifest(agentBaseUrl, business)));
   return results.filter((item): item is CollectManifest => item !== null);
 }
 
@@ -64,14 +56,10 @@ async function collectPageData(selection: BusinessChoice): Promise<PageData> {
   if (!tab.id) {
     throw new Error("没有找到当前页面");
   }
-  // 页面识别清单和采集清单一起拉：识别发生在按业务类型取采集清单之前，
-  // 所以它必须一次下发全部业务，不能按业务类型查。拉不到时为 null，
-  // Content Script 退回内置表并要求人工选择业务。
-  // 两者互不依赖，必须并发：串行 await 让每次审核在采集开始前先多等一个来回。
-  const [manifests, pageCatalog] = await Promise.all([
-    loadCollectManifests(),
-    fetchPageCatalog(agentBaseUrl) as Promise<PageCatalog | null>,
-  ]);
+  // 先获取页面目录，再并发拉取目录中各 Profile 的采集清单。
+  // 目录不可用时按内置业务列表降级。
+  const pageCatalog = await fetchPageCatalog(agentBaseUrl);
+  const manifests = await loadCollectManifests(pageCatalog);
   const pageData = (await chrome.tabs.sendMessage(tab.id, {
     type: "COLLECT_PAGE_MANIFEST",
     businessSelection:
@@ -85,82 +73,10 @@ async function collectPageData(selection: BusinessChoice): Promise<PageData> {
   // 清单不会传到这里。面板重新应用同一份，用于把字段键和材料类型显示成中文；
   // 采集判定仍然只发生在 Content Script。
   applyCollectManifest(
-    manifests.find((item) => item.business_type === pageData.businessType),
+    manifests.find((item) => item.business_type === pageData.businessType &&
+      (!item.region || item.region === pageData.region) && (!item.profile_version || item.profile_version === pageData.profileVersion)),
   );
   return { ...pageData, sourceTabId: tab.id };
-}
-
-async function readPageImage(page: PageData, image: PageData["images"][number]) {
-  try {
-    const result = await chrome.tabs.sendMessage(page.sourceTabId, {
-      type: "READ_REVIEW_IMAGE",
-      imageId: image.imageId,
-      expectedCollectionId: page.collectionId,
-    });
-    if (!result?.ok || !result.image) {
-      return { ...image, dataUrl: null, collectionError: result?.error || "图片读取失败" };
-    }
-    return result.image as PageData["images"][number];
-  } catch (error) {
-    return {
-      ...image,
-      dataUrl: null,
-      collectionError: error instanceof Error ? error.message : "图片读取失败",
-    };
-  }
-}
-
-async function uploadPageImages(
-  page: PageData,
-  jobId: string,
-  onImage: (image: PageData["images"][number], completed: number) => void,
-  onSnapshot: (snapshot: ReviewJobSnapshot) => void,
-) {
-  let cursor = 0;
-  let completed = 0;
-  // 每张图拆成"取图+压缩"和"跨公网上传"两段。没有这组数就分不清慢在哪一段，
-  // 也就不知道该提上传并发还是该提识别并发。只进控制台，不进上报协议。
-  const timings: Array<{ readMs: number; uploadMs: number }> = [];
-  const worker = async () => {
-    while (cursor < page.images.length) {
-      const index = cursor;
-      cursor += 1;
-      const readStartedAt = Date.now();
-      const image = await readPageImage(page, page.images[index]);
-      const readMs = Date.now() - readStartedAt;
-      const uploadStartedAt = Date.now();
-      let snapshot: ReviewJobSnapshot | null = null;
-      let lastError: unknown;
-      for (let attempt = 1; attempt <= 2; attempt += 1) {
-        try {
-          snapshot = await uploadStreamReviewImage(jobId, image);
-          break;
-        } catch (error) {
-          lastError = error;
-        }
-      }
-      if (!snapshot) throw lastError instanceof Error ? lastError : new Error("图片上传失败");
-      timings.push({ readMs, uploadMs: Date.now() - uploadStartedAt });
-      completed += 1;
-      // 保留压缩后的图片供结果页显示缩略图；data: 原地址则清空，避免
-      // 在页面状态中同时保存原图和压缩图两份正文。
-      onImage({ ...image, src: image.src.startsWith("data:") ? "" : image.src }, completed);
-      onSnapshot(snapshot);
-    }
-  };
-  await Promise.all(
-    Array.from({ length: Math.min(imageUploadConcurrency, Math.max(1, page.images.length)) }, worker),
-  );
-  const sum = (pick: (item: { readMs: number; uploadMs: number }) => number) =>
-    timings.reduce((total, item) => total + pick(item), 0);
-  console.info("[ReviewAgent][panel] image upload timing", {
-    images: timings.length,
-    uploadConcurrency: imageUploadConcurrency,
-    totalReadMs: sum((item) => item.readMs),
-    totalUploadMs: sum((item) => item.uploadMs),
-    slowestReadMs: Math.max(0, ...timings.map((item) => item.readMs)),
-    slowestUploadMs: Math.max(0, ...timings.map((item) => item.uploadMs)),
-  });
 }
 
 export interface ReviewWorkflow {
@@ -173,7 +89,6 @@ export interface ReviewWorkflow {
   stageMessage: string;
   reset: () => void;
   startReview: () => Promise<void>;
-  applyAffiliationFill: (actions: PageFillAction[]) => Promise<PageFillResult>;
   applyPageFieldValue: (field: string, value: string, expectedValue?: string | null) => Promise<PageFillResult>;
   applyPageFieldGroupValue: (fields: string[], value: string, expectedValues?: Record<string, string | null | undefined>) => Promise<PageFillResult>;
   focusOriginalImage: (imageId: string) => Promise<ImageFocusResult>;
@@ -190,38 +105,59 @@ export function useReviewWorkflow(
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [stageMessage, setStageMessage] = useState("");
+  const activeRun = useRef<{ controller: AbortController; jobId: string } | null>(null);
+  const preflightVersion = useRef(0);
+
+  const stopActiveRun = useCallback(() => {
+    const run = activeRun.current;
+    activeRun.current = null;
+    if (!run) return;
+    run.controller.abort();
+    if (run.jobId) void cancelReviewJob(run.jobId);
+  }, []);
 
   useEffect(() => {
+    stopActiveRun();
     let cancelled = false;
+    const version = ++preflightVersion.current;
     void collectPageData(businessSelection)
       .then((data) => {
-        if (cancelled) return;
+        if (cancelled || version !== preflightVersion.current) return;
         setPageData(data);
         if (data.businessDetectionError) {
           setError(data.businessDetectionError);
         }
       })
       .catch((reason: unknown) => {
-        if (!cancelled) {
+        if (!cancelled && version === preflightVersion.current) {
           setError(reason instanceof Error ? reason.message : "页面采集失败");
         }
       });
     return () => {
       cancelled = true;
+      stopActiveRun();
     };
-  }, [businessSelection]);
+  }, [businessSelection, stopActiveRun]);
 
   const reset = useCallback(() => {
+    ++preflightVersion.current;
+    stopActiveRun();
+    setLoading(false);
     setReview(null);
     setJob(null);
     setPageData(null);
     setError("");
     setNotice("");
     setStageMessage("");
-  }, []);
+  }, [stopActiveRun]);
 
   const startReview = useCallback(async () => {
-    if (loading) return;
+    // React 状态更新会批处理，ref 锁在同一事件周期内也能阻止重复提交。
+    if (activeRun.current) return;
+    ++preflightVersion.current;
+    const run = { controller: new AbortController(), jobId: "" };
+    activeRun.current = run;
+    const isCurrent = () => activeRun.current === run && !run.controller.signal.aborted;
     setLoading(true);
     setError("");
     setNotice("");
@@ -231,6 +167,7 @@ export function useReviewWorkflow(
     let activeJobId = "";
     try {
       const data = await collectPageData(businessSelection);
+      if (!isCurrent()) return;
       if (data.staleCollection) {
         // 被取代的采集：透出真实的过期原因，而不是退化为业务识别失败。
         throw new Error(
@@ -254,72 +191,63 @@ export function useReviewWorkflow(
         data.collectionDiagnostics,
       );
       setStageMessage(`已发现 ${data.images.length} 张图片，正在创建审核任务……`);
-      const created = await createStreamReviewJob(data);
+      const created = await createUrlReviewJob(data);
       activeJobId = created.job_id;
-      setStageMessage(`正在压缩并上传图片 0/${data.images.length}`);
+      run.jobId = created.job_id;
+      if (!isCurrent()) {
+        void cancelReviewJob(created.job_id);
+        return;
+      }
+      setStageMessage("正在识别图片并生成审核结论……");
       const polling = pollReviewJob<ReviewJobSnapshot>(
-        () => fetchReviewJob(created.job_id),
+        (signal) => fetchReviewJob(created.job_id, fetch, signal),
         (snapshot) => {
+          if (!isCurrent()) return;
           setJob(snapshot);
           if (snapshot.result) setReview(snapshot.result);
         },
         {
           timeoutMs: reviewDeadlineMs,
           intervalMs: reviewPollIntervalMs,
+          signal: run.controller.signal,
         },
       );
-      // 上传与轮询并行；立即挂载拒绝处理，避免上传阶段较长时轮询错误
-      // 被浏览器提前报告为未处理的 Promise rejection。稍后仍 await 原 Promise。
-      void polling.catch(() => undefined);
-      await uploadPageImages(
-        data,
-        created.job_id,
-        (image, completed) => {
-          setStageMessage(`正在压缩并上传图片 ${completed}/${data.images.length}`);
-          setPageData((current) => current?.collectionId === data.collectionId
-            ? { ...current, images: current.images.map((item) =>
-              (item.imageId || item.index) === (image.imageId || image.index) ? image : item) }
-            : current);
-        },
-        (snapshot) => setJob(snapshot),
-      );
-      setStageMessage("图片上传完成，正在识别并生成审核结论……");
-      setJob(await completeStreamReviewJob(created.job_id));
       const finalSnapshot = await polling;
+      if (!isCurrent()) return;
       if (finalSnapshot.status === "FAILED") {
-        throw new Error(finalSnapshot.message || "审核任务执行失败");
+        console.warn("[ReviewAgent] 审核任务执行失败", finalSnapshot.message);
+        throw new Error("本次审核未能完成，请重新审核；仍失败请查看原图人工核对并联系管理员");
       }
       if (finalSnapshot.status === "CANCELLED") throw new Error("审核任务已取消");
       if (finalSnapshot.status !== "RUNNING") activeJobId = "";
-      const actionResults = await executePageActions(finalSnapshot.result?.page_actions ?? [], data);
+      const actionResults = finalSnapshot.status === "RUNNING" ? []
+        : await executePageActions(finalSnapshot.result?.page_actions ?? [], data);
+      if (!isCurrent()) return;
       // 与采集阶段的提示合并，而不是互相覆盖：两条都是审核员需要看到的。
       if (actionResults.length) {
         setNotice((current) => [current, ...actionResults].filter(Boolean).join("；"));
       }
-      // The client deadline is a presentation boundary: a running snapshot still
-      // contains useful partial review results and is not a transport failure.
-      setNotice((current) => current || completionNotice(finalSnapshot));
+      // 等待上限不代表已有审核结论；完成提示也不能被采集或页面动作提示遮住。
+      setNotice((current) => [current, completionNotice(finalSnapshot)].filter(Boolean).join("；"));
     } catch (reason: unknown) {
-      if (activeJobId) void cancelReviewJob(activeJobId);
+      if (activeJobId) {
+        void cancelReviewJob(activeJobId);
+        activeJobId = "";
+      }
+      if (!isCurrent()) return;
       setError(
         reason instanceof Error ? reason.message : "审核辅助服务调用失败",
       );
     } finally {
-      setLoading(false);
-      setStageMessage("");
+      if (activeRun.current === run) {
+        // 客户端停止等待后不留下无法继续观察的后台任务。
+        if (activeJobId) void cancelReviewJob(activeJobId);
+        activeRun.current = null;
+        setLoading(false);
+        setStageMessage("");
+      }
     }
-  }, [businessSelection, loading]);
-
-  const applyAffiliationFill = useCallback(async (actions: PageFillAction[]) => {
-    if (!pageData) return { ok: false, message: "没有找到原审核页面" };
-    return applyPageFillIntent(actions, {
-      tabId: pageData.sourceTabId,
-      pageUrl: pageData.pageUrl,
-      pageInstanceId: pageData.pageInstanceId,
-      pageFingerprint: pageData.pageFingerprint,
-      collectionId: pageData.collectionId,
-    });
-  }, [pageData]);
+  }, [businessSelection]);
 
   const applyFieldValue = useCallback(async (field: string, value: string, expectedValue?: string | null) => {
     if (!pageData) return { ok: false, message: "没有找到原审核页面" };
@@ -377,7 +305,6 @@ export function useReviewWorkflow(
     stageMessage,
     reset,
     startReview,
-    applyAffiliationFill,
     applyPageFieldValue: applyFieldValue,
     applyPageFieldGroupValue: applyFieldGroupValue,
     focusOriginalImage,
@@ -386,8 +313,14 @@ export function useReviewWorkflow(
 
 async function executePageActions(actions: readonly PageActionIntent[], data: PageData): Promise<string[]> {
   const registry = new PageActionRegistry();
-  registry.register("verify_invoice", async (_action, page) => {
+  registry.register("verify_invoice", async (action, page) => {
+    const field = action.payload.field;
+    if (typeof field !== "string" || typeof page.pageFields[field] !== "string") {
+      return "未取得发票号码的页面原值，请在原页面人工验真";
+    }
     const verification = await verifyInvoice({
+      field,
+      expectedValue: page.pageFields[field],
       tabId: page.sourceTabId,
       pageUrl: page.pageUrl,
       pageInstanceId: page.pageInstanceId,

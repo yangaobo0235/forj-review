@@ -14,7 +14,7 @@ from app.workflow.qwen_client import (
 )
 
 CONFIG = QwenConfig("key", "https://dashscope.test/v1", "qwen3.7-plus")
-IMAGE = {"index": 2, "data_url": "data:image/jpeg;base64,AA=="}
+IMAGE = {"index": 2, "src": "https://images.example.test/synthetic.jpg"}
 
 
 @pytest.mark.asyncio
@@ -26,7 +26,7 @@ async def test_qwen_client_classifies_without_requesting_fields() -> None:
         assert payload["enable_thinking"] is False
         assert "不要提取业务字段" in prompt
         assert "invoice.code" not in prompt
-        assert payload["messages"][0]["content"][1]["image_url"]["url"].startswith("data:image/")
+        assert payload["messages"][0]["content"][1]["image_url"]["url"].startswith("https://images.example.test/synthetic.jpg")
         assert payload["response_format"] == {"type": "json_object"}
         result = {"document_type": "invoice", "confidence": 0.98, "reason": "含发票标题"}
         return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(result)}}]})

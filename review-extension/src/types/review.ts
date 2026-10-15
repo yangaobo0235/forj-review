@@ -5,6 +5,7 @@ export type Region = "default" | "qingdao" | "changchun";
 export type SelectionMode = "AUTO" | "MANUAL";
 
 export interface BusinessSelection {
+  pageId?: string;
   businessType: BusinessType;
   region: Region;
   profileVersion: string;
@@ -29,9 +30,6 @@ export interface PageImage {
   businessScope?: string;
   groupTitle?: string;
   groupOrder?: number;
-  mimeType?: string | null;
-  sizeBytes?: number | null;
-  dataUrl?: string | null;
   collectionError?: string | null;
   pagePosition?: string;
   naturalWidth?: number;
@@ -64,6 +62,7 @@ export interface ReviewFieldSnapshot {
 }
 
 export interface PageData {
+  pageId?: string;
   pageUrl: string;
   sourceTabId: number;
   pageInstanceId: string;
@@ -148,7 +147,7 @@ export interface MaterialCompletenessReport {
 
 export interface RetryAttempt {
   target_id: string;
-  stage: "qwen" | "qr_decode" | "qr_web";
+  stage: "qwen" | "qr_web";
   attempt_number: number;
   reason_code: string;
   strategy: string;
@@ -159,7 +158,6 @@ export interface RetryAttempt {
 export interface RetrySummary {
   total_retries?: number;
   qwen_retries?: number;
-  qr_decode_rounds?: number;
   qr_web_retries?: number;
   attempts: RetryAttempt[];
 }
@@ -169,6 +167,8 @@ export type Recommendation = "PASS" | "REVIEW_REQUIRED";
 export type CheckResultStatus = "MATCH" | "CONFLICT" | "INSUFFICIENT";
 
 export interface CheckResultValue {
+  uncertain?: boolean;
+  group_title?: string | null;
   differences?: DifferenceRange[];
   /** 该值与页面侧取值是否不一致；`null`/`undefined` 表示没有比对过。 */
   conflicting?: boolean | null;
@@ -264,6 +264,9 @@ export interface QrCheck {
   page_fields: Record<string, string>;
   status: FieldStatus;
   message: string;
+  decoder?: "model" | "zxing" | "opencv" | "none" | null;
+  decode_error?: string | null;
+  decode_elapsed_ms?: number | null;
 }
 
 export interface ReviewResponse {
@@ -338,7 +341,10 @@ export type ReviewDisplayTarget = "PAGE_FIELD" | "ASSISTANT";
 
 export interface ReviewTask {
   step_id: string;
+  /** Business visibility is projected by the backend; it does not change machine status. */
+  visible?: boolean;
   sequence: number;
+  /** MATERIAL is accepted only for old responses and excluded from display. */
   category: "FIELD" | "EXTERNAL" | "BUSINESS_RULE" | "MATERIAL";
   display_target: ReviewDisplayTarget;
   page_field?: string | null;
@@ -391,11 +397,11 @@ export interface ResultSection {
 }
 
 export type JobStatus = "RUNNING" | "PARTIAL" | "COMPLETED" | "FAILED" | "CANCELLED";
-export type ReviewJobPhase = "PREPARING" | "UPLOADING" | "RECOGNIZING" | "FINALIZING" | "COMPLETED" | "FAILED" | "CANCELLED";
+export type ReviewJobPhase = "PREPARING" | "RECOGNIZING" | "FINALIZING" | "COMPLETED" | "FAILED" | "CANCELLED";
 
 export interface ReviewProgress {
   total_count: number;
-  uploaded_count: number;
+  submitted_count: number;
   completed_count: number;
   failed_count: number;
   timed_out_count: number;
@@ -416,6 +422,8 @@ export interface ReviewJobSnapshot {
   status: JobStatus;
   created_at: string;
   progress: ReviewProgress;
+  failed_image_ids?: string[];
+  timed_out_image_ids?: string[];
   groups: Record<string, ReviewGroupProgress>;
   result?: ReviewResponse | null;
   message?: string | null;

@@ -1,4 +1,4 @@
-import type { BusinessSelection, ReviewFieldSnapshot } from "../types/review";
+import type { BusinessSelection } from "../types/review";
 import type { PageAdapter } from "./pageAdapter.ts";
 
 /**
@@ -10,16 +10,12 @@ import type { PageAdapter } from "./pageAdapter.ts";
  * 某个业务的规则去审另一个业务的单子。
  *
  * 因此识别交给后端下发的页面识别清单（`browser/page-catalog.ts`）。这里只保留
- * 适配器身份：可写控件和受控写回接入时在这里补。
+ * 适配器身份，避免在前端重复维护页面规则。
  */
 export class ConsistencyPageAdapter implements PageAdapter {
   public readonly id = "consistency";
 
   public detect(): BusinessSelection | null {
     return null;
-  }
-
-  public listWritableFields(): readonly ReviewFieldSnapshot[] {
-    return [];
   }
 }

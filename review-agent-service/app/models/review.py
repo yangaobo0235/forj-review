@@ -7,6 +7,7 @@
 
 from enum import StrEnum
 from typing import Any, Literal
+from urllib.parse import urlparse
 
 from pydantic import (
     AliasChoices,
@@ -51,7 +52,6 @@ class JobStatus(StrEnum):
 
 class ReviewJobPhase(StrEnum):
     PREPARING = "PREPARING"
-    UPLOADING = "UPLOADING"
     RECOGNIZING = "RECOGNIZING"
     FINALIZING = "FINALIZING"
     COMPLETED = "COMPLETED"
@@ -112,15 +112,6 @@ class ImageInput(BaseModel):
         default="unknown",
         validation_alias=AliasChoices("document_type_hint", "documentTypeHint"),
     )
-    mime_type: str | None = Field(
-        default=None, validation_alias=AliasChoices("mime_type", "mimeType")
-    )
-    size_bytes: int | None = Field(
-        default=None, ge=0, validation_alias=AliasChoices("size_bytes", "sizeBytes")
-    )
-    data_url: str | None = Field(
-        default=None, validation_alias=AliasChoices("data_url", "dataUrl")
-    )
     collection_error: str | None = Field(
         default=None,
         validation_alias=AliasChoices("collection_error", "collectionError"),
@@ -130,6 +121,17 @@ class ImageInput(BaseModel):
         default=None,
         validation_alias=AliasChoices("page_position", "pagePosition"),
     )
+
+    @property
+    def recognition_source(self) -> str | None:
+        """模型可读取的 HTTP(S) 图片地址。"""
+        try:
+            parsed = urlparse(self.src)
+        except ValueError:
+            return None
+        if parsed.scheme in {"http", "https"} and parsed.hostname:
+            return self.src
+        return None
 
     @model_validator(mode="before")
     @classmethod
@@ -142,8 +144,8 @@ class ImageInput(BaseModel):
             return value
         category = value.get("category_hint", value.get("categoryHint", "unknown"))
         # **这份名单和 `routing.scope_hint_types` 不是同一个集合，不要合并。**
-        # 那边回答的是「哪些材料属于旧车区」，用于决定二维码扫哪些图、哪些图的
-        # 正文要留到核验结束；这里回答的是「只看这个分类名，该把图片划到哪个
+        # 那边回答的是「哪些材料属于旧车区」，用于决定二维码扫哪些原图 URL；
+        # 这里回答的是「只看这个分类名，该把图片划到哪个
         # 分区」——是在 `business_scope` 缺失时猜一个分区。行驶证和登记证书两个
         # 分区都有，拿它们猜分区本身就是不成立的，所以这里既不列 `vehicle_license`
         # 也不该按材料声明推导：改了会让旧客户端提交的图片落到另一个分区，
@@ -183,6 +185,10 @@ class QrCheck(BaseModel):
     page_fields: dict[str, Any] = Field(default_factory=dict)
     status: FieldStatus = FieldStatus.REVIEW_REQUIRED
     message: str = ""
+    # 二维码内容的来源和本地解码诊断。保留为可选字段，兼容历史审核结果。
+    decoder: Literal["model", "zxing", "opencv", "none"] | None = None
+    decode_error: str | None = None
+    decode_elapsed_ms: int | None = Field(default=None, ge=0)
 
 
 class PageFillAction(BaseModel):
@@ -228,8 +234,10 @@ class ReviewTask(BaseModel):
     """一个已经实际执行、可按顺序展示的审核步骤。"""
 
     step_id: str
+    visible: bool = True
     check_ids: list[str] = Field(default_factory=list)
     sequence: int = Field(ge=1)
+    # MATERIAL 仅兼容旧响应；当前展示路由不再生成该类任务。
     category: Literal["FIELD", "EXTERNAL", "BUSINESS_RULE", "MATERIAL"]
     display_target: ReviewDisplayTarget
     page_field: str | None = None
@@ -295,6 +303,7 @@ class ReviewFieldSnapshot(BaseModel):
 
 class ReviewRequest(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
+    page_id: str | None = Field(default=None, max_length=160, validation_alias=AliasChoices("page_id", "pageId"))
 
     page_url: HttpUrl | str = Field(
         validation_alias=AliasChoices("page_url", "pageUrl")
@@ -437,7 +446,7 @@ class ReviewResponse(BaseModel):
 
 class ReviewProgress(BaseModel):
     total_count: int = 0
-    uploaded_count: int = 0
+    submitted_count: int = 0
     completed_count: int = 0
     failed_count: int = 0
     timed_out_count: int = 0
@@ -458,6 +467,8 @@ class ReviewJobSnapshot(BaseModel):
     status: JobStatus
     created_at: str
     progress: ReviewProgress
+    failed_image_ids: list[str] = Field(default_factory=list)
+    timed_out_image_ids: list[str] = Field(default_factory=list)
     groups: dict[str, ReviewGroupProgress] = Field(default_factory=dict)
     result: ReviewResponse | None = None
     message: str | None = None

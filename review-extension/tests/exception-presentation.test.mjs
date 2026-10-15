@@ -90,7 +90,7 @@ test("sidebar wiring preserves advice and qr while rendering exception groups", 
 });
 
 test("field-check empty state is compact and subdued", () => {
-  const css = readFileSync(new URL("../src/App.css", import.meta.url), "utf8");
+  const css = (readFileSync(new URL("../src/App.css", import.meta.url), "utf8") + readFileSync(new URL("../src/components/EvidenceReviewWorkbench.css", import.meta.url), "utf8"));
 
   assert.match(css, /\.field-check-empty\s*{[^}]*margin:\s*0/s);
   assert.match(css, /\.field-check-empty\s*{[^}]*color:\s*#667085/s);

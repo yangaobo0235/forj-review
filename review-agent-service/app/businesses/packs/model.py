@@ -74,7 +74,10 @@ class FieldDeclaration:
     # 证据策略；None 表示该字段只用于展示或写回，不参与材料比对。
     mode: EvidenceMode | None = None
     sources: tuple[str, ...] = ()
+    # 多材料来源设为 False 时，所有声明材料都必须提供有效值；页面不替代材料。
     allow_single_evidence: bool = True
+    uncertain_requires_review: bool = True
+    page_evidence_required: bool = True
     normalizer: str = "default"
     authority: tuple[AuthorityRule, ...] = ()
     # 该页面字段与另一个材料字段共用同一份证据策略（如发票代码与号码双值）。
@@ -90,6 +93,9 @@ class FieldDeclaration:
     # 边上的一天之差通常要靠人判断。同一个页面在不同日期审核可能得到不同结果，
     # 这是政策本身的性质。
     max_age_days: int | None = None
+    locator_name: str = ""
+    locator_id: str = ""
+    occurrence: int = 1
 
 
 @dataclass(frozen=True)
@@ -162,6 +168,7 @@ class RouteDeclaration:
     source_field: str
     targets: tuple[str, ...]
     scope: str = ""
+    group_order: int | None = None
 
 
 @dataclass(frozen=True)
@@ -203,6 +210,7 @@ class PageGroupDeclaration:
     label: str
     scope: str
     title: str
+    occurrence: int = 0
 
 
 @dataclass(frozen=True)
@@ -234,10 +242,19 @@ class RegionDeclaration:
 
 
 @dataclass(frozen=True)
+class TaskPresentation:
+    """Business-owned visibility; it never changes evidence or rule conclusions."""
+
+    hidden_fields: tuple[str, ...] = ()
+    hidden_check_prefixes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class BusinessExtensionPack:
     """一个业务、地区、版本的完整声明。"""
 
     business_type: str
+    title: str = ""
     # 该业务认可的图片业务分区（如旧车 / 新车）。采集到的图片落在这些
     # 分区之外时，字段一律不路由，转为人工复核。
     scopes: tuple[str, ...] = ()
@@ -266,6 +283,7 @@ class BusinessExtensionPack:
     # `application.id`）都没有时指纹为空，这些操作全部拒绝执行。
     # **必须按业务声明**：写死成某一个业务的字段名会让别的业务永远拿不到指纹。
     identity_anchors: tuple[str, ...] = ()
+    record_identity_fields: tuple[str, ...] = ()
     # 规则检查项 → 页面字段：(check_id, field)。规则结论同时投影成该字段的
     # 核验条目，审核员在字段视图里就能看到结论，不必到页面外核验里找。
     # 一个字段可以绑定多条检查，投影时按最坏状态合并。
@@ -283,6 +301,7 @@ class BusinessExtensionPack:
     # 该业务的材料要求和受控执行预算。
     material_policy: MaterialPolicy | None = None
     retry_policy: RetryPolicy = DEFAULT_RETRY_POLICY
+    presentation: TaskPresentation = TaskPresentation()
     def region(self, region: Region) -> RegionDeclaration | None:
         return next((item for item in self.regions if item.region == region), None)
 
@@ -303,7 +322,6 @@ class BusinessExtensionPack:
                     policy_id,
                     kind="RULE",
                     stage="POST_COMPARE",
-                    output_facts=("replacement.eligible",),
                     failure_policy="MANUAL_REVIEW",
                 )
             )
@@ -454,6 +472,13 @@ def validate_pack_references(pack: BusinessExtensionPack) -> None:
 
     for anchor in pack.identity_anchors:
         require(anchor, "页面指纹锚点 identity_anchors")
+    for anchor in pack.record_identity_fields:
+        require(anchor, "记录身份 record_identity_fields")
+        if anchor not in pack.identity_anchors:
+            problems.append(f"记录身份字段「{anchor}」不在 identity_anchors 中")
+
+    for hidden in pack.presentation.hidden_fields:
+        require(hidden, "展示策略 hidden_fields")
 
     if pack.invoice_verification_field:
         require(pack.invoice_verification_field, "发票验真触发字段 invoice_verification_field")
@@ -474,8 +499,13 @@ def build_collect_manifest(pack: BusinessExtensionPack) -> dict[str, object]:
         # 该业务认定的材料分区。前端据此判断图片是否属于审核材料、以及
         # 哪些分区的图片优先入选。
         "scopes": list(pack.scopes),
+        "page_sections": [
+            {"key": key, "title": next((section.title for section in pack.sections if section.key == key), key)}
+            for key in dict.fromkeys(item.page_section for item in pack.fields if item.page_section != "unknown")
+        ],
         "page_groups": [
-            {"label": item.label, "scope": item.scope, "title": item.title}
+            {"label": item.label, "scope": item.scope, "title": item.title,
+             **({"occurrence": item.occurrence} if item.occurrence else {})}
             for item in pack.page_groups
         ],
         "fields": [
@@ -486,6 +516,7 @@ def build_collect_manifest(pack: BusinessExtensionPack) -> dict[str, object]:
                 "section": item.page_section,
                 "section_required": item.section_required,
                 "reviewable": item.reviewable,
+                "locator_name": item.locator_name, "locator_id": item.locator_id, "occurrence": item.occurrence,
             }
             for item in pack.fields
             if item.aliases
@@ -498,6 +529,7 @@ def build_collect_manifest(pack: BusinessExtensionPack) -> dict[str, object]:
         "writable_control_kinds": list(pack.writable_control_kinds),
         # 页面指纹锚点：浏览器用它判断"还是不是同一条审核记录"。
         "identity_anchors": list(pack.identity_anchors),
+        "record_identity_fields": list(pack.record_identity_fields),
         "materials": [
             {
                 "document_type": item.document_type,

@@ -15,8 +15,8 @@ def run_verify_invoice(context: ReviewExecutionContext) -> RuleExecutionResult:
     `transfer.invoice_no`。写死一个业务的名字会让另一个业务永远不验真，
     而且不报错——只是那个按钮从来不亮。
 
-    **前端会在审核完成后自动点击它**，这是产品决定，不是遗漏；不要因为
-    `requires_authorization=True` 就改成需要人工确认。
+    前端会在审核完成后自动点击它，因此显式声明不需要逐项授权；
+    其他需要授权的动作仍只能由操作人员触发。
     """
     field = context.profile.invoice_verification_field
     if field is None:
@@ -29,6 +29,6 @@ def run_verify_invoice(context: ReviewExecutionContext) -> RuleExecutionResult:
         return RuleExecutionResult()
     return RuleExecutionResult(
         page_action_intents=(
-            PageActionIntent(action_id="verify_invoice", payload={"field": field}),
+            PageActionIntent(action_id="verify_invoice", payload={"field": field}, requires_authorization=False),
         )
     )

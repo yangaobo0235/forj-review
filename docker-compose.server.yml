@@ -19,10 +19,7 @@ services:
       # 就先降回 12，否则 429 会把"慢"换成"识别失败转人工"。
       REVIEW_MODEL_GLOBAL_CONCURRENCY: "16"
       REVIEW_MODEL_JOB_CONCURRENCY: "8"
-      # 接收侧：3 人 × 前端上传并发 4 = 12，配到这里刚好不排队。
-      # 每张在途约 12MB（原始字节 + base64 同时存活），这是 1GB 内存的主要压力项。
-      REVIEW_UPLOAD_GLOBAL_CONCURRENCY: "12"
-      # 汇总侧保持 2：这是纯 CPU（LangGraph 14 节点）+ 深拷贝带图片正文，
+      # 汇总侧保持 2：LangGraph 14 节点处理识别结果，
       # 2 核上再提只会互相抢核，吞吐不涨。
       REVIEW_FINALIZE_CONCURRENCY: "2"
       # 按天轮转的日志文件写进挂载卷：容器根文件系统是只读的。

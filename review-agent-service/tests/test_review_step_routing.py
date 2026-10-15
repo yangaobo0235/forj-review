@@ -1,7 +1,10 @@
+from dataclasses import replace
+
 import pytest
 from pydantic import ValidationError
 
 from app.businesses.profiles import (
+    BUSINESS_PROFILES,
     SCRAP_REPLACEMENT_CHANGCHUN,
     SCRAP_REPLACEMENT_QINGDAO,
     TRANSFER_DEFAULT,
@@ -16,6 +19,7 @@ from app.models.review import (
     ReviewTask,
 )
 from app.presentation.routing import build_review_tasks
+from app.presentation.tasks import prepare_display_tasks
 from app.workflow.models import (
     CheckResult,
     MaterialCompletenessIssue,
@@ -57,6 +61,32 @@ def test_non_match_requires_reviewer_action() -> None:
 def test_matching_step_rejects_reviewer_action_requirement() -> None:
     with pytest.raises(ValidationError):
         make_step(result_status="MATCH", requires_reviewer_action=True)
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("field_first", [False, True])
+def test_all_bound_rules_survive_field_projection(reverse: bool, field_first: bool) -> None:
+    field = make_step(**({"display_target": "ASSISTANT", "page_field": None,
+                         "page_target_field": "new_vehicle.vin"} if field_first else {}))
+    rules = [
+        make_step(step_id="BUSINESS-REQUIRED", sequence=2, category="BUSINESS_RULE",
+                  display_target="ASSISTANT", page_field=None, result_status="CONFLICT",
+                  requires_reviewer_action=True, reason="必要规则存在冲突", check_ids=["REQUIRED"]),
+        make_step(step_id="BUSINESS-SECOND", sequence=3, category="BUSINESS_RULE",
+                  display_target="ASSISTANT", page_field=None, reason="其他规则一致", check_ids=["SECOND"]),
+    ]
+    if reverse:
+        rules.reverse()
+    tasks = prepare_display_tasks(
+        [field, *rules], qr_enabled=False,
+        field_check_bindings=(("REQUIRED", "new_vehicle.vin"), ("SECOND", "new_vehicle.vin")),
+    )
+    assert len(tasks) == 1
+    assert tasks[0].result_status == "CONFLICT"
+    assert tasks[0].requires_reviewer_action
+    assert set(tasks[0].check_ids) == {"REQUIRED", "SECOND"}
+    assert "必要规则存在冲突" in tasks[0].reason
+    assert "其他规则一致" in tasks[0].reason
 
 
 def matching_comparison(field: str, value: str = "VIN-1") -> FieldComparison:
@@ -350,34 +380,39 @@ def test_external_check_routes_to_assistant() -> None:
     assert steps[0].page_field is None
 
 
-def test_complete_material_report_creates_one_material_group() -> None:
-    steps = build_steps(
+@pytest.mark.parametrize("profile", [p for p in BUSINESS_PROFILES if p.rules_configured],
+                         ids=lambda p: f"{p.business_type}:{p.region}")
+@pytest.mark.parametrize("page_interaction", [False, True])
+@pytest.mark.parametrize("status", ["COMPLETE", "INCOMPLETE", "UNCERTAIN"])
+def test_material_report_does_not_create_display_tasks(profile, page_interaction: bool, status: str) -> None:
+    steps = build_review_tasks(
+        request=ReviewRequest(page_url="https://example.test/review", business_type=profile.business_type, region=profile.region),
+        profile=replace(profile, page_interaction=page_interaction),
+        comparisons=[], external_checks=[], limitations=[],
         business_checks=[
             CheckResult(
                 check_id="MATERIAL-COMPLETENESS",
                 label="材料完整性",
-                status="MATCH",
+                status="MATCH" if status == "COMPLETE" else "INSUFFICIENT",
                 reason="材料完整",
             )
         ],
         completeness=MaterialCompletenessReport(
             phase="EXTRACTED",
-            status="COMPLETE",
+            status=status,
             enforced=False,
         )
     )
 
-    material_steps = [item for item in steps if item.category == "MATERIAL"]
-    assert [(item.step_id, item.result_status) for item in material_steps] == [
-        ("MATERIAL-GROUP", "MATCH")
-    ]
+    assert not any(item.category == "MATERIAL" for item in steps)
     assert not any(
         item.step_id == "BUSINESS-MATERIAL-COMPLETENESS"
         for item in steps
     )
+    assert [item.sequence for item in steps] == list(range(1, len(steps) + 1))
 
 
-def test_duplicate_material_issue_and_limitation_are_shown_once() -> None:
+def test_material_issue_and_limitation_do_not_create_display_tasks() -> None:
     issue = MaterialCompletenessIssue(
         code="MISSING_MATERIAL",
         reason_code="recognition_failed",
@@ -407,9 +442,7 @@ def test_duplicate_material_issue_and_limitation_are_shown_once() -> None:
 
     material_steps = [item for item in steps if item.category == "MATERIAL"]
 
-    assert len(material_steps) == 1
-    assert material_steps[0].step_id == "MATERIAL-GROUP"
-    assert material_steps[0].display_target is ReviewDisplayTarget.ASSISTANT
+    assert material_steps == []
     assert not any(
         item.step_id == "BUSINESS-MATERIAL-COMPLETENESS"
         for item in steps

@@ -207,6 +207,7 @@ _INVOICE_ONLY = (
 
 TRANSFER_PACK = BusinessExtensionPack(
     business_type="transfer",
+    title="过户审核",
     scopes=(TRANSFER_SCOPE,),
     sections=(SectionDeclaration(TRANSFER_SCOPE, TRANSFER_SECTION_TITLE),),
     fields=(
@@ -422,21 +423,18 @@ TRANSFER_PACK = BusinessExtensionPack(
             "material_completeness",
             kind="MATERIAL",
             stage="INPUT_COVERAGE",
-            output_facts=("material.coverage",),
             failure_policy="MANUAL_REVIEW",
         ),
         CapabilitySpec(
             "transfer_invoice_date",
             kind="RULE",
             stage="POST_COMPARE",
-            output_facts=("transfer.invoice_date_valid",),
             failure_policy="MANUAL_REVIEW",
         ),
         CapabilitySpec(
             "verify_invoice",
             kind="RULE",
             stage="POST_COMPARE",
-            output_facts=("invoice.verification",),
             failure_policy="SAFE_DEGRADE",
         ),
     ),
@@ -476,6 +474,7 @@ TRANSFER_PACK = BusinessExtensionPack(
     # 页面指纹锚点。`transfer.vin` 是强锚点，没有它指纹恒为空串，页面写回和
     # 原图定位会被全部拒绝。证件号是个人隐私，不放进指纹。
     identity_anchors=("transfer.vin", "transfer.plate_no"),
+    record_identity_fields=("transfer.vin",),
     material_policy=TRANSFER_MATERIAL_POLICY,
 )
 

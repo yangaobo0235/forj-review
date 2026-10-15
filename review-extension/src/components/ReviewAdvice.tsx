@@ -11,6 +11,7 @@ import {
   recommendationVisual,
 } from "../advicePresentation";
 import type { CheckResult, ReviewResponse } from "../types/review";
+import { isMaterialDiagnostic } from "../reviewSteps";
 
 function CheckValues({ check }: { check: CheckResult }) {
   if (!check.values?.length) return null;
@@ -28,8 +29,9 @@ function CheckValues({ check }: { check: CheckResult }) {
 
 export function ReviewAdvice({ review }: { review: ReviewResponse }) {
   const advice = review.agent_advice;
-  const findings = advice?.findings || [];
-  const crossChecks = orderedCrossChecks(review.business_type, review.cross_checks || []);
+  const findings = (advice?.findings || []).filter(check => !isMaterialDiagnostic(check.check_id));
+  const crossChecks = orderedCrossChecks(review.business_type, review.cross_checks || [])
+    .filter(check => !isMaterialDiagnostic(check.check_id));
   const visual = recommendationVisual(review.recommendation);
   return (
     <section className={`recommendation recommendation-${review.recommendation.toLowerCase()}`}>

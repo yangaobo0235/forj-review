@@ -368,6 +368,7 @@ def test_buyer_fields_need_both_the_register_and_the_invoice(
         )
         for index, document_type in enumerate(documents, start=1)
     ]
+    observations.append(FieldObservation(field=field, source_type="page", source_id="review_page", value="高广棋"))
 
     comparisons = _build_comparisons(
         request_for({"transfer.buyer_name": "高广棋", "transfer.buyer_id": "高广棋"}),

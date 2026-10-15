@@ -31,6 +31,7 @@ class FairAsyncScheduler:
         self._order: deque[str] = deque()
         self._active_by_job: dict[str, int] = {}
         self._active_total = 0
+        self._tasks: dict[str, set[asyncio.Task[None]]] = {}
         self._last_dispatched_job: str | None = None
         self._ready = threading.Event()
         self._thread = threading.Thread(target=self._thread_main, daemon=True)
@@ -58,6 +59,16 @@ class FairAsyncScheduler:
         loop = self._loop
         if loop is not None:
             loop.call_soon_threadsafe(self._cancel_pending, job_id)
+
+    def cancel(self, job_id: str) -> None:
+        """取消排队和运行中的协程，使已放弃的审核立即释放调度槽位。"""
+        if self._loop is not None:
+            self._loop.call_soon_threadsafe(self._cancel, job_id)
+
+    def _cancel(self, job_id: str) -> None:
+        self._cancel_pending(job_id)
+        for task in tuple(self._tasks.get(job_id, ())):
+            task.cancel()
 
     def _thread_main(self) -> None:
         loop = asyncio.new_event_loop()
@@ -127,20 +138,33 @@ class FairAsyncScheduler:
             self._active_total += 1
             self._active_by_job[item.job_id] = self._active_by_job.get(item.job_id, 0) + 1
             self._last_dispatched_job = item.job_id
-            asyncio.create_task(self._run(item))
+            task = asyncio.create_task(self._run(item))
+            self._tasks.setdefault(item.job_id, set()).add(task)
+            task.add_done_callback(lambda completed, current=item: self._finished(current, completed))
 
     async def _run(self, item: _WorkItem) -> None:
         try:
             if not item.future.cancelled():
-                item.future.set_result(await item.factory())
+                result = await item.factory()
+                if not item.future.done():
+                    item.future.set_result(result)
+        except asyncio.CancelledError:
+            item.future.cancel()
         except Exception as exc:  # noqa: BLE001 - forward worker failures to its Future
             if not item.future.done():
                 item.future.set_exception(exc)
-        finally:
-            self._active_total -= 1
-            active = self._active_by_job.get(item.job_id, 1) - 1
-            if active > 0:
-                self._active_by_job[item.job_id] = active
-            else:
-                self._active_by_job.pop(item.job_id, None)
-            self._dispatch()
+
+    def _finished(self, item: _WorkItem, task: asyncio.Task[None]) -> None:
+        # done 回调也覆盖“协程尚未开始就取消”，不能只依赖协程内部的 finally。
+        if task.cancelled():
+            item.future.cancel()
+        self._tasks[item.job_id].discard(task)
+        if not self._tasks[item.job_id]:
+            self._tasks.pop(item.job_id)
+        self._active_total -= 1
+        active = self._active_by_job.get(item.job_id, 1) - 1
+        if active > 0:
+            self._active_by_job[item.job_id] = active
+        else:
+            self._active_by_job.pop(item.job_id, None)
+        self._dispatch()

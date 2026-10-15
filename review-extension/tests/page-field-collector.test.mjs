@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ReviewPageFieldCollector } from "../src/browser/page-field-collector.ts";
+import { applyCollectManifest } from "../src/browser/collect-manifest.ts";
 
 function loadCollector() {
   return ReviewPageFieldCollector;
@@ -70,6 +71,72 @@ function collect(collector, root) {
   }
   return collector.collect(root);
 }
+
+test("identity collection matches live full collection but skips the review inventory", () => {
+  const collector = loadCollector();
+  const application = control({ label: "申请单编号", value: "CASE-A" });
+  const vin = control({ label: "车架号", value: "VIN-A", section: "old_vehicle" });
+  const otherVin = control({ label: "车架号", value: "VIN-B", section: "new_vehicle" });
+  const date = control({ label: "报废车日期", value: "2026-07-20" });
+  const root = fixture(application, vin, otherVin, date);
+  const anchors = ["application.id", "old_vehicle.vin"];
+  const full = collector.collect(root);
+  assert.ok(full.reviewFields.length > 0);
+  const sparse = collector.collectIdentity(root, anchors);
+  assert.deepEqual(sparse.pageFields, Object.fromEntries(anchors.map(field => [field, full.pageFields[field]])));
+  assert.deepEqual(sparse.reviewFields, []);
+  assert.deepEqual(sparse.writableTargets, []);
+  assert.deepEqual(sparse.fieldTargets.map(item => item.field), anchors);
+  vin.value = "VIN-CHANGED";
+  assert.equal(collector.collectIdentity(root, anchors).pageFields["old_vehicle.vin"], "VIN-CHANGED");
+});
+
+test("identity collection rejects duplicate anchors even when values agree", () => {
+  const collector = loadCollector();
+  for (const value of ["VIN-A", "VIN-B"]) {
+    const root = fixture(control({ label: "新车车架号", value: "VIN-A" }), control({ label: "新车车架号", value }));
+    const sparse = collector.collectIdentity(root, ["new_vehicle.vin"]);
+    assert.equal(sparse.pageFields["new_vehicle.vin"], undefined);
+    assert.deepEqual(sparse.ambiguousFields, collector.collect(root).ambiguousFields);
+    assert.deepEqual(sparse.fieldTargets, []);
+  }
+});
+
+test("identity collection keeps read-only and table anchors", () => {
+  const collector = loadCollector();
+  const readonly = control({ label: "申请单编号", value: "CASE-A" });
+  readonly.readOnly = true;
+  const row = element({ tag: "tr", text: "车架号 VIN-A 所有人 张三", section: "old_vehicle" });
+  row.children = [element({ tag: "th", text: "车架号" }), element({ tag: "td", text: "VIN-A" }), element({ tag: "th", text: "所有人" }), element({ tag: "td", text: "张三" })];
+  const root = { querySelectorAll(selector) {
+    if (selector.includes("contenteditable")) return [readonly];
+    return selector.startsWith("tr,") ? [row] : [];
+  } };
+  const fields = ["application.id", "old_vehicle.vin", "old_vehicle.owner"];
+  const full = collector.collect(root);
+  const sparse = collector.collectIdentity(root, fields);
+  assert.deepEqual(sparse.pageFields, { "application.id": "CASE-A", "old_vehicle.vin": "VIN-A", "old_vehicle.owner": "张三" });
+  assert.deepEqual(sparse.pageFields, Object.fromEntries(fields.map(field => [field, full.pageFields[field]])));
+});
+
+test("label index follows manifest replacement and reset without losing shared-label ambiguity", () => {
+  const collector = loadCollector();
+  const field = key => ({ key, label: "自定义编号", aliases: ["自定义编号", "自定义编号"], section: "unknown", section_required: false, reviewable: true });
+  const manifest = fields => ({ business_type: "test", scopes: [], page_groups: [], materials: [], fields });
+  try {
+    applyCollectManifest(manifest([field("application.id")]));
+    assert.equal(collector.definitionForLabel("自定义编号").field, "application.id");
+    applyCollectManifest(manifest([field("vehicle.vin")]));
+    assert.equal(collector.definitionForLabel("自定义编号").field, "vehicle.vin");
+    assert.deepEqual(collector.collectIdentity(fixture(control({ label: "自定义编号", value: "VIN-A" })), ["vehicle.vin"]).pageFields, { "vehicle.vin": "VIN-A" });
+    applyCollectManifest(manifest([field("application.id"), field("vehicle.vin")]));
+    assert.equal(collector.definitionForLabel("自定义编号"), null);
+  } finally {
+    applyCollectManifest(null);
+  }
+  assert.equal(collector.definitionForLabel("自定义编号"), null);
+  assert.equal(collector.definitionForLabel("申请单编号").field, "application.id");
+});
 
 test("recognizes the actual scrap date label", () => {
   const collector = loadCollector();
@@ -688,6 +755,48 @@ test("scopes collection to the open approval modal when list filters reuse ids",
   assert.equal(result.reviewFields[0].label, "报废车辆类型");
   assert.equal(result.reviewFields[1].label, "报废交车日期");
   assert.equal(result.reviewFields.some((item) => item.label === "经销商"), false);
+});
+
+test("configured occurrence counts certificate controls inside the approval detail only", () => {
+  const filter = control({ label: "报废证明编号", value: "", section: "old_vehicle" });
+  const hidden = control({ label: "报废证明编号", value: "HIDDEN", section: "old_vehicle" });
+  hidden.hidden = true;
+  const target = control({ label: "报废证明编号", value: "HS-SYNTHETIC-001", section: "old_vehicle" });
+  const modal = fixture(hidden, target);
+  const root = fixture(filter, hidden, target);
+  root.querySelector = () => modal;
+  for (const input of [filter, hidden, target]) input.ownerDocument = {
+    querySelectorAll: () => [filter, hidden, target],
+  };
+  applyCollectManifest({ business_type: "scrap_replacement", scopes: ["old_vehicle"], materials: [], page_groups: [], fields: [{
+    key: "scrap_certificate.certificate_no", label: "报废证明编号", aliases: ["报废证明编号"],
+    section: "old_vehicle", occurrence: 1, reviewable: true,
+  }] });
+  try {
+    const result = loadCollector().collect(root, "scrap_replacement");
+    assert.equal(result.pageFields["scrap_certificate.certificate_no"], "HS-SYNTHETIC-001");
+    assert.equal(result.reviewFields.length, 1);
+    assert.equal(result.reviewFields[0].field, "scrap_certificate.certificate_no");
+    assert.equal(result.fieldTargets[0].element, target);
+  } finally {
+    applyCollectManifest(null);
+  }
+});
+
+test("explicit occurrence selects the second visible control in the current detail", () => {
+  const inputs = [1, 2].map(index => control({ label: "自定义编号", value: `CERT-${index}`, section: "old_vehicle" }));
+  applyCollectManifest({ business_type: "scrap_replacement", scopes: ["old_vehicle"], materials: [], page_groups: [], fields: [{
+    key: "custom.certificate_no", aliases: ["自定义编号"], section: "old_vehicle", occurrence: 2, reviewable: true,
+  }] });
+  try {
+    const result = loadCollector().collect(fixture(...inputs), "scrap_replacement");
+    assert.equal(result.pageFields["custom.certificate_no"], "CERT-2");
+    assert.equal(result.reviewFields[0].field, null);
+    assert.equal(result.reviewFields[1].field, "custom.certificate_no");
+    assert.equal(result.fieldTargets[0].element, inputs[1]);
+  } finally {
+    applyCollectManifest(null);
+  }
 });
 
 test("keeps read-only known fields in the review catalog without making them writable", () => {

@@ -64,6 +64,7 @@ def assemble_review_response(
         batch.limitations,
         batch.confidences,
         completeness=batch.material_completeness,
+        review_tasks=review_tasks,
     )
     if response.presentation == "FIELD_WORKBENCH":
         risk_level = (

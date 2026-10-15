@@ -1,5 +1,5 @@
 import type { DomElement, DomRoot, FieldDefinition, FieldCandidate } from "./dom.ts";
-import { manifestFieldDefinitions } from "./collect-manifest.ts";
+import { manifestFieldDefinitions, manifestSectionFromText } from "./collect-manifest.ts";
 import type { ReviewFieldSnapshot } from "../types/review.ts";
 
 const isDomElement = (value: unknown): value is DomElement => {
@@ -129,6 +129,23 @@ const isDomElement = (value: unknown): value is DomElement => {
    * 清单是后端声明的唯一来源，内置表只保证清单不可用时仍能采集。
    */
   const fieldDefinitions = () => manifestFieldDefinitions() || FIELD_DEFINITIONS;
+  let indexedDefinitions: Record<string, FieldDefinition> | null = null;
+  let labelIndex = new Map<string, Array<{ field: string; definition: FieldDefinition }>>();
+  const definitionsByLabel = () => {
+    const definitions = fieldDefinitions();
+    if (definitions !== indexedDefinitions) {
+      indexedDefinitions = definitions;
+      labelIndex = new Map();
+      for (const [field, definition] of Object.entries(definitions)) {
+        for (const label of new Set(definition.aliases.map(normalizeText))) {
+          const entries = labelIndex.get(label) || [];
+          entries.push({ field, definition });
+          labelIndex.set(label, entries);
+        }
+      }
+    }
+    return labelIndex;
+  };
 
 
   const SOURCE_SCORES: Record<string, number> = {
@@ -179,6 +196,8 @@ const isDomElement = (value: unknown): value is DomElement => {
 
   const sectionFromText = (text: string) => {
     const value = String(text || "");
+    const declared = manifestSectionFromText(value);
+    if (declared) return declared;
     const hasOld = /报废车辆信息|报废车辆资料|报废车资料|旧车资料/.test(value);
     const hasNew = /新车及发票信息|新车及发票资料|新车资料|发票信息/.test(value);
     if (hasOld && !hasNew) return "old_vehicle";
@@ -188,19 +207,15 @@ const isDomElement = (value: unknown): value is DomElement => {
 
   const definitionForLabel = (label: string) => {
     const normalized = normalizeText(label);
-    const matches = Object.entries(fieldDefinitions()).filter(([, definition]) =>
-      definition.aliases.some((alias) => normalizeText(alias) === normalized),
-    );
+    const matches = definitionsByLabel().get(normalized) || [];
     if (matches.length !== 1) return null;
-    const [field, definition] = matches[0];
+    const { field, definition } = matches[0];
     return { field, ...definition };
   };
 
   const isKnownLabel = (label: string) => {
     const normalized = normalizeText(label);
-    return Object.values(fieldDefinitions()).some((definition) =>
-      definition.aliases.some((alias) => normalizeText(alias) === normalized),
-    );
+    return definitionsByLabel().has(normalized);
   };
 
   const writableTargetField = (label: string) => {
@@ -349,11 +364,10 @@ const isDomElement = (value: unknown): value is DomElement => {
       .filter((candidate) => !isIgnoredControlLabel(candidate.label))
       .filter((candidate) => !isVerificationCandidate(candidate));
 
-  const isEditableControl = (control: DomElement | null | undefined) => {
+  const isVisibleControl = (control: DomElement | null | undefined) => {
     const type = String(control?.getAttribute?.("type") || "").toLowerCase();
     if (["hidden", "button", "submit", "reset", "image"].includes(type)) return false;
-    if (control?.hidden === true || control?.disabled === true) return false;
-    if (control?.getAttribute?.("aria-hidden") === "true" || control?.getAttribute?.("aria-disabled") === "true") return false;
+    if (control?.hidden === true || control?.getAttribute?.("aria-hidden") === "true") return false;
     for (let node = control; node; node = node.parentElement) {
       if (node.hidden === true || node.getAttribute?.("aria-hidden") === "true") return false;
       if (node.style?.display === "none" || node.style?.visibility === "hidden") return false;
@@ -363,6 +377,11 @@ const isDomElement = (value: unknown): value is DomElement => {
         if (style?.display === "none" || style?.visibility === "hidden" || style?.visibility === "collapse") return false;
       }
     }
+    return true;
+  };
+
+  const isEditableControl = (control: DomElement | null | undefined) => {
+    if (!isVisibleControl(control) || control?.disabled === true || control?.getAttribute?.("aria-disabled") === "true") return false;
     const role = String(control?.getAttribute?.("role") || "").toLowerCase();
     const customEditable = role === "combobox" || control?.getAttribute?.("contenteditable") === "true";
     return customEditable || (control?.readOnly !== true && control?.getAttribute?.("readonly") == null);
@@ -486,8 +505,15 @@ const isDomElement = (value: unknown): value is DomElement => {
     return candidates;
   };
 
-  const matchingScore = (_field: string, definition: FieldDefinition, candidate: FieldCandidate) => {
+  const matchingScore = (_field: string, definition: FieldDefinition, candidate: FieldCandidate, scopedControls: DomElement[] = []) => {
     const label = normalizeText(candidate.label);
+    if (definition.locatorId && candidate.element?.id !== definition.locatorId) return null;
+    if (definition.locatorName && candidate.element?.getAttribute("name") !== definition.locatorName) return null;
+    if (definition.occurrence && candidate.element && !definition.locatorId && !definition.locatorName) {
+      // occurrence 按本次审核详情中的控件计数，列表筛选框和隐藏控件不参与定位。
+      const equivalent = scopedControls.filter(el => normalizeText(controlLabel(el.ownerDocument, el)) === label && findSection(el) === candidate.section);
+      if (equivalent.length && equivalent.indexOf(candidate.element) !== definition.occurrence - 1) return null;
+    }
     let exact = true;
     let aliasIndex = definition.aliases.findIndex((alias) => normalizeText(alias) === label);
     if (aliasIndex < 0) {
@@ -501,9 +527,7 @@ const isDomElement = (value: unknown): value is DomElement => {
       candidate.section !== definition.section
     ) return null;
     const matchedAlias = normalizeText(definition.aliases[aliasIndex]);
-    const aliasFieldCount = Object.values(fieldDefinitions()).filter((item) =>
-      item.aliases.some((alias) => normalizeText(alias) === matchedAlias),
-    ).length;
+    const aliasFieldCount = definitionsByLabel().get(matchedAlias)?.length ?? 0;
     if (
       aliasFieldCount > 1 &&
       candidate.section === "unknown"
@@ -517,7 +541,7 @@ const isDomElement = (value: unknown): value is DomElement => {
     );
   };
 
-  const resolveInventoryField = (candidate: FieldCandidate, businessType: string | null) => {
+  const resolveInventoryField = (candidate: FieldCandidate, businessType: string | null, scopedControls: DomElement[]) => {
     void businessType;
     const ranked = Object.entries(fieldDefinitions())
       .map(([field, definition]) => ({
@@ -527,6 +551,7 @@ const isDomElement = (value: unknown): value is DomElement => {
           field,
           definition,
           { ...candidate, value: candidate.value || "__empty_control__" },
+          scopedControls,
         ),
       }))
       .filter((item) => item.score != null)
@@ -549,13 +574,13 @@ const isDomElement = (value: unknown): value is DomElement => {
         label,
         value: readInventoryValue(control),
         section: findSection(control),
-        source: "control",
+        source: "control", element: control,
       };
       const operationField = writableTargetField(label);
       const operationLabel = operationField
         ? Object.entries(WRITABLE_TARGETS).find(([, field]) => field === operationField)?.[0]
         : null;
-      const resolved = operationField ? null : resolveInventoryField(candidate, businessType);
+      const resolved = operationField ? null : resolveInventoryField(candidate, businessType, controls);
       if (resolved?.definition.reviewable === false) continue;
       // 隐藏控件不是当前详情字段；只读的已知字段（日期等）仍需进入审核目录，
       // 但会以 editable=false 传给后端，避免提供页面回写按钮。
@@ -597,13 +622,13 @@ const isDomElement = (value: unknown): value is DomElement => {
     return fallback || root;
   };
 
-  const collectCandidates = (candidates: FieldCandidate[], scannedControls = 0, businessType: string | null = null, reviewFields: ReviewFieldSnapshot[] = []) => {
+  const collectCandidates = (candidates: FieldCandidate[], scannedControls = 0, businessType: string | null = null, reviewFields: ReviewFieldSnapshot[] = [], scopedControls: DomElement[] = [], onlyFields?: ReadonlySet<string>) => {
     void businessType;
     const pageFields: Record<string, string> = {};
     const fieldTargets = [];
     const unmatchedLabels = [];
     const ambiguousFields = [];
-    const writableTargets = Object.entries(WRITABLE_TARGETS).flatMap(([label, field]) => {
+    const writableTargets = (onlyFields ? [] : Object.entries(WRITABLE_TARGETS)).flatMap(([label, field]) => {
       // 页面有时会把表单项标签和控件占位文本拼接成“报废车挂靠 报废车挂靠”。
       // 与 writableTargetField 使用同一套前缀匹配，避免控件已识别但自动填写目标丢失。
       const targets = candidates.filter((candidate) => writableTargetField(candidate.label) === field);
@@ -632,10 +657,11 @@ const isDomElement = (value: unknown): value is DomElement => {
     }
 
     for (const [field, definition] of Object.entries(fieldDefinitions())) {
+      if (onlyFields && !onlyFields.has(field)) continue;
       const ranked = candidates
         .map((candidate) => ({
           candidate,
-          score: matchingScore(field, definition, candidate),
+          score: matchingScore(field, definition, candidate, scopedControls),
         }))
         .filter((item) => item.score != null)
         .sort((left, right) => (right.score ?? 0) - (left.score ?? 0));
@@ -661,7 +687,7 @@ const isDomElement = (value: unknown): value is DomElement => {
       }
     }
 
-    if (!pageFields["invoice.invoice_date"]) {
+    if ((!onlyFields || onlyFields.has("invoice.invoice_date")) && !pageFields["invoice.invoice_date"]) {
       const dateCandidates = candidates.filter((candidate) =>
         /开票日期|发票日期/.test(normalizeText(candidate.label)) &&
         /^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(String(candidate.value || "")),
@@ -690,12 +716,12 @@ const isDomElement = (value: unknown): value is DomElement => {
     };
   };
 
-  const collect = (root: DomRoot | null | undefined, businessType: string | null = null) => {
+  const collect = (root: DomRoot | null | undefined, businessType: string | null = null, onlyFields?: ReadonlySet<string>) => {
     const scopedRoot = reviewRoot(root);
     const rawControls = queryAll(scopedRoot, CONTROL_SELECTOR)
-      .filter((control) => isDataControl(control) && !isSearchFilterControl(control));
+      .filter((control) => isDataControl(control) && isVisibleControl(control) && !isSearchFilterControl(control));
     const controls = controlCandidates(scopedRoot, rawControls);
-    const reviewFields = reviewFieldInventory(scopedRoot, rawControls, businessType);
+    const reviewFields = onlyFields ? [] : reviewFieldInventory(scopedRoot, rawControls, businessType);
     const inSearchFilter = (candidate: FieldCandidate) => isSearchFilterControl(candidate.element);
     return collectCandidates(
       [
@@ -706,11 +732,15 @@ const isDomElement = (value: unknown): value is DomElement => {
       rawControls.length,
       businessType,
       reviewFields,
+      rawControls,
+      onlyFields,
     );
   };
 
   export const ReviewPageFieldCollector = {
     collect,
+    // 写回守卫只需要身份字段；仍实时解析 DOM 并保留重复目标的歧义检查。
+    collectIdentity: (root: DomRoot, fields: readonly string[]) => collect(root, null, new Set(fields)),
     collectCandidates,
     definitionForLabel,
     isSectionRequired,

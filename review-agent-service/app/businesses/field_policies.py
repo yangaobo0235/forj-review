@@ -16,6 +16,7 @@
 """
 
 from dataclasses import dataclass, replace
+from datetime import date, datetime, timedelta, timezone
 
 from app.businesses.packs import BUSINESS_PACKS
 from app.businesses.packs.model import (
@@ -31,6 +32,8 @@ class FieldEvidencePolicy:
     mode: EvidenceMode
     allowed_document_types: tuple[str, ...] = ()
     allow_single_evidence: bool = True
+    uncertain_requires_review: bool = True
+    page_evidence_required: bool = True
     normalizer: str = "default"
     authority: tuple[AuthorityRule, ...] = ()
     # 日期时效：页面日期必须落在审核日往前推 N 天内。None 表示不检查。
@@ -44,6 +47,8 @@ def _build_policies(pack: BusinessExtensionPack) -> dict[str, FieldEvidencePolic
             mode=item.mode,
             allowed_document_types=item.sources,
             allow_single_evidence=item.allow_single_evidence,
+            uncertain_requires_review=item.uncertain_requires_review,
+            page_evidence_required=item.page_evidence_required and item.mode != "DERIVED",
             normalizer=item.normalizer,
             authority=item.authority,
             max_age_days=item.max_age_days,
@@ -92,8 +97,39 @@ FIELD_EVIDENCE_POLICIES, MATERIAL_FIELD_BY_PAGE_FIELD = _merge_policies(
 )
 
 
+from app.businesses.context import ContextMapping
+
+FIELD_EVIDENCE_POLICIES = ContextMapping(FIELD_EVIDENCE_POLICIES, _build_policies)
+MATERIAL_FIELD_BY_PAGE_FIELD = ContextMapping(MATERIAL_FIELD_BY_PAGE_FIELD,
+    lambda pack: {f.key: f.material_field for f in pack.fields if f.material_field is not None})
+
+
 def field_policy(field: str) -> FieldEvidencePolicy | None:
     return FIELD_EVIDENCE_POLICIES.get(field)
+
+
+def date_window_problem(label: str, field: str, value: object, *, today: date | None = None) -> str | None:
+    """按业务声明检查日期时效；国内审核日期不依赖部署主机的时区。"""
+    from app.fields.normalize import normalize_value
+
+    policy = field_policy(field)
+    if policy is None or not policy.max_age_days:
+        return None
+    normalized = normalize_value(field, value)
+    if not normalized:
+        return None  # 缺少值由证据聚合负责。
+    try:
+        parsed = date.fromisoformat(normalized)
+    except ValueError:
+        return f"{label}日期格式无法确认，请人工复核"
+    review_day = today or datetime.now(timezone(timedelta(hours=8))).date()
+    earliest = review_day - timedelta(days=policy.max_age_days)
+    if earliest <= parsed <= review_day:
+        return None
+    return (
+        f"{label} {parsed.isoformat()} 不在最近 {policy.max_age_days} 天内"
+        f"（{earliest.isoformat()} 至 {review_day.isoformat()}），请人工复核"
+    )
 
 
 

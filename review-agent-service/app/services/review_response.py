@@ -5,11 +5,15 @@
 修改人：wuyi
 """
 
+import logging
+
 from app.businesses.field_policies import (
     MATERIAL_FIELD_BY_PAGE_FIELD,
+    date_window_problem,
     field_policy,
     filter_allowed_observations,
 )
+from app.businesses.fields import PAGE_FIELD_LABELS
 from app.businesses.profiles import BusinessProfile
 from app.compare.aggregate import aggregate_by_authority, aggregate_field
 from app.compare.check_results import unique_checks
@@ -24,9 +28,44 @@ from app.models.review import (
     ReviewRequest,
     ReviewResponse,
 )
-from app.presentation.routing import profile_uses_page_interaction
 from app.services.review_assembly import assemble_review_response
 from app.workflow.models import AgentBatchResult
+
+logger = logging.getLogger("uvicorn.error")
+
+
+def _log_decision(response: ReviewResponse, note: str = "") -> None:
+    """结论摘要：配置回测与影响面对账的唯一数据源。
+
+    只记字段键、状态与来源材料类型，**绝不记值**。没有这一行，"新配置跑出的结论与
+    当时人工判断是否一致"根本无法核对，agent 的映射质量就只能靠人看一眼——那不是判卷。
+    """
+    statuses = ",".join(f"{item.field}:{item.status.value}" for item in response.comparisons)
+    conflicts = ",".join(
+        f"{item.field}:"
+        + "+".join(sorted({fact.document_type or fact.source for fact in item.evidence}))
+        for item in response.comparisons
+        if item.status == FieldStatus.CONFLICT
+    )
+    uncertain = ",".join(
+        f"{item.field}:"
+        + "+".join(sorted({fact.document_type or fact.source for fact in item.evidence if fact.uncertain}))
+        for item in response.comparisons
+        if any(fact.uncertain for fact in item.evidence)
+    )
+    logger.info(
+        "review decision trace_id=%s business=%s region=%s profile=%s recommendation=%s"
+        " note=%s fields=%s conflicts=%s uncertain=%s",
+        response.trace_id,
+        response.business_type,
+        response.region,
+        response.profile_version,
+        response.recommendation.value,
+        note or "-",
+        statuses or "-",
+        conflicts or "-",
+        uncertain or "-",
+    )
 
 
 def _append_qr_observations(
@@ -85,7 +124,7 @@ def _mark_qr_conflicts(
                 if page_field == "vin"
                 else "scrap_certificate.certificate_no"
             )
-            if candidates and _comparable_qr_value(field_name, candidates[0]) != _comparable_qr_value(field_name, page_value):
+            if any(_comparable_qr_value(field_name, value) != _comparable_qr_value(field_name, page_value) for value in candidates):
                 check.status = FieldStatus.CONFLICT
                 check.message = "二维码网页字段与图片识别结果冲突"
                 has_conflict = True
@@ -97,12 +136,9 @@ def _build_comparisons(
     profile: BusinessProfile,
     observations: list[FieldObservation],
 ) -> list[FieldComparison]:
-    # 不确定标记的一票否决只对字段优先目标 Profile 生效，其余业务保持历史语义。
-    uncertain_requires_review = profile_uses_page_interaction(profile)
     fields = list(profile.required_fields)
-    if uncertain_requires_review:
-        collected_fields = set(request.page_fields) | {item.field for item in request.review_fields}
-        fields.extend(field for field in MATERIAL_FIELD_BY_PAGE_FIELD if field in collected_fields and field not in fields)
+    collected_fields = set(request.page_fields) | {item.field for item in request.review_fields}
+    fields.extend(field for field in MATERIAL_FIELD_BY_PAGE_FIELD if field in collected_fields and field not in fields)
 
     def field_observations(field_name: str) -> list[FieldObservation]:
         material_field = MATERIAL_FIELD_BY_PAGE_FIELD.get(field_name, field_name)
@@ -114,6 +150,8 @@ def _build_comparisons(
             field_name, field_observations(field_name)
         )
         policy = field_policy(field_name)
+        uncertain_requires_review = policy.uncertain_requires_review if policy else True
+        page_evidence_required = policy.page_evidence_required if policy else True
         # 声明了权威链的字段走声明式裁决：比较基准由业务指定，不靠票数推断。
         # 新增需要权威关系的字段只需在 field_evidence_policies 里声明，
         # 不必再写专用裁决函数。
@@ -123,6 +161,7 @@ def _build_comparisons(
                 observations_for_field,
                 policy.authority,
                 uncertain_requires_review=uncertain_requires_review,
+                page_evidence_required=page_evidence_required,
             ))
             continue
         if policy and policy.mode == "SYSTEM":
@@ -149,7 +188,23 @@ def _build_comparisons(
             single_evidence_requires_review=(
                 policy.allow_single_evidence is False if policy else True
             ),
+            page_evidence_required=page_evidence_required,
+            required_document_types=(
+                policy.allowed_document_types
+                if policy and not policy.allow_single_evidence and len(policy.allowed_document_types) > 1
+                else ()
+            ),
         ))
+    for comparison in comparisons:
+        problem = date_window_problem(
+            PAGE_FIELD_LABELS.get(comparison.field, comparison.field),
+            comparison.field,
+            request.page_fields.get(comparison.field),
+        )
+        if problem:
+            if comparison.status == FieldStatus.MATCH:
+                comparison.status = FieldStatus.REVIEW_REQUIRED
+            comparison.message = f"{comparison.message}；{problem}"
     return comparisons
 
 
@@ -206,7 +261,7 @@ def build_review_response(
         retry_summary=batch.retry_summary,
         page_fill_intent=page_fill_intent or [],
     )
-    return (
+    decision = (
         response
         if defer_advice
         else assemble_review_response(
@@ -216,6 +271,9 @@ def build_review_response(
             page_actions=page_fill_intent,
         )
     )
+    if not defer_advice:
+        _log_decision(decision, "assembled")
+    return decision
 
 
 def build_unconfigured_response(
@@ -246,6 +304,8 @@ def build_unconfigured_response(
             "timed_out_count": 0,
         },
     )
-    return assemble_review_response(
+    decision = assemble_review_response(
         response, AgentBatchResult(), business_checks=[]
     ).model_copy(update={"summary": message})
+    _log_decision(decision, "unconfigured")
+    return decision

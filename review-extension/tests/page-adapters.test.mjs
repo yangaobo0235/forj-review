@@ -73,12 +73,13 @@ test("人工选择的地区与页面不一致时拒绝执行", () => {
   assert.match(resolution.error, /不一致/);
 });
 
-test("适配器只声明可写控件，不声明页面字段", () => {
-  // 字段别名、页面分区和图片筛选依据来自后端采集清单；适配器不该再有一份。
-  const scrap = registry.get("scrap-replacement");
-  assert.deepEqual(scrap.listWritableFields(), []);
+test("适配器只负责页面识别，不重复声明字段和写回逻辑", () => {
+  // 字段别名、页面分区、图片筛选和写回均来自清单/通用写回器；适配器不该再有一份。
+  const scrap = registry.resolve("https://admin.forjtruck.com/scrap-replace-qingdao");
+  assert.ok(scrap);
 
   const source = scrap.constructor.toString() + scrap.detect.toString();
   assert.equal(source.includes("FIELD_DEFINITIONS"), false);
   assert.equal(source.includes("aliases"), false);
+  assert.equal(source.includes("writeField"), false);
 });

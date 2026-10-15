@@ -1,7 +1,7 @@
-import json
+import asyncio
 import logging
 import os
-import time
+import threading
 
 from fastapi.testclient import TestClient
 
@@ -16,6 +16,62 @@ def test_health_endpoint() -> None:
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_review_service_does_not_expose_configuration_tooling() -> None:
+    assert client.get("/api/config/tasks").status_code == 404
+    assert client.post("/api/config/pair", json={"code": "123456"}).status_code == 404
+    assert client.get("/api/review/definition").status_code == 404
+    assert client.get("/api/review/schema").status_code == 200
+    catalog = client.get("/api/review/page-catalog")
+    assert catalog.status_code == 200
+    assert {item["business_type"] for item in catalog.json()["identities"]} == {
+        "scrap_replacement", "vehicle_source", "transfer", "consistency",
+    }
+
+
+def test_url_job_api_creates_and_finishes_without_upload(monkeypatch):
+    from app.services.jobs import ReviewJobManager
+    from app.workflow.models import AgentBatchResult
+
+    class Service:
+        async def extract_image_async(self, request, image):
+            assert "data_url" not in image.model_dump()
+            assert image.src == "https://images.example.test/0.jpg"
+            return AgentBatchResult(total_count=1, completed_count=1, completed_image_ids=["url-0"])
+
+        async def assist_with_batch_async(self, request, initial_batch):
+            from app.models.review import ReviewResponse
+            return ReviewResponse(recommendation="REVIEW_REQUIRED", risk_level="MEDIUM", summary="合成测试"), initial_batch
+
+    manager = ReviewJobManager(Service())
+    monkeypatch.setattr("app.main.review_jobs", manager)
+    created = client.post("/api/review/jobs/urls", json={
+        "page_url": "https://example.test/review", "region": "qingdao",
+        "images": [{"index": 0, "imageId": "url-0", "src": "https://images.example.test/0.jpg"}],
+    })
+    assert created.status_code == 202
+    job_id = created.json()["job_id"]
+    assert manager.wait(job_id, timeout=2)
+    snapshot = client.get(f"/api/review/jobs/{job_id}").json()
+    assert snapshot["status"] == "COMPLETED"
+    assert snapshot["progress"]["completed_count"] == 1
+
+
+def test_url_job_api_rejects_browser_only_image():
+    result = client.post("/api/review/jobs/urls", json={
+        "page_url": "https://example.test/review", "region": "qingdao",
+        "images": [{"index": 0, "src": "blob:https://example.test/id"}],
+    })
+    assert result.status_code == 422
+    assert "HTTP" in result.json()["detail"]
+
+
+def test_image_upload_routes_are_removed():
+    paths = {route.path for route in app.routes}
+    assert "/api/review/jobs/stream" not in paths
+    assert "/api/review/jobs/{job_id}/images" not in paths
+    assert "/api/review/jobs/{job_id}/complete" not in paths
 
 
 def test_assist_returns_review_structure_for_page_data() -> None:
@@ -37,6 +93,10 @@ def test_assist_returns_review_structure_for_page_data() -> None:
     assert "qr_checks" in body
     assert body["context_summary"]["image_count"] == 0
     assert len(body["material_completeness"]["checklist"]) == 6
+    assert body["material_completeness"]["status"] == "INCOMPLETE"
+    assert any(item["check_id"] == "MATERIAL-COMPLETENESS" for item in body["cross_checks"])
+    assert all(item["category"] != "MATERIAL" and item["step_id"] != "BUSINESS-MATERIAL-COMPLETENESS"
+               for item in body["review_tasks"])
     subject_step = next(
         item
         for item in body["review_tasks"]
@@ -60,49 +120,30 @@ def test_job_api_creates_and_polls_review() -> None:
     assert polled.json()["status"] in {"RUNNING", "PARTIAL", "COMPLETED"}
 
 
-def test_stream_job_api_accepts_images_idempotently_and_completes() -> None:
+def test_url_job_api_can_cancel_a_running_job(monkeypatch) -> None:
+    from app.services.jobs import ReviewJobManager
+
+    started, stopped = threading.Event(), threading.Event()
+
+    class Service:
+        async def assist_with_batch_async(self, request, initial_batch):
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                stopped.set()
+
+    monkeypatch.setattr("app.main.review_jobs", ReviewJobManager(Service()))
     created = client.post(
-        "/api/review/jobs/stream",
-        json={
-            "page_url": "https://example.test/review/stream",
-            "region": "qingdao",
-            "images": [{"index": 0, "imageId": "image-0", "src": "unavailable"}],
-        },
-    )
-    assert created.status_code == 202
-    job_id = created.json()["job_id"]
-    metadata = json.dumps({
-        "index": 0,
-        "imageId": "image-0",
-        "src": "unavailable",
-        "collectionError": "图片读取失败",
-    })
-
-    first = client.post(f"/api/review/jobs/{job_id}/images", data={"metadata": metadata})
-    duplicate = client.post(f"/api/review/jobs/{job_id}/images", data={"metadata": metadata})
-    assert first.status_code == 202
-    assert duplicate.status_code == 202
-    assert duplicate.json()["progress"]["uploaded_count"] == 1
-    assert client.post(f"/api/review/jobs/{job_id}/complete").status_code == 200
-
-    snapshot = client.get(f"/api/review/jobs/{job_id}").json()
-    deadline = time.monotonic() + 2
-    while snapshot["status"] == "RUNNING" and time.monotonic() < deadline:
-        time.sleep(0.01)
-        snapshot = client.get(f"/api/review/jobs/{job_id}").json()
-    assert snapshot["status"] == "PARTIAL"
-    assert snapshot["phase"] == "COMPLETED"
-
-
-def test_stream_job_api_can_cancel_a_running_job() -> None:
-    created = client.post(
-        "/api/review/jobs/stream",
+        "/api/review/jobs/urls",
         json={"page_url": "https://example.test/review/cancel", "region": "qingdao", "images": []},
     )
+    assert started.wait(2)
     cancelled = client.delete(f"/api/review/jobs/{created.json()['job_id']}")
 
     assert cancelled.status_code == 200
     assert cancelled.json()["status"] == "CANCELLED"
+    assert stopped.wait(2)
     assert cancelled.json()["phase"] == "CANCELLED"
 
 
@@ -130,7 +171,7 @@ def test_review_service_reports_context_image_summary_and_collection_errors() ->
             images=[
                 {
                     "index": 0,
-                    "src": "data:image/jpeg;base64,AA==",
+                    "src": "https://images.example.test/synthetic.jpg",
                     "imageId": "img-0001",
                     "mimeType": "image/jpeg",
                     "sizeBytes": 2,
@@ -212,6 +253,17 @@ def test_collect_manifest_endpoint_serves_fields_groups_and_materials() -> None:
     materials = {item["document_type"]: item for item in body["materials"]}
     assert "回收证明" in materials["scrap_certificate"]["hints"]
     assert materials["identity_card"]["label"] == "居民身份证"
+
+
+def test_collect_manifest_resolves_page_identity_even_without_region_or_version() -> None:
+    response = client.get(
+        "/api/review/collect-manifest",
+        params={"business_type": "scrap_replacement", "page_id": "scrap_replacement:qingdao"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["region"] == "qingdao"
+    assert response.json()["profile_version"] == "1.0"
 
 
 def test_collect_manifest_is_not_available_for_undeclared_businesses() -> None:

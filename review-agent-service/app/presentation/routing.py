@@ -1,13 +1,12 @@
 """字段优先的审核步骤集中路由。
 
 主要职责：一次运行内决定每个审核步骤展示在宿主页面字段还是助手面板，
-并完成材料异常去重和步骤排序。展示目标只来自本模块的显式映射表，
+并完成规则投影、任务去重和步骤排序。展示目标只来自本模块的显式映射表，
 不根据中文 label 或 reason 猜测；页内交互只对目标 Profile 启用，
 未配置业务继续使用结果界面。
 """
 
 from collections.abc import Sequence
-from datetime import date, datetime, timedelta
 from typing import Literal
 
 from app.businesses.field_policies import field_policy
@@ -42,7 +41,7 @@ def profile_uses_page_interaction(profile: BusinessProfile) -> bool:
 
 MISSING_PAGE_FIELD_REASON = "页面字段缺失或存在歧义，请人工核对该字段"
 
-Category = Literal["FIELD", "EXTERNAL", "BUSINESS_RULE", "MATERIAL"]
+Category = Literal["FIELD", "EXTERNAL", "BUSINESS_RULE"]
 ResultStatus = Literal["MATCH", "CONFLICT", "INSUFFICIENT"]
 
 # 规则把页面侧取值交给任务装配时使用的 `details` 键，见 `_business_step`。
@@ -133,37 +132,6 @@ def _page_field_collected(request: ReviewRequest, page_field: str) -> bool:
     return request.page_fields.get(page_field) not in (None, "")
 
 
-def _date_window_problem(
-    label: str,
-    field: str,
-    raw_value: object | None,
-    max_age_days: int | None,
-) -> str | None:
-    """日期时效：页面日期是否落在「审核日往前推 N 天」到今天之间。
-
-    解析不出日期时返回 None：读不出值由字段比对负责（材料缺失、页面未采集
-    各有自己的状态），时效只是叠加在上面的政策检查，不在这一层再判一次。
-    """
-    if not max_age_days:
-        return None
-    normalized = normalize_value(field, raw_value)
-    if not normalized:
-        return None
-    try:
-        parsed = date.fromisoformat(normalized)
-    except ValueError:
-        return None
-    # 用本地时区的当天：审核发生在国内，按 UTC 算会在每天后半夜错一天。
-    today = datetime.now().astimezone().date()
-    earliest = today - timedelta(days=max_age_days)
-    if earliest <= parsed <= today:
-        return None
-    return (
-        f"{label} {parsed.isoformat()} 不在最近 {max_age_days} 天内"
-        f"（{earliest.isoformat()} 至 {today.isoformat()}），请人工复核"
-    )
-
-
 def _field_step(
     request: ReviewRequest,
     comparison: FieldComparison,
@@ -183,15 +151,17 @@ def _field_step(
             detail=item.detail,
             derived_from=item.derived_from,
             evidence_region=item.evidence_region,
+            uncertain=item.uncertain,
+            group_title=item.group_title,
         )
         for item in comparison.evidence
         if item.value not in (None, "")
     ]
     result_status = _comparison_status(comparison)
-    material_evidence_by_image: dict[str, EvidenceFact] = {}
+    material_evidence_by_image: dict[tuple[str, str | None], EvidenceFact] = {}
     for item in comparison.evidence:
         if item.image_id and item.source == "图片识别":
-            material_evidence_by_image.setdefault(item.image_id, item)
+            material_evidence_by_image.setdefault((item.image_id, item.source_field), item)
     material_evidence = list(material_evidence_by_image.values())
     if result_status == "MATCH" and not _page_field_collected(request, comparison.field):
         result_status = "INSUFFICIENT"
@@ -206,18 +176,6 @@ def _field_step(
     # 报废置换字段全部在审核助手中展示；原页面保持干净，不再注入标记。
     # 页面是否采集、页面原值和材料证据都由 evidence/values 传给工作台处理。
     policy = field_policy(comparison.field)
-    # 日期时效：页面日期超出允许的最近天数时降为人工复核。已经冲突的字段
-    # 不因此升级（冲突本身更需要处理），只把窗口写进理由。
-    window_problem = _date_window_problem(
-        label,
-        comparison.field,
-        request.page_fields.get(comparison.field),
-        policy.max_age_days if policy else None,
-    )
-    if window_problem:
-        if result_status == "MATCH":
-            result_status = "INSUFFICIENT"
-        reason = f"{reason}；{window_problem}"
     return _step(
         step_id=f"FIELD-{comparison.field}",
         category="FIELD",
@@ -245,13 +203,18 @@ def _field_step(
     )
 
 
-def _page_catalog_step(snapshot: ReviewFieldSnapshot, step_id: str) -> ReviewTask:
+def _page_catalog_step(snapshot: ReviewFieldSnapshot, step_id: str, profile: BusinessProfile) -> ReviewTask:
     """为没有已配置核验来源的实际页面控件保留可审查步骤。
 
     只有声明了 `review_declared_fields_only` 的业务不生成这类条目——那类业务
     的审核字段就是声明过的字段，页面上其余控件直接不进审核目录。
     """
     has_value = snapshot.value not in (None, "")
+    declared = profile.pack_declaration and any(
+        snapshot.label.strip() in (declaration.label, *declaration.aliases)
+        for declaration in profile.pack_declaration.fields
+        if declaration.reviewable
+    )
     return _step(
         step_id=step_id,
         category="FIELD",
@@ -259,7 +222,11 @@ def _page_catalog_step(snapshot: ReviewFieldSnapshot, step_id: str) -> ReviewTas
         label=snapshot.label,
         result_status="INSUFFICIENT",
         reason=(
-            "当前材料和规则未配置该页面控件的核验来源，请人工核对"
+            "未能关联此字段的页面值，请重新采集后复核"
+            if declared and not snapshot.field
+            else "未取得此字段的材料核验结果，请查看原图人工核对"
+            if declared
+            else "当前材料和规则未配置该页面控件的核验来源，请人工核对"
             if has_value
             else "当前页面控件未填写，且没有已配置的材料核验来源，请人工核对"
         ),
@@ -279,6 +246,9 @@ def _is_review_scope_field(profile: BusinessProfile, field: str | None) -> bool:
     """
     if not profile.review_declared_fields_only:
         return True
+    if profile.pack_declaration:
+        declaration = profile.pack_declaration.field(field)
+        return bool(declaration and declaration.reviewable)
     return bool(field) and field in PAGE_FIELD_LABELS
 
 
@@ -624,7 +594,7 @@ def _field_first_steps(
             )
         elif _is_review_scope_field(profile, field):
             step_id = f"FIELD-{field}" if field else f"FIELD-DOM-{index}"
-            steps.append(_page_catalog_step(snapshot, step_id))
+            steps.append(_page_catalog_step(snapshot, step_id, profile))
     return steps
 
 
@@ -668,30 +638,6 @@ def _business_step(
         evidence=check.evidence,
         details=details,
     )
-
-
-def _material_steps(
-    profile: BusinessProfile,
-    completeness: MaterialCompletenessReport | None,
-    limitations: Sequence[str],
-) -> list[ReviewTask]:
-    steps: list[ReviewTask] = []
-    if completeness is not None and profile.material_policy is not None:
-        # 材料完整时不生成材料成功步骤，只展示实际存在的问题。
-        for index, issue in enumerate(completeness.issues, start=1):
-            steps.append(
-                _step(
-                    step_id=f"MATERIAL-{issue.code}-{index}",
-                    category="MATERIAL",
-                    display_target=ReviewDisplayTarget.ASSISTANT,
-                    label="资料完整性",
-                    result_status="INSUFFICIENT",
-                    reason=f"{issue.message}；{issue.suggested_action}",
-                )
-            )
-    # 识别限制保留在响应诊断中，但不再生成独立工作台任务；材料任务
-    # 只表示材料是否齐全，避免审核员看到“识别异常字段”类细节。
-    return steps
 
 
 def _deduplicate_steps(steps: Sequence[ReviewTask]) -> list[ReviewTask]:
@@ -745,7 +691,9 @@ def build_review_tasks(
     steps: list[ReviewTask] = []
     # PAGE_FIELD 只用于目标 Profile 且请求中存在该规范字段；
     # 缺失字段转为 ASSISTANT + INSUFFICIENT。
-    # 外部规则、派生规则和材料异常使用 ASSISTANT。
+    # 外部规则和派生规则使用 ASSISTANT。
+    # 材料完整性属于输入诊断，不生成展示任务；报告和原始检查仍由
+    # 工作流及最终建议保留。completeness / limitations 参数兼容旧调用方。
     if page_interaction:
         # 没有注册页面动作的业务只展示结论，不提供回填按钮：写在未注册动作上
         # 的回填必然失败，把按钮禁掉比让审核员点出一个错误提示更诚实。
@@ -788,17 +736,24 @@ def build_review_tasks(
             spec.check_id for spec in PAGE_FIELD_COMPOSITES
         }
         and check.check_id not in projected_check_ids
+        and check.check_id != "MATERIAL-COMPLETENESS"
     )
-    steps.extend(_material_steps(profile, completeness, limitations))
     from app.presentation.tasks import prepare_display_tasks
 
-    return prepare_display_tasks(
+    tasks = prepare_display_tasks(
         _resequence(_deduplicate_steps(steps)),
         qr_enabled=any(
             spec.capability_id == "scrap_certificate_qr"
             for spec in profile.capabilities
             if spec.kind == "EXTERNAL"
         ),
-        completeness=completeness,
         field_check_bindings=profile.field_check_bindings,
     ) if page_interaction else _resequence(_deduplicate_steps(steps))
+    pack = profile.pack_declaration
+    if pack is None:
+        return tasks
+    policy = pack.presentation
+    return [task.model_copy(update={"visible": not (
+        (task.page_field or task.page_target_field) in policy.hidden_fields
+        or (task.category != "FIELD" and task.step_id.removeprefix("BUSINESS-").startswith(policy.hidden_check_prefixes))
+    )}) for task in tasks]

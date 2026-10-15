@@ -651,8 +651,8 @@ def test_one_material_read_from_several_images_stays_a_single_evidence_source() 
     assert comparison.status is FieldStatus.MATCH
 
 
-def test_material_merge_keeps_the_candidate_matching_the_page_value() -> None:
-    """同一份材料的两次读取不一致时，优先保留与页面值一致的那条。"""
+def test_material_merge_preserves_conflicting_reads_even_when_one_matches_the_page() -> None:
+    """页面值不是挑选证据的依据，不同读值都必须留给审核员。"""
     observations = [
         FieldObservation(
             field="vehicle.brand_model", source_type="image", source_id="license-a",
@@ -673,5 +673,5 @@ def test_material_merge_keeps_the_candidate_matching_the_page_value() -> None:
     comparison = aggregate_field("vehicle.brand_model", observations)
 
     material = [item for item in comparison.evidence if item.document_type == "vehicle_license"]
-    assert [item.value for item in material] == ["解放牌CA4250P66M25T1A1E6"]
-    assert comparison.status is FieldStatus.MATCH
+    assert [item.value for item in material] == ["解放牌CA4250P66K25T1A1E", "解放牌CA4250P66M25T1A1E6"]
+    assert comparison.status is FieldStatus.CONFLICT

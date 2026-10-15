@@ -1,4 +1,4 @@
-import { applyCollectManifest, manifestHintType, manifestIdentityAnchors, manifestWritableControlKinds, manifestWritableFields } from "./collect-manifest.ts";
+import { applyCollectManifest, manifestHintType, manifestIdentityAnchors, manifestRecordIdentityFields, manifestWritableControlKinds, manifestWritableFields } from "./collect-manifest.ts";
 import type { CollectManifest } from "./collect-manifest.ts";
 import { appliedPageCatalog, applyPageCatalog, explainPageIdentity } from "./page-catalog.ts";
 import type { PageCatalog } from "./page-catalog.ts";
@@ -6,24 +6,27 @@ import { ReviewBusinessDetector } from "./business-detector.ts";
 import { ReviewBusinessScope } from "./business-scope.ts";
 import { ReviewImageCandidates } from "./image-candidates.ts";
 import { ReviewImageFocus } from "./image-focus.ts";
-import { ReviewImageNormalization } from "./image-normalization.ts";
 import { documentTypeForImageLabel, imageLabelFor, nearestAncestorText } from "./image-label.ts";
 import { ReviewPageFieldCollector } from "./page-field-collector.ts";
 import { ReviewPageFieldWriter } from "./page-field-writer.ts";
-import { buildPageFingerprint, createPageInstanceId } from "./page-identity.ts";
-import type { BusinessSelection, PageFillAction, PageImage, PageWriteGroupAction } from "../types/review.ts";
+import { BUILTIN_IDENTITY_ANCHORS, buildPageFingerprint, createPageInstanceId, sameRecordExceptFields } from "./page-identity.ts";
+import type { BusinessSelection, PageImage, PageWriteGroupAction } from "../types/review.ts";
 /**
- * 功能：协调页面采集、图片标准化和原图定位消息。
+ * 功能：协调页面字段、图片地址采集和原图定位消息。
  * 职责边界：复杂识别逻辑委托给独立公共脚本；DOM 元素不跨消息传输。
  * 修改日期：2026-09-11
  * 修改人：wuyi
  */
 
-// Keep collection orchestration here; field, image, normalization, and focus rules live in dedicated scripts.
+// Keep collection orchestration here; field, image, and focus rules live in dedicated scripts.
 const reviewImageElements = new Map();
-const reviewImageCandidates = new Map<string, { collectionId: string; candidate: ImageSelection }>();
 const reviewFieldElements = new Map();
-const verifiedFieldWrites = new Map();
+const verifiedFieldWrites = new Map<string, { original: unknown; value: string }>();
+// 同一采集批次内，连续回填只更新最新值，身份基准始终保留第一次回填前的值。
+const rememberVerifiedWrite = (field: string, original: unknown, value: string) => {
+  const previous = verifiedFieldWrites.get(field);
+  verifiedFieldWrites.set(field, { original: previous ? previous.original : original, value });
+};
 const MAX_REVIEW_IMAGES = 16;
 const pageInstanceId = createPageInstanceId();
 let activeCollectionId = "";
@@ -32,13 +35,11 @@ let collectionSequence = 0;
 const nextCollectionId = () => `${pageInstanceId}:${++collectionSequence}`;
 // 指纹锚点来自本次业务的采集清单；没有清单时退回内置表。
 const pageFingerprint = (fields: Record<string, unknown>) =>
-  buildPageFingerprint(fields, manifestIdentityAnchors() ?? undefined);
+  buildPageFingerprint(fields, manifestIdentityAnchors() ?? undefined, manifestRecordIdentityFields() ?? undefined);
 const MESSAGE_TYPES = Object.freeze({
   collectPageData: "COLLECT_PAGE_DATA",
   collectPageManifest: "COLLECT_PAGE_MANIFEST",
-  readReviewImage: "READ_REVIEW_IMAGE",
   focusReviewImage: "FOCUS_REVIEW_IMAGE",
-  applyPageFillIntent: "APPLY_PAGE_FILL_INTENT",
   applyPageFieldValue: "APPLY_PAGE_FIELD_VALUE",
   applyPageFieldGroupValue: "APPLY_PAGE_FIELD_GROUP_VALUE",
   verifyInvoice: "VERIFY_INVOICE",
@@ -72,13 +73,6 @@ const classifyImage = (hint: string) => {
   return "unknown";
 };
 
-const blobToDataUrl = (blob: Blob): Promise<string> => new Promise((resolve, reject) => {
-  const reader = new FileReader();
-  reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
-  reader.onerror = () => reject(new Error("图片转换失败"));
-  reader.readAsDataURL(blob);
-});
-
 const imageAssetMetadata = (candidate: ImageSelection): PageImage => {
   const { image, index } = candidate;
   const src = image.currentSrc || image.src;
@@ -107,51 +101,14 @@ const imageAssetMetadata = (candidate: ImageSelection): PageImage => {
     pagePosition: `${Math.round(image.getBoundingClientRect().left)},${Math.round(image.getBoundingClientRect().top)}`,
     naturalWidth: image.naturalWidth || 0,
     naturalHeight: image.naturalHeight || 0,
-    mimeType: image.naturalWidth ? "image/jpeg" : null,
-    sizeBytes: null,
-    dataUrl: null,
-    collectionError: src ? null : "图片地址为空",
+    collectionError: /^https?:\/\//i.test(src) ? null : "这份材料暂时无法读取，请刷新原页面后重新审核；仍失败请查看原图人工核对",
   };
 };
 
-const readImageAsset = async (candidate: ImageSelection): Promise<PageImage> => {
-  const imageAsset = imageAssetMetadata(candidate);
-  const src = imageAsset.src;
-  if (!src) return imageAsset;
-  try {
-    if (src.startsWith("blob:") || src.startsWith("data:")) {
-      const response = await fetch(src);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const blob = await response.blob();
-      const normalizedBlob = await ReviewImageNormalization.normalizeBlob(blob);
-      imageAsset.mimeType = normalizedBlob.type;
-      imageAsset.sizeBytes = normalizedBlob.size;
-      imageAsset.dataUrl = await blobToDataUrl(normalizedBlob);
-    } else {
-      const result = await chrome.runtime.sendMessage({ type: "FETCH_IMAGE_ASSET", url: src });
-      if (!result?.ok) throw new Error(result?.error || "后台图片读取失败");
-      imageAsset.mimeType = result.mimeType;
-      imageAsset.sizeBytes = result.sizeBytes;
-      imageAsset.dataUrl = result.dataUrl;
-    }
-  } catch (error) {
-    imageAsset.collectionError = error instanceof Error ? error.message : "图片读取失败";
-  }
-  return imageAsset;
-};
 // 采集清单不可用时的兜底白名单。清单一旦应用就以清单为准：允许写回哪些
 // 字段、哪些控件类型都是业务声明，不在浏览器里再维护一份。
-const BUILTIN_WRITABLE_FIELDS = new Set([
-  "old_vehicle.recycle_date", "scrap_certificate.certificate_no", "old_vehicle.vin", "old_vehicle.plate_no", "old_vehicle.owner", "old_vehicle.engine_model",
-  "invoice.code", "invoice.invoice_no", "invoice.amount", "invoice.invoice_date", "new_vehicle.vin", "new_vehicle.plate_no", "new_vehicle.owner",
-  "page_ocr.new_vehicle_vin", "application.customer_name",
-  "old_vehicle.type", "new_vehicle.fuel_type", "new_vehicle.registration_date",
-  "application.terminal_phone", "application.terminal_certificate_no", "application.owner_type",
-  "old_vehicle.affiliation", "new_vehicle.affiliation",
-]);
-
 /** 本次清单允许写回的字段；没有清单时退回内置白名单。 */
-const writableFields = () => manifestWritableFields() ?? BUILTIN_WRITABLE_FIELDS;
+const writableFields = () => manifestWritableFields() ?? ReviewPageFieldWriter.defaultWritableFields;
 
 /** 本次清单允许写回的控件类型；没有清单时不限制。 */
 const writableControlKinds = () => manifestWritableControlKinds();
@@ -165,8 +122,13 @@ const controlFields = (collection: CollectionSnapshot) => {
   return fields;
 };
 
-const sameCollectedRecord = (message: ReviewMessage) => {
-  const currentFields = controlFields(ReviewPageFieldCollector.collect(document, null));
+const readIdentityFields = () => controlFields(ReviewPageFieldCollector.collectIdentity(
+  document, manifestIdentityAnchors() ?? BUILTIN_IDENTITY_ANCHORS,
+));
+
+const sameCollectedRecord = (message: ReviewMessage, fields?: Record<string, unknown>) => {
+  if (message.expectedPageUrl !== window.location.href || message.expectedPageInstanceId !== pageInstanceId || !message.expectedPageFingerprint) return false;
+  const currentFields = { ...(fields ?? readIdentityFields()) };
   for (const [field, write] of verifiedFieldWrites) {
     if (currentFields[field] === write.value) currentFields[field] = write.original;
   }
@@ -181,28 +143,15 @@ const sameCollectedRecord = (message: ReviewMessage) => {
 const sameActiveCollection = (message: ReviewMessage) =>
   Boolean(message.expectedCollectionId) && message.expectedCollectionId === activeCollectionId;
 
-const sameReviewIdentity = (message: ReviewMessage) => sameCollectedRecord(message) && sameActiveCollection(message);
+const sameReviewIdentity = (message: ReviewMessage, fields?: Record<string, unknown>) => sameActiveCollection(message) && sameCollectedRecord(message, fields);
 // The target field may have been normalized by a framework after collection;
 // identity remains valid when every anchor except that field is unchanged.
 const sameReviewIdentityExceptFields = (message: ReviewMessage, fields: string[]) => {
-  if (sameReviewIdentity(message)) return true;
   if (message.expectedPageUrl !== window.location.href || message.expectedPageInstanceId !== pageInstanceId || message.expectedCollectionId !== activeCollectionId) return false;
-  const current = controlFields(ReviewPageFieldCollector.collect(document, null));
-  const expected: Array<[string, unknown]> = JSON.parse(message.expectedPageFingerprint || "[]");
-  const expectedMap = new Map<string, unknown>(expected);
-  const actual: Array<[string, unknown]> = JSON.parse(pageFingerprint(current) || "[]");
-  const actualMap = new Map<string, unknown>(actual);
-  let stableAnchor = false;
-  for (const [anchor, value] of expectedMap) {
-    if (fields.includes(anchor)) continue;
-    // Some framework controls are temporarily absent while a form item
-    // rerenders. Only reject a write when a comparable anchor is present and
-    // has actually changed; the target field itself is allowed to differ.
-    if (!actualMap.has(anchor)) continue;
-    if (String(actualMap.get(anchor) ?? "") !== String(value ?? "")) return false;
-    stableAnchor = true;
-  }
-  return stableAnchor || expectedMap.size === 1;
+  const current = readIdentityFields();
+  if (sameReviewIdentity(message, current)) return true;
+  return sameRecordExceptFields(message.expectedPageFingerprint || "", pageFingerprint(current), fields,
+    manifestRecordIdentityFields() ?? undefined);
 };
 
 const sameReviewIdentityExceptField = (message: ReviewMessage, field: string) => sameReviewIdentityExceptFields(message, [field]);
@@ -241,27 +190,21 @@ const isCollectionMessage = (message: ReviewMessage) =>
   || message?.type === MESSAGE_TYPES.collectPageManifest;
 
 chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendResponse) => {
-  if (message.type === MESSAGE_TYPES.readReviewImage) {
-    const entry = message.imageId ? reviewImageCandidates.get(message.imageId) : null;
-    if (!entry || entry.collectionId !== activeCollectionId || message.expectedCollectionId !== activeCollectionId) {
-      sendResponse({ ok: false, error: "图片采集批次已失效，请重新审核" });
-      return true;
-    }
-    if (!entry.candidate.image.isConnected) {
-      sendResponse({ ok: false, error: "原图已离开页面，请重新审核" });
-      return true;
-    }
-    readImageAsset(entry.candidate)
-      .then((image) => sendResponse({ ok: true, image }))
-      .catch((error) => sendResponse({ ok: false, error: error instanceof Error ? error.message : "图片读取失败" }));
-    return true;
-  }
   if (message.type === MESSAGE_TYPES.verifyInvoice) {
     if (!sameReviewIdentity(message)) {
       sendResponse({ ok: false, message: "页面已变化，请重新审核" });
       return true;
     }
-    sendResponse(ReviewPageFieldWriter.triggerInvoiceVerification(document));
+    const field = message.action?.field;
+    const entry = field && reviewFieldElements.get(field);
+    if (!entry?.element || entry.collectionId !== activeCollectionId
+      || typeof message.action?.expectedValue !== "string"
+      || message.action.expectedValue !== entry.collectedValue
+      || (entry.controlSnapshot && ReviewPageFieldWriter.captureValue(entry.element)?.control !== entry.controlSnapshot.control)) {
+      sendResponse({ ok: false, message: "发票号码控件或原值已变化，请重新采集后验真" });
+      return true;
+    }
+    sendResponse(ReviewPageFieldWriter.triggerInvoiceVerification(document, entry.element, entry.controlSnapshot?.value ?? entry.collectedValue));
     return;
   }
   if (message.type === MESSAGE_TYPES.applyPageFieldValue) {
@@ -294,17 +237,18 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
       return true;
     }
     const writeGuard = () => {
-      if (sameReviewIdentity(message)) return true;
+      const currentFields = readIdentityFields();
+      if (sameReviewIdentity(message, currentFields)) return true;
       // A successful write legitimately changes the target field used by the
       // page fingerprint. Validate all other anchors and the expected value,
       // while substituting the value we just wrote for that one field.
-      const currentFields = controlFields(ReviewPageFieldCollector.collect(document, null));
       if (String(currentFields[action.field!] ?? "").trim() !== action.value!.trim()) return false;
-      const expectedFields = { ...currentFields };
+      const expectedFields: Record<string, unknown> = { ...currentFields };
       for (const [field, write] of verifiedFieldWrites) {
         if (expectedFields[field] === write.value) expectedFields[field] = write.original;
       }
-      expectedFields[action.field!] = verifiedFieldWrites.get(action.field!)?.original ?? action.expectedValue;
+      const previousWrite = verifiedFieldWrites.get(action.field!);
+      expectedFields[action.field!] = previousWrite ? previousWrite.original : action.expectedValue;
       return message.expectedPageUrl === window.location.href
         && message.expectedPageInstanceId === pageInstanceId
         && message.expectedCollectionId === activeCollectionId
@@ -315,10 +259,7 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
       controlKinds: writableControlKinds(),
     })
       .then((result) => {
-        if (result.ok) verifiedFieldWrites.set(action.field, {
-          original: verifiedFieldWrites.get(action.field)?.original ?? action.expectedValue,
-          value: result.actions?.[0]?.value ?? action.value,
-        });
+        if (result.ok) rememberVerifiedWrite(writeAction.field, action.expectedValue, result.actions?.[0]?.value ?? writeAction.value);
         if (result.ok || result.code === "FIELD_VALUE_CHANGED") {
           entry.controlSnapshot = ReviewPageFieldWriter.captureValue(entry.element);
           entry.collectedValue = result.ok ? result.actions?.[0]?.value : result.currentValue;
@@ -383,35 +324,18 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
         for (const item of entries) {
           const filled = result.actions?.find((candidate) => candidate.field === item.field);
           if (filled) {
-            verifiedFieldWrites.set(item.field, {
-              original: item.expectedValue,
-              value: filled.value,
-            });
+            rememberVerifiedWrite(item.field, item.expectedValue, filled.value);
             item.entry.controlSnapshot = ReviewPageFieldWriter.captureValue(item.element);
             item.entry.collectedValue = filled.value;
           }
         }
       }
-      console.info("[ReviewAgent][write] group result", { ok: result.ok, message: result.message, code: result.code, actions: result.actions });
+        console.info("[ReviewAgent][write] group result", { ok: result.ok, code: result.code, actionCount: result.actions?.length ?? 0 });
       sendResponse(result);
     }).catch((error) => {
-      console.info("[ReviewAgent][write] group threw", error);
+        console.info("[ReviewAgent][write] group threw", { errorType: error instanceof Error ? error.name : "unknown" });
       sendResponse({ ok: false, message: error instanceof Error ? error.message : "组合字段回填失败", actions: [] });
     });
-    return true;
-  }
-  if (message.type === MESSAGE_TYPES.applyPageFillIntent) {
-    if (!sameReviewIdentity(message)) {
-      sendResponse({ ok: false, message: "页面已变化，请重新审核", actions: [] });
-      return true;
-    }
-    ReviewPageFieldWriter.execute(document, (message.actions || []) as PageFillAction[], () => sameReviewIdentity(message))
-      .then(sendResponse)
-      .catch((error) => sendResponse({
-        ok: false,
-        message: error instanceof Error ? error.message : "挂靠字段填写失败",
-        actions: [],
-      }));
     return true;
   }
   if (message.type === MESSAGE_TYPES.focusReviewImage) {
@@ -459,7 +383,8 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
   // 采集清单按业务类型选择；没有可用清单时清空并退回内置表。
   applyCollectManifest(
     (message.collectManifests as CollectManifest[] | undefined)
-      ?.find((item) => item.business_type === business?.businessType),
+      ?.find((item) => item.business_type === business?.businessType &&
+        (!item.region || item.region === business?.region) && (!item.profile_version || item.profile_version === business?.profileVersion)),
   );
   const fieldCollection = ReviewPageFieldCollector.collect(
     document,
@@ -563,16 +488,14 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
     })),
   });
   const images = selection.selected;
-  const imageAssetsPromise = message.type === MESSAGE_TYPES.collectPageManifest
-    ? Promise.resolve(images.map(imageAssetMetadata))
-    : Promise.all(images.map((candidate) => readImageAsset(candidate)));
-  imageAssetsPromise
+  Promise.resolve(images.map(imageAssetMetadata))
     .then((imageAssets) => {
       if (latestCollectionId !== collectionId) {
         // 被取代的采集也要带回业务识别结果和真实原因，面板不得退化为“无法识别业务”。
         sendResponse({
           ...(business || {}),
           pageUrl: window.location.href,
+          pageId: business?.pageId,
           pageInstanceId,
           pageFingerprint: pageFingerprint(pageFields),
           collectionId,
@@ -588,11 +511,9 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
       }
       // The active map changes only with the response that owns this token.
       reviewImageElements.clear();
-      reviewImageCandidates.clear();
       images.forEach((candidate, index) => {
         const imageAsset = imageAssets[index];
         if (imageAsset?.src) reviewImageElements.set(candidate.imageId, { image: candidate.image, src: imageAsset.src });
-        if (candidate.imageId) reviewImageCandidates.set(candidate.imageId, { collectionId, candidate });
       });
       reviewFieldElements.clear();
       verifiedFieldWrites.clear();
@@ -629,6 +550,7 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
       sendResponse({
       ...(business || {}),
       pageUrl: window.location.href,
+      pageId: business?.pageId,
       pageInstanceId,
       pageFingerprint: pageFingerprint(pageFields),
       collectionId,

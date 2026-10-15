@@ -43,6 +43,13 @@ class FakeQwenClient:
         return self.extraction
 
 
+def extracted_values(service, images):
+    """业务提取测试统一走生产使用的异步接口，值投影仅服务于断言。"""
+    batch = asyncio.run(service.extract_async(images))
+    recognized = {item.field: (str(item.value), item.image_index) for item in batch.observations if item.value}
+    return recognized, batch.limitations, batch.confidences
+
+
 def image(
     index: int = 0,
     category_hint: str = "unknown",
@@ -51,8 +58,7 @@ def image(
 ) -> ImageInput:
     values = {
         "index": index,
-        "src": "data:image/jpeg;base64,AA==",
-        "data_url": "data:image/jpeg;base64,AA==",
+        "src": "https://images.example.test/synthetic.jpg",
         "category_hint": category_hint,
     }
     if business_scope is not None:
@@ -71,7 +77,7 @@ def test_identity_card_is_extracted_without_sensitive_number() -> None:
         )
     )
 
-    recognized, limitations, confidences = AgentService(fake).extract(
+    recognized, limitations, confidences = extracted_values(AgentService(fake),
         [image(category_hint="id_card")]
     )
 
@@ -89,12 +95,11 @@ def test_unavailable_identity_card_is_reported_as_unreadable() -> None:
     fake = FakeQwenClient()
     identity_card = ImageInput(
         index=0,
-        src="https://example.test/id-card.jpg",
-        data_url=None,
+        src="blob:https://example.test/id-card",
         category_hint="id_card",
     )
 
-    _, limitations, _ = AgentService(fake).extract([identity_card])
+    _, limitations, _ = extracted_values(AgentService(fake), [identity_card])
 
     assert limitations == ["图片 0 内容不可用"]
 
@@ -108,7 +113,7 @@ def test_known_invoice_uses_one_extraction_call() -> None:
         )
     )
 
-    recognized, limitations, confidences = AgentService(fake).extract(
+    recognized, limitations, confidences = extracted_values(AgentService(fake),
         [image(category_hint="invoice")]
     )
 
@@ -159,7 +164,7 @@ def test_unknown_image_is_classified_then_extracted() -> None:
         ),
     )
 
-    recognized, limitations, _ = AgentService(fake).extract(
+    recognized, limitations, _ = extracted_values(AgentService(fake),
         [image(business_scope="new_vehicle")]
     )
 
@@ -177,7 +182,7 @@ def test_unreliable_classification_does_not_extract_fields() -> None:
 
     for classification in classifications:
         fake = FakeQwenClient(classification=classification)
-        recognized, limitations, _ = AgentService(fake).extract([image()])
+        recognized, limitations, _ = extracted_values(AgentService(fake), [image()])
 
         assert recognized == {}
         assert limitations
@@ -192,7 +197,7 @@ def test_mismatched_extraction_type_discards_fields() -> None:
         )
     )
 
-    recognized, limitations, _ = AgentService(fake).extract(
+    recognized, limitations, _ = extracted_values(AgentService(fake),
         [image(category_hint="invoice")]
     )
 
@@ -208,7 +213,7 @@ def test_non_allowlisted_fields_are_discarded() -> None:
         )
     )
 
-    recognized, _, _ = AgentService(fake).extract([image(category_hint="invoice")])
+    recognized, _, _ = extracted_values(AgentService(fake), [image(category_hint="invoice")])
 
     assert recognized == {"invoice.invoice_no": ("123", 0), "invoice.code": ("123", 0)}
 
@@ -222,7 +227,7 @@ def test_classified_unknown_image_keeps_resolved_policy_allowlist() -> None:
         ),
     )
 
-    recognized, _, _ = AgentService(fake).extract(
+    recognized, _, _ = extracted_values(AgentService(fake),
         [image(category_hint="unknown", business_scope="new_vehicle")]
     )
 
@@ -238,7 +243,7 @@ def test_one_image_failure_does_not_stop_the_next_image() -> None:
         fail_indices={0},
     )
 
-    recognized, limitations, _ = AgentService(fake).extract(
+    recognized, limitations, _ = extracted_values(AgentService(fake),
         [image(0, "invoice"), image(1, "invoice")]
     )
 
@@ -260,7 +265,7 @@ def test_image_completion_log_names_the_uncertain_fields(caplog: object) -> None
 
     # 单图完成事件走 uvicorn 的 logger（服务日志直接打到 Uvicorn 控制台）。
     with caplog.at_level(logging.INFO, logger="uvicorn.error"):
-        AgentService(fake).extract([image(category_hint="invoice")])
+        extracted_values(AgentService(fake), [image(category_hint="invoice")])
 
     assert "image=0" in caplog.text
     assert "uncertain_field_count=2" in caplog.text
@@ -283,7 +288,7 @@ def test_image_completion_log_marks_an_uncertainty_free_image(caplog: object) ->
 
     # 单图完成事件走 uvicorn 的 logger（服务日志直接打到 Uvicorn 控制台）。
     with caplog.at_level(logging.INFO, logger="uvicorn.error"):
-        AgentService(fake).extract([image(category_hint="invoice")])
+        extracted_values(AgentService(fake), [image(category_hint="invoice")])
 
     assert "uncertain_field_count=0 uncertain_fields=-" in caplog.text
 
@@ -296,7 +301,7 @@ def test_qwen_failure_is_sanitized_and_logged(caplog: object) -> None:
             raise RuntimeError("HTTP 400 raw model response VIN=SHOULD-NOT-LEAK")
 
     with caplog.at_level(logging.WARNING, logger="app.workflow.service"):
-        _, limitations, _ = AgentService(SensitiveFailureClient()).extract(
+        _, limitations, _ = extracted_values(AgentService(SensitiveFailureClient()),
             [image(category_hint="invoice")]
         )
 
@@ -423,8 +428,7 @@ async def test_identical_vehicle_documents_are_routed_by_page_business_scope() -
 
     old_image = ImageInput(
         index=3,
-        src="image",
-        data_url="data:image/jpeg;base64,AA==",
+        src="https://images.example.test/synthetic.jpg",
         image_id="old_vehicle-01",
         business_scope="old_vehicle",
         group_title="报废车辆资料",
@@ -432,8 +436,7 @@ async def test_identical_vehicle_documents_are_routed_by_page_business_scope() -
     )
     new_image = ImageInput(
         index=6,
-        src="image",
-        data_url="data:image/jpeg;base64,AA==",
+        src="https://images.example.test/synthetic.jpg",
         image_id="new_vehicle-01",
         business_scope="new_vehicle",
         group_title="新车资料",
@@ -554,7 +557,6 @@ def _transfer_invoice_image() -> ImageInput:
         index=0,
         image_id="invoice-0",
         src="https://example.test/0.jpg",
-        data_url="data:image/jpeg;base64,AA==",
         business_scope="transfer",
         category_hint="invoice",
     )

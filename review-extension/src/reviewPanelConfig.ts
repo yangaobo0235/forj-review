@@ -19,7 +19,8 @@ export type BusinessChoice =
   | "scrap_replacement_changchun"
   | "consistency"
   | "transfer"
-  | "vehicle_source";
+  | "vehicle_source"
+  | `config:${string}`;
 
 export const businessLabels: Record<BusinessChoice, string> = {
   AUTO: "自动识别",
@@ -75,6 +76,35 @@ const fieldLabels: Record<string, string> = {
 export function manualBusinessSelection(
   choice: Exclude<BusinessChoice, "AUTO">,
 ): BusinessSelection {
+  if (choice.startsWith("config:")) {
+    const encoded = choice.slice("config:".length);
+    // New catalog entries carry the stable page identity as one encoded payload.
+    // Keep accepting the old four-part key so previously opened panels continue to work.
+    try {
+      const parsed = JSON.parse(decodeURIComponent(encoded)) as { businessType?: string; region?: string; profileVersion?: string; pageId?: string };
+      if (parsed.businessType && parsed.region) {
+        return {
+          businessType: parsed.businessType as BusinessType,
+          region: parsed.region as BusinessSelection["region"],
+          profileVersion: parsed.profileVersion || "1.0",
+          workflowStage: parsed.businessType as BusinessType,
+          selectionMode: "MANUAL",
+          ...(parsed.pageId ? { pageId: parsed.pageId } : {}),
+        };
+      }
+    } catch {
+      // Legacy key format below.
+    }
+    const [, businessType, region, profileVersion, pageId] = choice.split(":");
+    return {
+      businessType: businessType as BusinessType,
+      region: region as BusinessSelection["region"],
+      profileVersion,
+      workflowStage: businessType as BusinessType,
+      selectionMode: "MANUAL",
+      ...(pageId ? { pageId } : {}),
+    };
+  }
   const region = choice.endsWith("_qingdao")
     ? "qingdao"
     : choice.endsWith("_changchun")

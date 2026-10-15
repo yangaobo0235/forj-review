@@ -66,10 +66,12 @@ def batch_observations(batch: AgentBatchResult) -> list[FieldObservation]:
                 item.business_scope or document.business_scope,
                 document.document_type,
                 dict.fromkeys(document.uncertain_fields, True),
+                group_order=item.group_order,
             )
             uncertain = (
                 uncertain
                 or item.field in document.uncertain_fields
+                or item.source_field in document.uncertain_fields
                 or item.field in routed
             )
         result.append(item.model_copy(update={"uncertain": uncertain, "retried": retried}))

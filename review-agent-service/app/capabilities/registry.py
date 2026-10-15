@@ -13,6 +13,7 @@ from app.capabilities.specs import (
     CapabilityResult,
     CapabilitySpec,
     ReviewExecutionContext,
+    order_capabilities,
 )
 from app.workflow.models import CheckResult
 
@@ -46,9 +47,7 @@ class CapabilityRegistry:
         return tuple(self.specs[key] for key in sorted(self.specs))
 
     def validate(self, specs: Sequence[CapabilitySpec]) -> None:
-        ids = [item.capability_id for item in specs]
-        if len(ids) != len(set(ids)):
-            raise ValueError("Profile 能力标识重复")
+        ids = [item.capability_id for item in order_capabilities(specs)]
         missing = set(ids) - self.handlers.keys()
         if missing:
             raise ValueError(f"未注册能力：{', '.join(sorted(missing))}")

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, Protocol
 
@@ -70,6 +71,42 @@ class CapabilityBinding:
         return dict(self.parameters)
 
 
+
+
+STAGE_ORDER = {stage: index for index, stage in enumerate((
+    "INPUT_COVERAGE", "EVIDENCE", "PRE_COMPARE", "POST_COMPARE", "FINAL_REVIEW",
+))}
+
+
+def order_capabilities(specs: Sequence[CapabilitySpec]) -> tuple[CapabilitySpec, ...]:
+    """Validate fact producers and order by stage and dependency, not author order."""
+    by_id = {spec.capability_id: spec for spec in specs}
+    if len(by_id) != len(specs):
+        raise ValueError("Profile 能力标识重复")
+    producers: dict[str, str] = {}
+    for spec in specs:
+        for fact in spec.output_facts:
+            if fact in producers:
+                raise ValueError(f"事实「{fact}」的生产者重复：{producers[fact]}、{spec.capability_id}")
+            producers[fact] = spec.capability_id
+    pending = {}
+    for spec in specs:
+        predecessors = {producers[fact] for fact in spec.input_facts if fact in producers}
+        for producer_id in predecessors:
+            if STAGE_ORDER[by_id[producer_id].stage] > STAGE_ORDER[spec.stage]:
+                raise ValueError(f"能力「{spec.capability_id}」依赖较晚阶段的「{producer_id}」")
+        pending[spec.capability_id] = predecessors
+    ordered = []
+    while pending:
+        ready = [key for key, predecessors in pending.items() if not predecessors]
+        if not ready:
+            raise ValueError(f"能力事实依赖存在循环：{', '.join(sorted(pending))}")
+        key = min(ready, key=lambda key: (STAGE_ORDER[by_id[key].stage], key))
+        ordered.append(by_id[key])
+        del pending[key]
+        for predecessors in pending.values():
+            predecessors.discard(key)
+    return tuple(ordered)
 
 
 class CapabilityHandler(Protocol):

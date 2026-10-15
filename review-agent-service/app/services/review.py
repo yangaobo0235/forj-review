@@ -11,17 +11,15 @@ from collections.abc import Callable, Mapping
 from typing import Any
 from uuid import uuid4
 
+from app.businesses.context import with_business_context
 from app.businesses.context_validation import validate_request_route
-from app.businesses.packs import pack_for_business
-from app.businesses.packs.scrap_replacement import OLD_SECTION
 from app.businesses.profiles import BusinessProfile
 from app.businesses.registry import BusinessRegistry, build_business_registry
-from app.businesses.routing import scope_hint_types
+from app.businesses.rules.scrap_certificate_qr import qr_candidates
 from app.capabilities.page_actions import PageActionHandler
 from app.capabilities.specs import BusinessRuleHandler, ExternalCheckHandler
 from app.compare.evidence_values import batch_observations
 from app.models.review import (
-    BusinessType,
     FieldObservation,
     FieldStatus,
     ImageInput,
@@ -29,7 +27,8 @@ from app.models.review import (
     ReviewRequest,
     ReviewResponse,
 )
-from app.services.qr import QrCodeService, QrWebVerifier
+from app.services.qr import QrWebVerifier
+from app.services.qr_decode import QrImageDecoder
 from app.services.review_response import (
     build_review_response,
     build_unconfigured_response,
@@ -48,14 +47,14 @@ class ReviewService:
 
     def __init__(
         self,
-        qr: object | None = None,
         registry: BusinessRegistry | None = None,
         external_check_handlers: Mapping[str, ExternalCheckHandler] | None = None,
         business_rule_handlers: Mapping[str, BusinessRuleHandler] | None = None,
         page_action_handlers: Mapping[str, PageActionHandler] | None = None,
+        qr_decoder: QrImageDecoder | None = None,
     ) -> None:
-        self.qr = qr or QrCodeService()
         self.qr_web = QrWebVerifier(allowed_hosts=["qclt.mofcom.gov.cn"])
+        self.qr_decoder = qr_decoder or QrImageDecoder()
         self.registry = registry or build_business_registry()
         config = load_qwen_config()
         self.agent = AgentService(QwenClient(config)) if config.available else None
@@ -79,13 +78,14 @@ class ReviewService:
         response, _ = await self.assist_with_batch_async(request, on_progress=on_progress)
         return response
 
+    @with_business_context
     async def assist_with_batch_async(
         self,
         request: ReviewRequest,
         on_progress: ReviewProgressCallback | None = None,
         initial_batch: AgentBatchResult | None = None,
     ) -> tuple[ReviewResponse, AgentBatchResult]:
-        """执行审核并允许复用流式阶段已经完成的图片提取结果。"""
+        """执行审核并复用 URL 任务已完成的图片提取结果。"""
 
         if not request.trace_id:
             request = request.model_copy(update={"trace_id": uuid4().hex})
@@ -124,6 +124,7 @@ class ReviewService:
                 await callback_result
         return response, batch
 
+    @with_business_context
     async def _extract_documents(
         self,
         request: ReviewRequest,
@@ -154,7 +155,7 @@ class ReviewService:
         unavailable_image_ids = [
             str(image.image_id or image.index)
             for image in request.images
-            if image.collection_error or not image.data_url
+            if image.collection_error or not image.recognition_source
         ]
         return AgentBatchResult(
             total_count=len(request.images),
@@ -169,8 +170,10 @@ class ReviewService:
             request.business_type,
             request.region,
             request.profile_version,
+            page_id=request.page_id,
         )
 
+    @with_business_context
     def _build_response(
         self,
         request: ReviewRequest,
@@ -186,7 +189,8 @@ class ReviewService:
         observations = batch_observations(batch)
         issues: list[str] = []
 
-        for field_name in resolved_profile.required_fields:
+        for field_name in (tuple(f.key for f in resolved_profile.pack_declaration.fields)
+                           if resolved_profile.pack_declaration else resolved_profile.required_fields):
             page_value = request.page_fields.get(field_name)
             if page_value not in (None, ""):
                 observations.append(
@@ -226,12 +230,13 @@ class ReviewService:
         # response.page_actions；本函数不再注入任何字段级动作。
         return response
 
+    @with_business_context
     async def extract_image_async(
         self,
         request: ReviewRequest,
         image: ImageInput,
     ) -> AgentBatchResult:
-        """识别流式任务中的一张图片，最终规则汇总阶段不会再次识别。"""
+        """识别 URL 清单中的一张图片，最终规则汇总阶段复用此结果。"""
 
         profile = self.resolve_profile(request)
         image_request = request.model_copy(update={"images": [image]})
@@ -252,87 +257,60 @@ class ReviewService:
     ) -> list[QrCheck]:
         resolved_profile = profile or self.resolve_profile(request)
         checks: list[QrCheck] = []
-        # 旧车材料集合从业务声明推导，不在扫描条件和「保留正文」条件里各手抄
-        # 一份（以前同一个表达式里还逐字写了两遍）。**固定取报废置换的声明**：
-        # 二维码核验只存在于这个业务，旧实现也是所有业务共用这一份名单。
-        scrap_pack = pack_for_business(BusinessType.SCRAP_REPLACEMENT)
-        old_document_hints = (
-            scope_hint_types(scrap_pack, OLD_SECTION) if scrap_pack else frozenset()
-        )
-        scrap_indices = {
-            item.image_index
-            for item in batch.observations
-            if getattr(item, "document_type", None) == "scrap_certificate"
-        }
-        scrap_indices.update(
-            document.image_index
-            for document in batch.recognized_documents
-            if document.document_type == "scrap_certificate"
-        )
-        scrap_ids = {
-            document.target_id
-            for document in batch.recognized_documents
-            if document.document_type == "scrap_certificate"
-        }
-        scanned_scrap_indices: list[int] = []
-        decoded_any = False
-        first_undecoded_index: int | None = None
-        for image in request.images:
-            is_scrap = (
-                image.category_hint == "scrap_certificate"
-                or image.document_type_hint == "scrap_certificate"
-                or image.index in scrap_indices
-                or str(image.image_id or image.index) in scrap_ids
-            )
-            # 分类模型偶尔把回收证明识别为旧车资料。报废置换的二维码只允许
-            # 从旧车区域读取，因此在没有可靠回收证明分类时回退扫描旧车图片，
-            # 避免“有二维码但未进入核验流程”。
-            # 回收证明上的二维码经常在上传时被标成 vehicle_license/unknown，
-            # 或者同一批材料只有部分图片被模型分类为 scrap_certificate。
-            # 报废置换中所有旧车区域图片都属于受控材料范围，统一尝试解码，
-            # 后续仍由官方域名白名单和网页字段完整性决定是否通过。
-            # 页面采集器在部分旧页面无法从 DOM 标签推导业务分组，会把
-            # business_scope 留为 unknown；已知的旧车材料类型仍然是安全的
-            # 二维码扫描候选。官网域名白名单会在后续步骤再次兜底。
-            fallback_old_vehicle = image.business_scope == OLD_SECTION or (
-                image.business_scope in {"unknown", ""}
-                and (
-                    image.category_hint in old_document_hints
-                    or image.document_type_hint in old_document_hints
-                )
-            )
-            if image.collection_error or not (is_scrap or fallback_old_vehicle):
+        preferred, fallback = qr_candidates(request, batch, resolved_profile)
+        # 普通材料识别仍然只把原图 URL 交给模型；二维码官网核验是唯一允许
+        # 额外读取图片的专用例外，且只对候选材料、只读内存一次。
+        documents = {document.image_index: document for document in batch.recognized_documents}
+        missing: list[QrCheck] = []
+        for position, image in enumerate([*preferred, *fallback]):
+            if position >= len(preferred) and any(check.domain_valid for check in checks):
+                break
+            document = documents.get(image.index)
+            codes = list(document.qr_codes) if document and not image.collection_error else []
+            decoder = "model" if codes else None
+            decode_result = None
+            # 模型没有产出文档或文档没有 qr_codes，都进入二维码专用兜底。
+            # 这样模型整张图超时/解析失败时，官网核验仍有机会由本地解码完成；
+            # 材料识别状态会在诊断中保留，不会被伪装成成功。
+            if not codes and not image.collection_error:
+                decode_result = await self.qr_decoder.decode(image.recognition_source)
+                codes = list(decode_result.values)
+                decoder = decode_result.decoder if codes else None
+            if not codes:
+                if decode_result is not None:
+                    if decode_result.error_code == "decode_empty":
+                        detail = "ZXing 未读到二维码；OpenCV 也未读到二维码"
+                    elif decode_result.error_code in {"download_timeout", "download_error", "http_status"}:
+                        detail = f"二维码图片读取失败（{decode_result.error_code}）"
+                    else:
+                        detail = f"二维码读取失败（{decode_result.error_code or 'unknown'}）"
+                    prefix = "模型未提取到可靠的二维码" if document else "材料识别未完成"
+                    message = f"{prefix}；{detail}，请查看原图人工核验"
+                else:
+                    message = (
+                        "材料识别未完成，尚未取得二维码内容，请重试该材料或人工核验"
+                        if not document or image.collection_error
+                        else "模型未提取到可靠的二维码内容，请查看原图人工核验"
+                    )
+                missing.append(QrCheck(
+                    image_index=image.index,
+                    status=FieldStatus.REVIEW_REQUIRED,
+                    message=message,
+                    decoder=decode_result.decoder if decode_result is not None else "none",
+                    decode_error=decode_result.error_code if decode_result is not None else None,
+                    decode_elapsed_ms=decode_result.elapsed_ms if decode_result is not None else None,
+                ))
                 continue
-            scanned_scrap_indices.append(image.index)
-            # data_url 是扩展端规范化后的首选来源；兼容直接提交 data URL
-            # 到 src 的旧客户端，避免只因字段名不同而显示“未识别二维码”。
-            image_data = image.data_url or (
-                image.src if str(image.src).startswith("data:") else ""
-            )
-            if hasattr(self.qr, "decode_data_url_with_rounds"):
-                decoded, attempts = self.qr.decode_data_url_with_rounds(
-                    image_data,
-                    image.index,
-                    max_rounds=resolved_profile.retry_policy.qr_decode_max_rounds,
-                )
-                batch.retry_summary.attempts.extend(attempts)
-            else:
-                decoded = self.qr.decode_data_url(image_data, image.index)
-            if not decoded:
-                if first_undecoded_index is None:
-                    first_undecoded_index = image.index
-                continue
-            decoded_any = True
-            for item in decoded:
+            for code in dict.fromkeys(codes):
                 if hasattr(self.qr_web, "verify_with_retry"):
                     verified, attempts = await self.qr_web.verify_with_retry(
-                        item.raw_value,
+                        code,
                         image.index,
                         retry_count=resolved_profile.retry_policy.qr_web_retry_count,
                     )
                     batch.retry_summary.attempts.extend(attempts)
                 else:
-                    verified = await self.qr_web.verify(item.raw_value, image.index)
+                    verified = await self.qr_web.verify(code, image.index)
                 status = (
                     FieldStatus.MATCH
                     if verified.status == "MATCH"
@@ -341,7 +319,7 @@ class ReviewService:
                 checks.append(
                     QrCheck(
                         image_index=image.index,
-                        raw_value=item.raw_value,
+                        raw_value=code,
                         url=verified.url,
                         domain_valid=verified.domain_valid,
                         accessible=verified.accessible,
@@ -352,17 +330,10 @@ class ReviewService:
                             if verified.page_fields
                             else "二维码网页无法完成核验"
                         ),
+                        decoder=decoder,
+                        decode_error=decode_result.error_code if decode_result is not None else None,
+                        decode_elapsed_ms=decode_result.elapsed_ms if decode_result is not None else None,
                     )
                 )
-        # 旧车区域通常包含行驶证、登记证和回收证明三张图。没有二维码时
-        # 只生成一条整体结果，避免同一根因在助手中重复三次；一旦任意一张
-        # 图片解码成功，则只保留官网核验结果，不再混入其它图片的“未识别”提示。
-        if scanned_scrap_indices and not decoded_any and not checks:
-            checks.append(
-                QrCheck(
-                    image_index=(first_undecoded_index if first_undecoded_index is not None else scanned_scrap_indices[0]),
-                    status=FieldStatus.REVIEW_REQUIRED,
-                    message="未识别到二维码",
-                )
-            )
-        return checks
+        # 找到二维码后不展示其他候选图的解码空结果；整体失败只保留一项复核。
+        return checks or missing[:1]

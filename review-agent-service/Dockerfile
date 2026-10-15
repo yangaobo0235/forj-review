@@ -23,10 +23,6 @@ ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# 图像处理用 opencv-python-headless，不需要 libgl/libglib；二维码解码和裁剪放大
-# 只用到 imdecode/imencode/resize/rotate/cvtColor/bilateralFilter，均为 headless
-# 可用能力。
-#
 # tzdata 保留：compose 里的 TZ=Asia/Shanghai 只是环境变量，C 库 localtime 需要
 # /usr/share/zoneinfo 下的时区数据文件才能生效；缺了它日志时间戳仍回落 UTC，
 # 按天轮转的切点也会偏 8 小时。

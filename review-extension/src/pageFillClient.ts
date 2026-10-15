@@ -1,19 +1,8 @@
-import type { PageFillAction, PageWriteAction, PageWriteGroupAction } from "./types/review";
+import type { PageWriteAction, PageWriteGroupAction } from "./types/review";
 
-export interface PageFillResult {
-  ok: boolean;
-  skipped?: boolean;
-  message: string;
-  code?: string;
-  currentValue?: string;
-  actions?: Array<{ field: string; label: string; value: string; status: string }>;
-}
-
-/** Field errors remain recoverable; only a lost page identity blocks the session. */
-export function isBlockingPageFillFailure(result: Pick<PageFillResult, "message" | "code">): boolean {
-  if (result.code) return result.code === "PAGE_IDENTITY_CHANGED";
-  return /页面已变化|原审核页面标识不完整|context invalidated|Receiving end/i.test(result.message);
-}
+import type { PageFillResult } from "./pageFillResult.ts";
+export type { PageFillResult } from "./pageFillResult.ts";
+export { isBlockingPageFillFailure } from "./pageFillResult.ts";
 
 interface ChromeTabsLike {
   tabs: {
@@ -27,22 +16,6 @@ export interface PageFillTarget {
   pageInstanceId: string;
   pageFingerprint: string;
   collectionId: string;
-}
-
-export async function applyPageFillIntent(
-  actions: PageFillAction[],
-  target: PageFillTarget,
-  chromeApi: ChromeTabsLike = globalThis.chrome,
-): Promise<PageFillResult> {
-  if (!actions.length) return { ok: true, skipped: true, message: "本次审核没有页面填写动作" };
-  if (!Number.isInteger(target.tabId) || !target.pageUrl || !target.pageInstanceId || !target.pageFingerprint || !target.collectionId || !chromeApi.tabs.sendMessage) {
-    return { ok: false, message: "原审核页面标识不完整，请重新审核" };
-  }
-  return chromeApi.tabs.sendMessage(target.tabId, {
-    type: "APPLY_PAGE_FILL_INTENT", actions,
-    expectedPageUrl: target.pageUrl, expectedPageInstanceId: target.pageInstanceId, expectedPageFingerprint: target.pageFingerprint,
-    expectedCollectionId: target.collectionId,
-  });
 }
 
 export async function applyPageFieldValue(
@@ -86,7 +59,7 @@ export async function applyPageFieldGroupValue(
 }
 
 export async function verifyInvoice(
-  target: PageFillTarget,
+  target: PageFillTarget & { field: string; expectedValue: string },
   chromeApi: ChromeTabsLike = globalThis.chrome,
 ): Promise<PageFillResult> {
   if (!Number.isInteger(target.tabId) || !target.pageUrl || !target.pageInstanceId || !target.pageFingerprint || !target.collectionId || !chromeApi.tabs.sendMessage) {
@@ -94,6 +67,7 @@ export async function verifyInvoice(
   }
   return chromeApi.tabs.sendMessage(target.tabId, {
     type: "VERIFY_INVOICE",
+    action: { field: target.field, expectedValue: target.expectedValue },
     expectedPageUrl: target.pageUrl,
     expectedPageInstanceId: target.pageInstanceId,
     expectedPageFingerprint: target.pageFingerprint,

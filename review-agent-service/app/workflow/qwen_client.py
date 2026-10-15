@@ -11,6 +11,7 @@ import logging
 import re
 from time import perf_counter
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 from pydantic import ValidationError
@@ -278,13 +279,19 @@ class QwenClient:
         """调用兼容 OpenAI 协议的 Qwen 接口并返回文本内容。"""
         if not self.config.available:
             raise RuntimeError("DASHSCOPE_API_KEY 未配置")
-        data_url = image.get("data_url") or image.get("src")
+        image_url = image.get("src")
+        try:
+            parsed = urlparse(image_url) if isinstance(image_url, str) else None
+        except ValueError:
+            parsed = None
+        if parsed is None or parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise RuntimeError("模型图片输入必须为 HTTP(S) 地址")
         payload = {
             "model": self.config.model,
             "enable_thinking": False,
             "messages": [{"role": "user", "content": [
-                {"type": "text", "text": prompt},
-                {"type": "image_url", "image_url": {"url": data_url}},
+                {"type": "text", "text": prompt + (f"\n当前页面上传槽位：组内第{image['group_order']}张。只提取适用于当前槽位的字段。" if image.get("group_order") is not None else "")},
+                {"type": "image_url", "image_url": {"url": image_url}},
             ]}],
             "temperature": 0,
             "response_format": {"type": "json_object"},

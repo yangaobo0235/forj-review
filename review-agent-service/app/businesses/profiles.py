@@ -56,6 +56,8 @@ class BusinessProfile:
     invoice_verification_field: str | None = None
     # 审核字段就是声明的字段；页面上其他控件不进审核目录。
     review_declared_fields_only: bool = False
+    pack_declaration: object | None = None
+    page_id: str = ""
 
     @property
     def capabilities(self) -> tuple[CapabilitySpec, ...]:
@@ -129,21 +131,18 @@ class BusinessProfile:
         generated = self.capability_bindings
         if not self.binding_declarations:
             return generated
-        generated_map = {item.capability_id: item for item in generated}
         declared_map = {item.capability_id: item for item in self.binding_declarations}
-        # A dataclasses.replace() call that changes legacy fields must remain
-        # effective during migration (for example REQUIRED → WHEN_PRESENT).
-        # In that case fall back to the regenerated view instead of retaining
-        # stale declarations.
-        if set(generated_map) != set(declared_map):
-            return generated
-        if any(
-            declared.required is not None
-            and generated_map[key].required != declared.required
-            for key, declared in declared_map.items()
-        ):
-            return generated
-        return self.binding_declarations
+        if len(declared_map) != len(self.binding_declarations):
+            raise ValueError("Profile 能力绑定标识重复")
+        # Legacy selectors determine requiredness only at this boundary.
+        # Explicit enabled/parameters survive partial declarations.
+        bindings = []
+        for item in generated:
+            declared = declared_map.pop(item.capability_id, item)
+            if self.external_checks or self.rule_groups:
+                declared = replace(declared, required=item.required)
+            bindings.append(declared)
+        return (*bindings, *declared_map.values())
 
     @property
     def enabled_page_actions(self) -> tuple[str, ...]:
@@ -169,7 +168,7 @@ class BusinessProfile:
 
 
 
-def _build_profile(pack, region: Region) -> BusinessProfile:
+def _build_profile(pack, region: Region, *, page_id: str | None = None) -> BusinessProfile:
     """从业务声明生成某个地区的 Profile。
 
     字段、材料、能力和页面动作在地区之间共用，只有地区政策不同。地区政策为
@@ -180,6 +179,8 @@ def _build_profile(pack, region: Region) -> BusinessProfile:
         raise ValueError(f"{pack.business_type} 声明中缺少地区：{region.value}")
     titles = {section.key: section.title for section in pack.sections}
     return BusinessProfile(
+        page_id=page_id or f"{pack.business_type}:{region.value}",
+        pack_declaration=pack,
         business_type=BusinessType(pack.business_type),
         region=declaration.region,
         version=declaration.version,

@@ -59,7 +59,7 @@ test("official qr evidence exposes a distinct label", () => {
 });
 
 test("image value and focus action keep their columns without a thumbnail", () => {
-  const css = readFileSync(new URL("../src/App.css", import.meta.url), "utf8");
+  const css = (readFileSync(new URL("../src/App.css", import.meta.url), "utf8") + readFileSync(new URL("../src/components/EvidenceReviewWorkbench.css", import.meta.url), "utf8"));
 
   assert.match(css, /\.image-evidence\s+\.evidence-value\s*{[^}]*grid-column:\s*2/s);
   assert.match(css, /\.image-evidence\s+\.evidence-focus\s*{[^}]*grid-column:\s*3/s);
@@ -174,7 +174,7 @@ test("vin and plate evidence use position-based differences", () => {
 });
 
 test("page and image values use a readable value column", () => {
-  const css = readFileSync(new URL("../src/App.css", import.meta.url), "utf8");
+  const css = (readFileSync(new URL("../src/App.css", import.meta.url), "utf8") + readFileSync(new URL("../src/components/EvidenceReviewWorkbench.css", import.meta.url), "utf8"));
 
   assert.match(
     css,
@@ -191,7 +191,7 @@ test("conflicting evidence keeps the full value readable and soft-highlights dif
     new URL("../src/components/ReviewResults.tsx", import.meta.url),
     "utf8",
   );
-  const css = readFileSync(new URL("../src/App.css", import.meta.url), "utf8");
+  const css = (readFileSync(new URL("../src/App.css", import.meta.url), "utf8") + readFileSync(new URL("../src/components/EvidenceReviewWorkbench.css", import.meta.url), "utf8"));
 
   assert.match(
     source,

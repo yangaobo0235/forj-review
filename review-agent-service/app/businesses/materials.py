@@ -125,7 +125,8 @@ class DocumentPolicy:
             "页码数组和转移登记记录等明确要求的结构化字段按对应指引输出。"
             "只输出 JSON 对象，不使用 Markdown，不给出审核结论。"
             f'document_type 必须为 "{self.document_type}"。'
-            "JSON 必须包含 document_type、fields、confidence、evidence_regions、uncertain_fields。"
+            "JSON 必须包含 document_type、fields、confidence、evidence_regions、uncertain_fields、qr_codes。"
+            "qr_codes 仅填写当前图片中可靠读取的二维码原始内容，无法可靠读取则为 []；禁止拼接、推测或补全网址。"
             f"{COLLECTION_TYPE_INSTRUCTION}"
             f'evidence_regions 的每一项使用 field、image_index={image_index} 和 "box"，'
             "box 格式为 [x1, y1, x2, y2]。"
@@ -216,7 +217,10 @@ def _merge_document_policies() -> dict[str, DocumentPolicy]:
     return policies
 
 
-DOCUMENT_POLICIES: dict[str, DocumentPolicy] = _merge_document_policies()
+from app.businesses.context import ContextMapping
+
+DOCUMENT_POLICIES = ContextMapping(_merge_document_policies(),
+    lambda pack: {d.document_type: _merge_material(d, None) for d in pack.materials})
 
 # 分类提示词的候选资料类型；新增材料类型只需在扩展包里声明。
 DOCUMENT_TYPE_CHOICES = "、".join(
@@ -224,10 +228,14 @@ DOCUMENT_TYPE_CHOICES = "、".join(
 )
 
 
+def document_type_choices():
+    return "、".join([*sorted(DOCUMENT_POLICIES), UNSUPPORTED_DOCUMENT_TYPE])
+
+
 def build_classification_prompt() -> str:
     """构建未知图片的首阶段分类提示词，不允许同时提取业务字段。"""
     return (
-        f"只判断这张图片的资料类型。document_type 只能是 {DOCUMENT_TYPE_CHOICES}。"
+        f"只判断这张图片的资料类型。document_type 只能是 {document_type_choices()}。"
         "不要提取业务字段，不要输出身份证号码等敏感信息，不要给出审核结论。"
         "只输出 JSON 对象，包含 document_type、confidence、reason；confidence 取值为 0 到 1。"
     )
@@ -251,7 +259,7 @@ def build_unknown_extraction_prompt(
     }
     prompt = (
         f"请判断资料类型并提取图片中明确可见的审核字段。{LAYOUT_INSTRUCTION}"
-        f"document_type 只能是 {DOCUMENT_TYPE_CHOICES}。"
+        f"document_type 只能是 {document_type_choices()}。"
         "旧车、新车和车源车辆都是页面业务归属，不是图片资料类型。"
         f"各类型字段白名单：{json.dumps(policies, ensure_ascii=False)}。"
         "只能输出最终 document_type 对应白名单中的字段，不推测、不补全，不给出审核结论。"
@@ -259,7 +267,8 @@ def build_unknown_extraction_prompt(
         "普通字段值保留图片中的原始文字和符号，不自行修正、归类或补全。"
         "看不清的字段写入 uncertain_fields；版面不存在的字段不要写入 uncertain_fields，"
         "不适用的字段也不要写入 uncertain_fields。"
-        "只输出 JSON 对象，包含 document_type、fields、confidence、evidence_regions、uncertain_fields。"
+        "只输出 JSON 对象，包含 document_type、fields、confidence、evidence_regions、uncertain_fields、qr_codes。"
+        "qr_codes 仅填写当前图片中可靠读取的二维码原始内容，无法可靠读取则为 []；禁止拼接、推测或补全网址。"
         f"{COLLECTION_TYPE_INSTRUCTION}"
         f'evidence_regions 使用 image_index={image_index} 和 "box"=[x1,y1,x2,y2]。'
     )

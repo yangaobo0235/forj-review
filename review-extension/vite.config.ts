@@ -16,16 +16,17 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), {
       name: 'extension-entries',
       async closeBundle() {
-        for (const entry of ['content', 'background']) {
+        const localBuild = mode !== 'public'
+        const entries = ['content', 'background']
+        for (const entry of entries) {
           await build({ configFile: false, build: {
             emptyOutDir: false,
-            lib: { entry: resolve(import.meta.dirname, `src/browser/${entry}.ts`), formats: ['iife'], name: entry, fileName: () => `${entry}.js` },
+            lib: { entry: resolve(import.meta.dirname, `src/browser/${entry}.ts`), formats: ['iife'], name: entry.replace(/-/g, '_'), fileName: () => `${entry}.js` },
           } })
         }
 
         const manifestPath = resolve(import.meta.dirname, 'dist/manifest.json')
         const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
-        const localBuild = mode !== 'public'
         const extensionName = localBuild ? '赋界审核助手(本地)' : '赋界审核助手'
         manifest.name = extensionName
         manifest.action.default_title = `打开${extensionName}`

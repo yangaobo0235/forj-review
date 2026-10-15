@@ -19,7 +19,6 @@ from app.businesses.packs.model import slot_document_types
 from app.businesses.routing import normalize_document_type, route_fields
 from app.models.review import FieldObservation
 from app.workflow.errors import classify_qwen_error, describe_qwen_error
-from app.workflow.image_focus import focus_data_url, uncertain_boxes
 from app.workflow.models import (
     AgentBatchResult,
     MaterialCompletenessReport,
@@ -59,6 +58,11 @@ SLOT_DOCUMENT_TYPES = {
 GENERIC_SCOPE_HINTS = {"", "unknown"} | {
     scope for pack in BUSINESS_PACKS.values() for scope in pack.scopes
 }
+
+
+from app.businesses.context import ContextMapping, current_pack
+
+SLOT_DOCUMENT_TYPES = ContextMapping(SLOT_DOCUMENT_TYPES, slot_document_types)
 
 
 def _derived_from(
@@ -109,7 +113,8 @@ def declared_material_types(business_type: Any) -> frozenset[str] | None:
     返回 None 而不是空集合：尚未声明扩展包的业务没有这份名单，空集合会把它们
     全部推进两阶段分类，那是行为回退而不是收紧。
     """
-    pack = BUSINESS_PACKS.get(business_type)
+    from app.businesses.packs import pack_for_business
+    pack = pack_for_business(business_type)
     if pack is None:
         return None
     return frozenset(material.document_type for material in pack.materials)
@@ -125,7 +130,8 @@ def _expected_document_type(
         getattr(image, "category_hint", "unknown"),
     ):
         hint = str(raw_hint or "").strip()
-        if hint in GENERIC_SCOPE_HINTS:
+        active_pack = current_pack()
+        if hint in ({"", "unknown", *active_pack.scopes} if active_pack else GENERIC_SCOPE_HINTS):
             continue
         normalized = normalize_document_type(hint)
         # 命中全局政策表还不够：它还得是本业务声明过的材料，否则就是拿别的
@@ -158,17 +164,6 @@ class AgentService:
         self.image_timeout = image_timeout
         self.review_deadline = review_deadline
 
-    def extract(
-        self, images: list[Any]
-    ) -> tuple[dict[str, tuple[str, int]], list[str], list[float]]:
-        """兼容原同步接口，返回首次识别值、限制说明和置信度。"""
-        batch = asyncio.run(self.extract_async(images))
-        recognized: dict[str, tuple[str, int]] = {}
-        for item in batch.observations:
-            if item.image_index is not None and item.value:
-                recognized.setdefault(item.field, (str(item.value), item.image_index))
-        return recognized, batch.limitations, batch.confidences
-
     async def extract_async(
         self,
         images: list[Any],
@@ -195,7 +190,7 @@ class AgentService:
                 result.completed_image_ids.append(str(image_name))
                 await self._notify(on_progress, result)
                 return
-            if image.collection_error or not image.data_url:
+            if image.collection_error or not image.recognition_source:
                 result.failed_count += 1
                 result.failed_image_ids.append(str(image_name))
                 result.limitations.append(f"图片 {image_name} 内容不可用")
@@ -310,30 +305,38 @@ class AgentService:
                 covered_pages=_covered_pages(extraction.fields.get("registration.covered_pages")),
                 uncertain_fields=list(extraction.uncertain_fields),
                 uncertain_values={field: extraction.fields.get(field) for field in extraction.uncertain_fields},
+                qr_codes=list(dict.fromkeys(code.strip() for code in extraction.qr_codes if code.strip())),
             ))
 
             routed_fields, routing_limitation = route_fields(
                 image.business_scope,
                 policy.document_type,
                 extraction.fields,
+                group_order=image.group_order,
             )
             routed_regions: dict[str, list[float]] = {}
+            source_regions = {region.field: list(region.box) for region in extraction.evidence_regions}
             for region in extraction.evidence_regions:
                 region_fields, _ = route_fields(
                     image.business_scope,
                     policy.document_type,
                     {region.field: "__evidence_region__"},
+                    group_order=image.group_order,
                 )
                 for routed_field in region_fields:
                     routed_regions.setdefault(routed_field, list(region.box))
             if routing_limitation:
                 result.limitations.append(f"图片 {image_name}：{routing_limitation}")
             accepted = 0
-            for field_name, value in routed_fields.items():
+            accepted_fields: list[str] = []
+            entries = [(k, v, None) for k, v in routed_fields.items()]
+            for field_name, value, source_field in entries:
                 if value:
                     result.observations.append(
                         FieldObservation(
                             field=field_name,
+                            source_field=source_field,
+                            uncertain=bool(source_field and source_field in extraction.uncertain_fields),
                             source_type="image",
                             source_id=str(image_name),
                             document_type=policy.document_type,
@@ -347,18 +350,19 @@ class AgentService:
                             # 「发票代码由票面数电号码适配」，不让审核员以为
                             # 票面上真印了一个发票代码。关系由材料声明给出。
                             derived_from=_derived_from(policy, field_name, extraction.fields),
-                            evidence_region=routed_regions.get(field_name),
+                            evidence_region=source_regions.get(source_field) if source_field else routed_regions.get(field_name),
                             confidence=extraction.confidence,
                         )
                     )
                     accepted += 1
+                    accepted_fields.append(field_name)
             if extraction.confidence is not None:
                 result.confidences.append(extraction.confidence)
             result.completed_count += 1
             result.completed_image_ids.append(str(image_name))
             logger.info(
                 "Agent image completed: image=%s type=%s category_hint=%s"
-                " document_type_hint=%s accepted_field_count=%d"
+                " document_type_hint=%s accepted_field_count=%d accepted_fields=%s"
                 " uncertain_field_count=%d uncertain_fields=%s retry_attempts=%d"
                 " retry_result=%s duration_ms=%d",
                 image_name,
@@ -369,6 +373,8 @@ class AgentService:
                 image.category_hint or "-",
                 image.document_type_hint or "-",
                 accepted,
+                # 只记录字段键，便于排查材料路由缺失，避免记录证件原值。
+                ",".join(sorted(accepted_fields)) or "-",
                 len(extraction.uncertain_fields),
                 # 一票否决的直接线索：模型自己报了不确定，人工复核会在这里
                 # 被触发。看不到字段名就只能翻响应体排查。
@@ -408,15 +414,11 @@ class AgentService:
     ) -> tuple[QwenExtraction, DocumentPolicy | None]:
         """已知槽位使用专属提示词；真正未知的图片先分类再专属提取。
 
-        `focus_boxes` 非空时先把图片裁剪到这些证据区域再放大，用于局部重读；
-        裁剪不出来就按整图重读。
+        URL 图片直接交给模型重读原图，区域坐标随重读原因传递。
         """
         payload = image.model_dump()
         if focus_boxes:
-            focused = focus_data_url(payload.get("data_url") or payload.get("src"), focus_boxes)
-            if focused:
-                payload = {**payload, "data_url": focused}
-
+            retry_reason = (retry_reason or "") + "；重点重读原图归一化区域 " + str(list(focus_boxes))
         expected_type = _expected_document_type(image, allowed_document_types)
         policy = DOCUMENT_POLICIES.get(expected_type or "")
         if policy is not None:
@@ -455,11 +457,11 @@ class AgentService:
 
     @staticmethod
     def _focus_boxes(extraction: QwenExtraction, reason: str) -> list[list[float]]:
-        """定向重读时取出待重读字段的证据区域；其他重试原因不做裁剪。"""
+        """把待重读字段的原图区域作为模型提示，不处理图片字节。"""
         if not reason.startswith(RETRYABLE_UNCERTAIN_PREFIX):
             return []
         fields = reason.removeprefix(RETRYABLE_UNCERTAIN_PREFIX).split(",")
-        return uncertain_boxes(extraction, fields)
+        return [list(region.box) for region in extraction.evidence_regions if region.field in fields]
 
     @staticmethod
     def _retry_kwargs(method: Callable[..., Any], retry_reason: str | None) -> dict[str, str]:

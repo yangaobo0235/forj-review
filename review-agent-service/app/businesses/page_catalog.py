@@ -39,6 +39,9 @@ class PageIdentity:
     region: Region
     paths: tuple[str, ...] = ()
     anchors: tuple[str, ...] = ()
+    profile_version: str = "1.0"
+    title: str = ""
+    page_id: str = ""
 
 
 def _pack_identities() -> tuple[PageIdentity, ...]:
@@ -74,6 +77,23 @@ _DECLARED_IDENTITIES: tuple[PageIdentity, ...] = (
 PAGE_IDENTITIES: tuple[PageIdentity, ...] = (*_pack_identities(), *_DECLARED_IDENTITIES)
 
 
+def active_identities():
+    from app.businesses.profiles import BUSINESS_PROFILES
+    active = {}
+    for profile in BUSINESS_PROFILES:
+        active[profile.page_id or f"{profile.business_type.value}:{profile.region.value}"] = profile
+    result = []
+    for page_id, profile in active.items():
+        key = (profile.business_type, profile.region)
+        pack = profile.pack_declaration
+        declaration = pack.region(profile.region) if pack else None
+        if declaration:
+            result.append(PageIdentity(*key, declaration.admin_paths, declaration.page_anchors, profile.version, pack.title, page_id))
+        else:
+            result.extend(item for item in _DECLARED_IDENTITIES if (item.business_type, item.region) == key)
+    return tuple(result)
+
+
 def path_matches(path: str, prefix: str) -> bool:
     """路径是否命中该前缀。按完整路径段匹配，避免相似前缀互相误判。"""
     return path == prefix or path.startswith(f"{prefix}/")
@@ -87,7 +107,7 @@ def identities_for_path(path: str) -> tuple[PageIdentity, ...]:
     青岛的单子照样被挡住。
     """
     return tuple(
-        item for item in PAGE_IDENTITIES if any(path_matches(path, route) for route in item.paths)
+        item for item in active_identities() if any(path_matches(path, route) for route in item.paths)
     )
 
 
@@ -103,9 +123,12 @@ def page_catalog() -> dict[str, object]:
             {
                 "business_type": item.business_type.value,
                 "region": item.region.value,
+                **({"profile_version": item.profile_version} if item.profile_version != "1.0" else {}),
+                **({"title": item.title} if item.title else {}),
+                **({"page_id": item.page_id} if item.page_id else {}),
                 "paths": list(item.paths),
                 "anchors": list(item.anchors),
             }
-            for item in PAGE_IDENTITIES
+            for item in active_identities()
         ],
     }

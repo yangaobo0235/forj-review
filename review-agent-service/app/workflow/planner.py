@@ -4,15 +4,9 @@ from dataclasses import dataclass
 from typing import Literal
 
 from app.businesses.profiles import BusinessProfile
+from app.capabilities.specs import order_capabilities
 
 CapabilityStatus = Literal["READY", "SKIPPED", "BLOCKED", "NOT_CONFIGURED"]
-STAGE_ORDER = {
-    "INPUT_COVERAGE": 0,
-    "EVIDENCE": 1,
-    "PRE_COMPARE": 2,
-    "POST_COMPARE": 3,
-    "FINAL_REVIEW": 4,
-}
 
 
 @dataclass(frozen=True)
@@ -31,7 +25,7 @@ def plan_capabilities(profile: BusinessProfile, available: set[str] | None = Non
         return (CapabilityPlanItem("profile", "NOT_CONFIGURED", profile.unconfigured_message or "业务规则未配置", "FINAL_REVIEW"),)
     items = []
     bindings = {binding.capability_id: binding for binding in profile.bindings}
-    specs = profile.capabilities
+    specs = order_capabilities(profile.capabilities)
     # Bindings are the canonical profile declaration.  ``capabilities`` keeps
     # producing metadata from the legacy fields during migration, so validate
     # that both views describe the same ids before planning.
@@ -58,11 +52,11 @@ def plan_capabilities(profile: BusinessProfile, available: set[str] | None = Non
         items.append(CapabilityPlanItem(
             spec.capability_id,
             status,
-            "缺少能力所需材料" if missing else "",
+            "缺少能力所需材料或事实：" + "、".join(sorted(missing)) if missing else "",
             spec.stage,
             spec.dependencies,
             tuple(sorted(missing)),
         ))
         if status == "READY":
             produced_facts.update(spec.output_facts)
-    return tuple(sorted(items, key=lambda item: (STAGE_ORDER.get(item.stage, 99), item.capability_id)))
+    return tuple(items)

@@ -194,7 +194,7 @@ test("车源审核使用字段优先工作台并显示材料要求", () => {
   });
   assert.notEqual(renderer, null);
 
-  // 未声明的 Profile 版本仍退回通用任务清单，不会误用字段优先工作台。
+  // 配置版本升级仍使用同一个完整工作台，不退化为简化任务清单。
   assert.equal(
     resolveWorkbenchRenderer({
       business_type: "vehicle_source",
@@ -202,12 +202,12 @@ test("车源审核使用字段优先工作台并显示材料要求", () => {
       profile_version: "9.9",
       review_tasks: [],
     }),
-    null,
+    renderer,
   );
 });
 
-test("车源工作台只有待处理和全部字段两个视图", () => {
-  const workbench = loadSource("components/ScrapReplacementReview.tsx").ScrapReplacementReview;
+test("车源工作台保留字段冲突且不展示旧材料任务", () => {
+  const workbench = loadSource("components/EvidenceReviewWorkbench.tsx").EvidenceReviewWorkbench;
   const review = {
     business_type: "vehicle_source",
     region: "default",
@@ -225,20 +225,17 @@ test("车源工作台只有待处理和全部字段两个视图", () => {
   const html = renderToStaticMarkup(React.createElement(workbench, {
     review,
     pageData: { pageFields: {}, images: [] },
-    materialTasksVisible: true,
-    externalView: false,
   }));
 
-  // 车型的冲突由字段行表示，待处理里只有它和材料缺失。
-  assert.match(html, /待处理 \(2\)/);
+  assert.match(html, /待处理 \(1\)/);
   assert.match(html, /全部字段 \(1\)/);
-  // 车型的三条结论已经投影到字段行里，不再单列页面外核验视图。
-  assert.doesNotMatch(html, /页面外核验/);
-  assert.match(html, /资料完整性/);
+  assert.doesNotMatch(html, /材料完整性|缺少机动车行驶证/);
+  assert.match(html, /页面外核验 \(0\)/);
+  assert.match(html, /车型/);
 });
 
 test("车型字段行把页面侧和材料侧一一对应地摆出来", () => {
-  const workbench = loadSource("components/ScrapReplacementReview.tsx").ScrapReplacementReview;
+  const workbench = loadSource("components/EvidenceReviewWorkbench.tsx").EvidenceReviewWorkbench;
   const model = {
     ...step("FIELD-vehicle.model", 1, "FIELD", "车型", "页面车型排放标准 国六 与材料 国五 不一致", "CONFLICT"),
     details: { check_ids: ["VEHICLE-MODEL-POWER"], reason_distributed: true },
@@ -269,7 +266,6 @@ test("车型字段行把页面侧和材料侧一一对应地摆出来", () => {
       ] }],
     },
     pageData: { pageFields: {}, images: [] },
-    materialTasksVisible: true,
     externalView: false,
   }));
 
@@ -291,7 +287,7 @@ test("车型字段行把页面侧和材料侧一一对应地摆出来", () => {
 });
 
 test("没有投影的字段不会凭空多出一句比对说明", () => {
-  const workbench = loadSource("components/ScrapReplacementReview.tsx").ScrapReplacementReview;
+  const workbench = loadSource("components/EvidenceReviewWorkbench.tsx").EvidenceReviewWorkbench;
   const html = renderToStaticMarkup(React.createElement(workbench, {
     review: {
       business_type: "vehicle_source",
@@ -305,7 +301,6 @@ test("没有投影的字段不会凭空多出一句比对说明", () => {
       }],
     },
     pageData: { pageFields: {}, images: [] },
-    materialTasksVisible: true,
     externalView: false,
   }));
 

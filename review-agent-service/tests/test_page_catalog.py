@@ -98,7 +98,10 @@ def test_catalog_shape_matches_what_the_browser_reads() -> None:
     identities = catalog["identities"]
     assert len(identities) == len(PAGE_IDENTITIES)
     for item in identities:
-        assert set(item) == {"business_type", "region", "paths", "anchors"}
+        assert {"business_type", "region", "paths", "anchors"} <= set(item) <= {
+            "business_type", "region", "paths", "anchors", "title", "profile_version", "page_id"}
+        if "title" in item:
+            assert isinstance(item["title"], str) and item["title"]
         assert isinstance(item["paths"], list) and item["paths"]
         assert isinstance(item["anchors"], list)
 

@@ -1,5 +1,7 @@
 """车源审核的材料要求：行驶证必须，登记证书第 1、2 页与车辆铭牌二选一。"""
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from app.businesses.completeness import evaluate_collected, evaluate_extracted
@@ -431,27 +433,26 @@ def test_vehicle_source_declares_writeback_for_its_text_fields() -> None:
 )
 def test_issue_date_must_be_within_the_last_ninety_days(days_ago: int, expected: str) -> None:
     """发证日期超出时效交人工复核，不自动判不通过。"""
-    from datetime import datetime, timedelta
+    from dataclasses import replace
+    from datetime import datetime, timedelta, timezone
 
-    from app.models.review import FieldComparison, FieldStatus
     from app.presentation.routing import build_review_tasks
+    from app.services.review_response import _build_comparisons
 
-    issued = (datetime.now().astimezone().date() - timedelta(days=days_ago)).isoformat()
+    issued = (datetime.now(timezone(timedelta(hours=8))).date() - timedelta(days=days_ago)).isoformat()
     tasks = build_review_tasks(
         request=request().model_copy(update={
             "review_fields": [_inventory_step_id("vehicle.issue_date", "发证日期", 1)],
             "page_fields": {"vehicle.issue_date": issued},
         }),
         profile=VEHICLE_SOURCE_DEFAULT,
-        comparisons=[
-            FieldComparison(
-                field="vehicle.issue_date",
-                left_value=issued,
-                right_value=issued,
-                status=FieldStatus.MATCH,
-                message="多个来源字段一致",
-            )
-        ],
+        comparisons=_build_comparisons(
+            request().model_copy(update={"page_fields": {"vehicle.issue_date": issued}}),
+            replace(VEHICLE_SOURCE_DEFAULT, required_fields=("vehicle.issue_date",)),
+            [FieldObservation(field="vehicle.issue_date", source_type="image", source_id="license",
+                              document_type="vehicle_license", business_scope="vehicle", value=issued),
+             FieldObservation(field="vehicle.issue_date", source_type="page", source_id="page", value=issued)],
+        ),
         external_checks=[],
         business_checks=[],
         completeness=None,
@@ -581,7 +582,7 @@ PAGE_FIELDS = {
     "vehicle.brand_model": "解放牌CA5180CCYP62K1L4E5",
     "vehicle.usage_nature": "货运",
     "vehicle.registration_date": "2020-05-01",
-    "vehicle.issue_date": "2020-05-08",
+    "vehicle.issue_date": datetime.now(timezone(timedelta(hours=8))).date().isoformat(),
     "vehicle.owner": "某某物流有限公司",
     "vehicle.model": "一汽解放 J6L 中卡 220马力 4X2 6.75米仓栅式载货车(CA5180CCYP62K1L4E5)(国五)",
     "vehicle.fuel_type": "柴油",
@@ -600,7 +601,7 @@ MATERIAL_FIELDS = {
         "vehicle.brand_model": "解放牌CA5180CCYP62K1L4E5",
         "vehicle.usage_nature": "货运",
         "vehicle.registration_date": "2020年5月1日",
-        "vehicle.issue_date": "2020年5月8日",
+        "vehicle.issue_date": PAGE_FIELDS["vehicle.issue_date"],
         "vehicle.owner": "某某物流有限公司",
         "vehicle.fuel_type": "柴油",
     },

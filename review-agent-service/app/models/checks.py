@@ -28,6 +28,8 @@ class CheckResultValue(BaseModel):
     detail: str | None = None
     derived_from: str | None = None
     evidence_region: list[float] | None = None
+    uncertain: bool = False
+    group_title: str | None = None
 
 
 class CheckResult(BaseModel):
