@@ -1,0 +1,12 @@
+{
+  "name": "forj-review-assistant",
+  "private": true,
+  "scripts": {
+    "dev:extension": "npm --prefix apps/extension run dev",
+    "build:extension": "npm --prefix apps/extension run build",
+    "build:extension:public": "npm --prefix apps/extension run build:public",
+    "test:extension": "npm --prefix apps/extension test",
+    "lint:extension": "npm --prefix apps/extension run lint",
+    "check:architecture": "python scripts/ci/check_architecture.py && node scripts/ci/check-extension-architecture.mjs"
+  }
+}

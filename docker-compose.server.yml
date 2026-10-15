@@ -2,12 +2,12 @@ services:
   review-agent:
     container_name: review-agent-service
     build:
-      context: ./review-agent-service
-      dockerfile: Dockerfile
-    image: review-agent-service:main
+      context: .
+      dockerfile: deploy/Dockerfile
+    image: forj-review-api:main
     restart: unless-stopped
     env_file:
-      - ./review-agent-service/.env
+      - ./.env
     environment:
       PYTHONUNBUFFERED: "1"
       # 容器默认 UTC，日志时间戳和按天轮转的切点都会偏 8 小时（切点变成北京

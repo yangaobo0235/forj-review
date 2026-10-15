@@ -1,0 +1,88 @@
+"""仅把明确可读的观察作为确定性政策和主体关系证据。"""
+
+import re
+
+from forj_review_assistant.businesses.routing import route_fields
+from forj_review_assistant.contracts.recognition import AgentBatchResult
+from forj_review_assistant.contracts.review import FieldObservation
+
+UNREADABLE_VALUES = frozenset(
+    {
+        "无法识别",
+        "无法确认",
+        "不详",
+        "未知",
+        "不清",
+        "空白",
+        "N/A",
+        "NA",
+        "NULL",
+        "NONE",
+        "未识别",
+        "模糊",
+        "看不清",
+    }
+)
+
+
+def readable_value(value: object | None) -> bool:
+    if value is None:
+        return False
+    text = str(value).strip()
+    return bool(
+        text
+        and text.upper() not in UNREADABLE_VALUES
+        and not any(
+            word in text for word in ("无法识别", "无法确认", "未知", "不详", "看不清")
+        )
+        and not re.search(r"[?？*＊�]", text)
+        and re.search(r"[\w\u3400-\u9fff]", text)
+    )
+
+
+def batch_observations(batch: AgentBatchResult) -> list[FieldObservation]:
+    """在真实批处理边界传播模型不确定标记，保留原值供人工查看。
+
+    同时标记该图片是否已经重读过：重读后仍不确定，理由文本会和"从未重读"
+    区分开，审核员据此知道机器已经试过了。
+    """
+    retried_targets = {
+        attempt.target_id
+        for attempt in batch.retry_summary.attempts
+        if attempt.stage == "qwen" and attempt.attempt_number > 1
+    }
+    result = []
+    for item in batch.observations:
+        uncertain = item.uncertain
+        retried = False
+        for document in batch.recognized_documents:
+            if document.target_id not in {item.source_id, item.image_id} and not (
+                document.image_index is not None
+                and document.image_index == item.image_index
+            ):
+                continue
+            retried = retried or document.target_id in retried_targets
+            routed, _ = route_fields(
+                item.business_scope or document.business_scope,
+                document.document_type,
+                dict.fromkeys(document.uncertain_fields, True),
+                group_order=item.group_order,
+            )
+            uncertain = (
+                uncertain
+                or item.field in document.uncertain_fields
+                or item.source_field in document.uncertain_fields
+                or item.field in routed
+            )
+        result.append(item.model_copy(update={"uncertain": uncertain, "retried": retried}))
+    return result
+
+
+def observation_evidence(observations: list[FieldObservation]) -> list[dict]:
+    return [
+        {
+            "source": "图片识别" if item.source_type == "image" else "申请页面字段",
+            **item.model_dump(),
+        }
+        for item in observations
+    ]

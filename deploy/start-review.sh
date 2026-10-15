@@ -3,13 +3,13 @@ set -euo pipefail
 
 upload_dir="/home/ubuntu/review-agent-deploy"
 runtime_dir="/opt/review-assistant"
-image_tar="${upload_dir}/review-agent-service-main.tar"
+image_tar="${upload_dir}/forj-review-api-main.tar"
 uploaded_compose="${upload_dir}/docker-compose.server.yml"
 compose_file="${runtime_dir}/docker-compose.server.yml"
-env_file="${runtime_dir}/review-agent-service/.env"
+env_file="${runtime_dir}/.env"
 service_name="review-agent"
-image_name="review-agent-service:main"
-rollback_image="review-agent-service:rollback"
+image_name="forj-review-api:main"
+rollback_image="forj-review-api:rollback"
 health_url="http://127.0.0.1:18110/health"
 
 if [[ ! -s "${image_tar}" ]]; then
@@ -38,6 +38,9 @@ echo "Saving the current image as ${rollback_image}..."
 docker image rm "${rollback_image}" >/dev/null 2>&1 || true
 if docker image inspect "${image_name}" >/dev/null 2>&1; then
   docker tag "${image_name}" "${rollback_image}"
+elif docker image inspect review-agent-service:main >/dev/null 2>&1; then
+  # First upgrade from the previous product image name keeps a rollback image too.
+  docker tag review-agent-service:main "${rollback_image}"
 fi
 
 echo "Loading ${image_tar}..."

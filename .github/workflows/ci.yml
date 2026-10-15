@@ -17,9 +17,6 @@ jobs:
   backend:
     name: Backend
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: review-agent-service
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,7 +26,7 @@ jobs:
         with:
           enable-cache: true
           python-version: "3.11"
-          cache-dependency-glob: review-agent-service/uv.lock
+          cache-dependency-glob: uv.lock
 
       - name: Install dependencies
         run: uv sync --locked
@@ -38,18 +35,24 @@ jobs:
         run: uv run pytest -q
 
       - name: Run Ruff
-        run: uv run ruff check app tests
+        run: uv run ruff check src tests scripts
 
       # README 和 CONTRIBUTING 都要求提交前跑这一步，之前没有门禁。
       - name: Byte-compile
-        run: uv run python -m compileall -q app
+        run: uv run python -m compileall -q src
+
+      - name: Check architecture
+        run: uv run python scripts/ci/check_architecture.py
+
+      - name: Build Python distribution
+        run: uv build
 
   extension:
     name: Extension
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: review-extension
+        working-directory: apps/extension
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -59,7 +62,7 @@ jobs:
         with:
           node-version: "22.18.0"
           cache: npm
-          cache-dependency-path: review-extension/package-lock.json
+          cache-dependency-path: apps/extension/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -77,6 +80,9 @@ jobs:
 
       - name: Run ESLint
         run: npm run lint
+
+      - name: Check extension architecture
+        run: node ../../scripts/ci/check-extension-architecture.mjs
 
   secrets:
     name: Secret scan

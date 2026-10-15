@@ -41,7 +41,7 @@ Thumbs.db
 
 # Local agent state and temporary work
 .tmp/
-# 本地按天轮转的后端日志（REVIEW_LOG_DIR=logs，落在 review-agent-service/logs）
+# 本地按天轮转的后端日志（根目录启动时 REVIEW_LOG_DIR=logs）
 logs/
 # 根目录下的平铺临时文件（如 .tmp-real-assist.json）。上面的 `.tmp/` 只匹配目录，
 # 匹配不到这类文件；它们曾把真实的审核响应带进过 git 历史。

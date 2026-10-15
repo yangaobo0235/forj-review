@@ -2,7 +2,7 @@
 set -euo pipefail
 
 project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-env_file="${project_dir}/review-agent-service/.env"
+env_file="${project_dir}/.env"
 
 cd "${project_dir}"
 
@@ -11,8 +11,8 @@ if [[ ! -s "${env_file}" ]]; then
   exit 1
 fi
 
-if ! docker image inspect review-agent-service:main >/dev/null 2>&1; then
-  echo "Missing review-agent-service:main. Load the locally built image before deploying." >&2
+if ! docker image inspect forj-review-api:main >/dev/null 2>&1; then
+  echo "Missing forj-review-api:main. Load the locally built image before deploying." >&2
   exit 1
 fi
 
