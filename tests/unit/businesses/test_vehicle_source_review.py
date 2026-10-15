@@ -444,7 +444,7 @@ def test_issue_date_must_be_within_the_last_ninety_days(days_ago: int, expected:
     from dataclasses import replace
     from datetime import datetime, timedelta, timezone
 
-    from forj_review_assistant.presentation.response import _build_comparisons
+    from forj_review_assistant.evidence.comparison.review import build_field_comparisons
     from forj_review_assistant.presentation.routing import build_review_tasks
 
     issued = (datetime.now(timezone(timedelta(hours=8))).date() - timedelta(days=days_ago)).isoformat()
@@ -454,7 +454,7 @@ def test_issue_date_must_be_within_the_last_ninety_days(days_ago: int, expected:
             "page_fields": {"vehicle.issue_date": issued},
         }),
         profile=VEHICLE_SOURCE_DEFAULT,
-        comparisons=_build_comparisons(
+        comparisons=build_field_comparisons(
             request().model_copy(update={"page_fields": {"vehicle.issue_date": issued}}),
             replace(VEHICLE_SOURCE_DEFAULT, required_fields=("vehicle.issue_date",)),
             [FieldObservation(field="vehicle.issue_date", source_type="image", source_id="license",

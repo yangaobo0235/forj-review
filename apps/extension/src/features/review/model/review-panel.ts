@@ -2,7 +2,6 @@
  * 功能：集中维护业务、字段和状态展示标签。
  * 职责边界：不包含审核判定逻辑。
  * 修改日期：2026-08-26
- * 修改人：wuyi
  */
 
 import { manifestFieldLabels } from "../../../platform/browser/catalog/collect-manifest.ts";

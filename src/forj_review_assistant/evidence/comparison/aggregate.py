@@ -2,7 +2,6 @@
 
 主要职责：标准化页面、图片和官网证据并生成字段比较。
 修改日期：2026-08-26
-修改人：wuyi
 """
 
 from collections import Counter
@@ -30,6 +29,7 @@ EVIDENCE_SOURCE_LABELS = {
     "image": "图片识别",
     "page": PAGE_VALUE_SOURCE,
     "qr_page": "二维码官网字段",
+    "capability": "能力核验",
 }
 
 
@@ -128,7 +128,7 @@ def aggregate_field(
         field_name,
         [item for item in observations if str(item.value or "").strip()]
     )
-    image_values = [item.value for item in valid if item.source_type == "image"]
+    image_values = [item.value for item in valid if item.source_type in {"image", "capability"}]
     page_values = [item.value for item in valid if item.source_type == "page"]
     evidence = [
         EvidenceFact(
@@ -157,7 +157,9 @@ def aggregate_field(
     if uncertain_requires_review and any(item.uncertain for item in valid):
         status = FieldStatus.REVIEW_REQUIRED
         message = (
-            "图片识别不确定，已重读仍无法确认，请核对原图"
+            "能力核验结果不确定，请人工确认"
+            if any(item.uncertain and item.source_type == "capability" for item in valid)
+            else "图片识别不确定，已重读仍无法确认，请核对原图"
             if any(item.retried for item in valid)
             else "图片识别结果不确定，请核对原图"
         )
@@ -371,7 +373,11 @@ def aggregate_by_authority(
         message = f"{ambiguous.label}返回多个不同值"
     elif uncertain_requires_review and any(item.uncertain for item in valid):
         status = FieldStatus.REVIEW_REQUIRED
-        message = "材料识别结果不确定，请核对原图"
+        message = (
+            "能力核验结果不确定，请人工确认"
+            if any(item.uncertain and item.source_type == "capability" for item in valid)
+            else "材料识别结果不确定，请核对原图"
+        )
     elif benchmark is None:
         status = FieldStatus.REVIEW_REQUIRED
         message = f"未取得{head.label}值，无法建立权威比较基准"

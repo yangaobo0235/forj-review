@@ -700,7 +700,7 @@ SCRAP_REPLACEMENT_PACK = BusinessExtensionPack(
     # 地区无关的能力绑定；地区政策能力由 RegionDeclaration 推导。
     capability_specs=(
         CapabilitySpec(
-            "material_completeness", kind="MATERIAL", stage="INPUT_COVERAGE",
+            "material_completeness", kind="MATERIAL", stage="EVIDENCE_VALIDATION",
             failure_policy="MANUAL_REVIEW",
         ),
         CapabilitySpec(

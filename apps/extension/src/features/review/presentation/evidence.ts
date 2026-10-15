@@ -2,7 +2,6 @@
  * 功能：生成证据来源和冲突高亮展示计划。
  * 职责边界：不改变原始证据值。
  * 修改日期：2026-08-26
- * 修改人：wuyi
  */
 
 import { manifestMaterialLabels } from "../../../platform/browser/catalog/collect-manifest.ts";

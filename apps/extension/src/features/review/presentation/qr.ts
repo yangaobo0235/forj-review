@@ -2,7 +2,6 @@
  * 功能：把二维码核验结果转换为界面展示数据。
  * 职责边界：不访问二维码网页或重新核验。
  * 修改日期：2026-08-26
- * 修改人：wuyi
  */
 
 import type { QrCheck } from "../../../shared/contracts/review";

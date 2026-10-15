@@ -6,7 +6,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, Protocol
 
-from forj_review_assistant.contracts.recognition import AgentBatchResult, CheckResult
+from forj_review_assistant.contracts.evidence import EvidenceFact
+from forj_review_assistant.contracts.recognition import (
+    AgentBatchResult,
+    CheckResult,
+    MaterialCompletenessReport,
+)
 from forj_review_assistant.contracts.review import (
     CapabilityResult,
     FieldComparison,
@@ -37,7 +42,7 @@ class CapabilitySpec:
     kind: Literal["EXTERNAL", "RULE", "MATERIAL"] = "RULE"
     version: str = "1.0"
     stage: Literal[
-        "INPUT_COVERAGE", "EVIDENCE", "PRE_COMPARE", "POST_COMPARE", "FINAL_REVIEW"
+        "INPUT_COVERAGE", "EVIDENCE_VALIDATION", "EVIDENCE", "PRE_COMPARE", "POST_COMPARE", "FINAL_REVIEW"
     ] = "POST_COMPARE"
     input_facts: tuple[str, ...] = ()
     output_facts: tuple[str, ...] = ()
@@ -50,7 +55,7 @@ class CapabilitySpec:
     def __post_init__(self) -> None:
         if self.kind not in ("EXTERNAL", "RULE", "MATERIAL"):
             raise ValueError(f"未知能力类型：{self.kind}")
-        if self.stage not in ("INPUT_COVERAGE", "EVIDENCE", "PRE_COMPARE", "POST_COMPARE", "FINAL_REVIEW"):
+        if self.stage not in ("INPUT_COVERAGE", "EVIDENCE_VALIDATION", "EVIDENCE", "PRE_COMPARE", "POST_COMPARE", "FINAL_REVIEW"):
             raise ValueError(f"未知能力阶段：{self.stage}")
         if self.failure_policy not in ("BLOCK", "MANUAL_REVIEW", "SAFE_DEGRADE", "SKIP"):
             raise ValueError(f"未知能力失败策略：{self.failure_policy}")
@@ -74,7 +79,7 @@ class CapabilityBinding:
 
 
 STAGE_ORDER = {stage: index for index, stage in enumerate((
-    "INPUT_COVERAGE", "EVIDENCE", "PRE_COMPARE", "POST_COMPARE", "FINAL_REVIEW",
+    "INPUT_COVERAGE", "EVIDENCE_VALIDATION", "EVIDENCE", "PRE_COMPARE", "POST_COMPARE", "FINAL_REVIEW",
 ))}
 
 
@@ -121,6 +126,8 @@ class ReviewExecutionContext:
     observations: tuple[FieldObservation, ...]
     comparisons: tuple[FieldComparison, ...] = ()
     qr_checks: tuple[QrCheck, ...] = ()
+    checks: tuple[CheckResult, ...] = ()
+    material_completeness: MaterialCompletenessReport | None = None
 
 
 @dataclass(frozen=True)
@@ -128,6 +135,7 @@ class RuleExecutionResult:
     checks: tuple[CheckResult, ...] = ()
     page_action_candidates: tuple[PageFillAction, ...] = ()
     page_action_intents: tuple[PageActionIntent, ...] = ()
+    evidence: tuple[EvidenceFact, ...] = ()
 
 
 class ExternalCheckHandler(Protocol):
@@ -135,7 +143,7 @@ class ExternalCheckHandler(Protocol):
         self,
         context: ReviewExecutionContext,
         spec: ExternalCheckSpec,
-    ) -> tuple[CheckResult | QrCheck, ...]: ...
+    ) -> tuple[CheckResult | QrCheck | EvidenceFact, ...]: ...
 
 
 class BusinessRuleHandler(Protocol):

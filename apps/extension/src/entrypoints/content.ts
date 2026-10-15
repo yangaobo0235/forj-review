@@ -15,7 +15,6 @@ import type { BusinessSelection, PageImage, PageWriteGroupAction } from "../shar
  * 功能：协调页面字段、图片地址采集和原图定位消息。
  * 职责边界：复杂识别逻辑委托给独立公共脚本；DOM 元素不跨消息传输。
  * 修改日期：2026-09-11
- * 修改人：wuyi
  */
 
 // Keep collection orchestration here; field, image, and focus rules live in dedicated scripts.

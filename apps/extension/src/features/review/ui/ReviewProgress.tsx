@@ -2,7 +2,6 @@
  * 功能：展示审核任务进度和分组状态。
  * 职责边界：只消费任务快照，不修改任务状态。
  * 修改日期：2026-08-26
- * 修改人：wuyi
  */
 
 import type { PageData, ReviewJobSnapshot } from "../../../shared/contracts/review";

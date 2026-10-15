@@ -32,7 +32,9 @@ def comparison(field: str, value: str) -> FieldComparison:
     )
 
 
-def test_affiliation_actions_follow_confirmed_subject_types_even_if_auxiliary_customer_check_differs() -> None:
+def test_affiliation_actions_follow_confirmed_subject_types_even_if_auxiliary_customer_check_differs() -> (
+    None
+):
     request = ReviewRequest(
         page_url="https://example.test/scrap",
         page_fields={
@@ -44,22 +46,24 @@ def test_affiliation_actions_follow_confirmed_subject_types_even_if_auxiliary_cu
     state = {
         "request": request,
         "profile": SCRAP_REPLACEMENT_QINGDAO,
-        "batch": AgentBatchResult(observations=[
-            EvidenceFact("identity_card.name", "张三", "id-front", "identity_card"),
-            EvidenceFact("identity_card.side", "FRONT", "id-front", "identity_card"),
-            EvidenceFact("identity_card.side", "BACK", "id-back", "identity_card"),
-        ]),
-        "response": type("Response", (), {
-            "comparisons": [
-                comparison("old_vehicle.owner", "张三"),
-                comparison("new_vehicle.owner", "张三"),
-                comparison("new_vehicle.vin", "VIN-NEW"),
-            ],
-        })(),
+        "batch": AgentBatchResult(
+            observations=[
+                EvidenceFact("identity_card.name", "张三", "id-front", "identity_card"),
+                EvidenceFact("identity_card.side", "FRONT", "id-front", "identity_card"),
+                EvidenceFact("identity_card.side", "BACK", "id-back", "identity_card"),
+            ]
+        ),
+        "comparisons": [
+            comparison("old_vehicle.owner", "张三"),
+            comparison("new_vehicle.owner", "张三"),
+            comparison("new_vehicle.vin", "VIN-NEW"),
+        ],
         "qr_checks": [],
     }
 
-    result = run_affiliation_subject(ReviewWorkflow.__new__(ReviewWorkflow)._execution_context(state))
+    result = run_affiliation_subject(
+        ReviewWorkflow.__new__(ReviewWorkflow)._execution_context(state)
+    )
 
     assert result.checks[0].check_id == "AFFILIATION-SUBJECT-001"
     assert result.checks[0].status == "MATCH"
@@ -85,21 +89,30 @@ def test_affiliation_actions_ignore_ocr_vin_and_accept_company_labels(ocr_vin) -
     state = {
         "request": request,
         "profile": SCRAP_REPLACEMENT_QINGDAO,
-        "batch": AgentBatchResult(observations=[
-            EvidenceFact("business_license.company_name", "甲运输有限公司", "license-a", "business_license"),
-            EvidenceFact("business_license.legal_representative", "张三", "license-a", "business_license"),
-        ]),
-        "response": type("Response", (), {
-            "comparisons": [
-                comparison("old_vehicle.owner", "甲运输有限公司"),
-                comparison("new_vehicle.owner", "甲运输有限公司"),
-                comparison("new_vehicle.vin", "VIN-NEW"),
-            ],
-        })(),
+        "batch": AgentBatchResult(
+            observations=[
+                EvidenceFact(
+                    "business_license.company_name",
+                    "甲运输有限公司",
+                    "license-a",
+                    "business_license",
+                ),
+                EvidenceFact(
+                    "business_license.legal_representative", "张三", "license-a", "business_license"
+                ),
+            ]
+        ),
+        "comparisons": [
+            comparison("old_vehicle.owner", "甲运输有限公司"),
+            comparison("new_vehicle.owner", "甲运输有限公司"),
+            comparison("new_vehicle.vin", "VIN-NEW"),
+        ],
         "qr_checks": [],
     }
 
-    result = run_affiliation_subject(ReviewWorkflow.__new__(ReviewWorkflow)._execution_context(state))
+    result = run_affiliation_subject(
+        ReviewWorkflow.__new__(ReviewWorkflow)._execution_context(state)
+    )
 
     assert [item.status for item in result.checks] == ["MATCH", "MATCH"]
     assert all("VIN" not in item.check_id for item in result.checks)

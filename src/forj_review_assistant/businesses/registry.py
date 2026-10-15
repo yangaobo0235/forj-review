@@ -2,7 +2,6 @@
 
 主要职责：安全解析精确配置及允许的默认地区回退。
 修改日期：2026-08-26
-修改人：wuyi
 """
 
 from collections import defaultdict

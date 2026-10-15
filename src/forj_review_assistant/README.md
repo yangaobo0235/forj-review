@@ -55,3 +55,5 @@ API 层只负责鉴权、协议解析、请求 ID 和错误映射；审核服务
 ## 新增后端代码前的检查
 
 先确认是否已有同类字段、能力或注册表条目；优先扩展现有模型和接口。新增公开字段要更新 `src/forj_review_assistant/contracts`、前端类型、契约测试和文档。新增规则要说明证据来源、缺失行为、冲突行为、版本和 Profile 范围。新增外部调用要声明超时、重试、熔断和脱敏策略。
+
+统一证据入口为 `evidence/collection.py`，字段比较为 `evidence/comparison/review.py`。主图各能力阶段分别执行，中间状态不依赖完整响应。规则、外部核验和动作在业务目录登记，由 `runtime/workflow/capability_assembly.py` 装配。材料完整性处于识别后的 `EVIDENCE_VALIDATION`，真正的输入检查才使用 `INPUT_COVERAGE`。

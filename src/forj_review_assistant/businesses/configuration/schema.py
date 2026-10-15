@@ -49,7 +49,7 @@ class EvidenceSource(Declaration):
 
 
 class Authority(Declaration):
-    source: Literal["qr_page", "page", "image"]
+    source: Literal["qr_page", "page", "image", "capability"]
     label: Text
     document_types: tuple[Identifier, ...] = ()
     match: Literal["full", "suffix8"] = "full"

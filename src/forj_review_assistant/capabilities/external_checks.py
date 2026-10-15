@@ -8,6 +8,7 @@ from forj_review_assistant.capabilities.specs import (
     ExternalCheckSpec,
     ReviewExecutionContext,
 )
+from forj_review_assistant.contracts.evidence import EvidenceFact
 from forj_review_assistant.contracts.recognition import CheckResult
 from forj_review_assistant.contracts.review import QrCheck
 
@@ -24,7 +25,7 @@ class ExternalCheckRegistry:
         self,
         specs: tuple[ExternalCheckSpec, ...],
         context: ReviewExecutionContext,
-    ) -> tuple[CheckResult | QrCheck, ...]:
+    ) -> tuple[CheckResult | QrCheck | EvidenceFact, ...]:
         results = []
         for spec in dict.fromkeys(specs):
             handler = self._handlers.get(spec.check_id)

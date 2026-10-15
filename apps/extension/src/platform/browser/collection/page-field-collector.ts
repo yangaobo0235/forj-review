@@ -12,7 +12,6 @@ const isDomElement = (value: unknown): value is DomElement => {
  * 功能：从表单、表格和只读 DOM 提取标准字段候选。
  * 职责边界：同等可靠候选冲突时保留歧义，不猜测值；只有唯一候选才保留 DOM 目标。
  * 修改日期：2026-09-11
- * 修改人：wuyi
  */
 
 

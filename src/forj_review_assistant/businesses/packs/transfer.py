@@ -425,7 +425,7 @@ TRANSFER_PACK = BusinessExtensionPack(
         CapabilitySpec(
             "material_completeness",
             kind="MATERIAL",
-            stage="INPUT_COVERAGE",
+            stage="EVIDENCE_VALIDATION",
             failure_policy="MANUAL_REVIEW",
         ),
         CapabilitySpec(

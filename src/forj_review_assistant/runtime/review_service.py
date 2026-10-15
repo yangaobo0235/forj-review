@@ -2,7 +2,6 @@
 
 主要职责：协调业务配置、工作流和辅助工具，不内嵌响应策略。
 修改日期：2026-08-26
-修改人：wuyi
 """
 
 import asyncio
@@ -30,14 +29,13 @@ from forj_review_assistant.contracts.recognition import (
     MaterialCompletenessReport,
 )
 from forj_review_assistant.contracts.review import (
-    FieldObservation,
     FieldStatus,
     ImageInput,
     QrCheck,
     ReviewRequest,
     ReviewResponse,
 )
-from forj_review_assistant.evidence.comparison.evidence_values import batch_observations
+from forj_review_assistant.evidence.collection import collect_observations, collection_issues
 from forj_review_assistant.integrations.qr.decoder import QrImageDecoder
 from forj_review_assistant.integrations.qr.web_verifier import QrWebVerifier
 from forj_review_assistant.integrations.recognition.client import QwenClient
@@ -198,34 +196,8 @@ class ReviewService:
         defer_advice: bool = False,
     ) -> ReviewResponse:
         resolved_profile = profile or self.resolve_profile(request)
-        observations = batch_observations(batch)
-        issues: list[str] = []
-
-        for field_name in (tuple(f.key for f in resolved_profile.pack_declaration.fields)
-                           if resolved_profile.pack_declaration else resolved_profile.required_fields):
-            page_value = request.page_fields.get(field_name)
-            if page_value not in (None, ""):
-                observations.append(
-                    FieldObservation(
-                        field=field_name,
-                        source_type="page",
-                        source_id="review_page",
-                        value=page_value,
-                    )
-                )
-
-        if not request.images and (
-            resolved_profile.material_policy is not None
-            or resolved_profile.required_fields
-        ):
-            issues.append("未采集到审核图片")
-        if not request.page_fields and resolved_profile.required_fields:
-            issues.append("未采集到右侧申请字段")
-
-        for image in request.images:
-            if image.collection_error:
-                image_name = image.image_id or image.index
-                issues.append(f"图片 {image_name} 采集失败：{image.collection_error}")
+        observations, _ = collect_observations(request, resolved_profile, batch)
+        issues = collection_issues(request, resolved_profile)
 
         response = build_review_response(
             request,

@@ -10,7 +10,7 @@ from forj_review_assistant.contracts.review import (
     ReviewFieldSnapshot,
     ReviewRequest,
 )
-from forj_review_assistant.presentation.response import _build_comparisons
+from forj_review_assistant.evidence.comparison.review import build_field_comparisons
 from forj_review_assistant.presentation.routing import build_review_tasks
 
 
@@ -33,7 +33,7 @@ def test_ocr_vin_compares_its_own_page_value_against_shared_materials(profile, v
     # An unrelated material must never become a VIN candidate.
     observations.append(FieldObservation(field="new_vehicle.vin", value="WRONG", source_type="image",
                                          source_id="license", document_type="business_license"))
-    comparisons = _build_comparisons(request, profile, observations)
+    comparisons = build_field_comparisons(request, profile, observations)
     by_field = {item.field: item for item in comparisons}
     assert by_field["new_vehicle.vin"].status is FieldStatus.MATCH
     assert by_field["page_ocr.new_vehicle_vin"].status is status

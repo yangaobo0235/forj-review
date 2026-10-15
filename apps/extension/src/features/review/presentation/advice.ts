@@ -2,7 +2,6 @@
  * 功能：把建议和跨材料检查转换为界面文案。
  * 职责边界：不改变检查状态或结论。
  * 修改日期：2026-08-26
- * 修改人：wuyi
  */
 
 import type { Recommendation, CheckResult, CheckResultStatus } from "../../../shared/contracts/review";

@@ -250,7 +250,7 @@ def compile_page(
             CapabilitySpec(
                 "material_completeness",
                 kind="MATERIAL",
-                stage="INPUT_COVERAGE",
+                stage="EVIDENCE_VALIDATION",
             ),
         )
         capability_bindings.setdefault(

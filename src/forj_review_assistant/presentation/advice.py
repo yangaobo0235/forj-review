@@ -2,7 +2,6 @@
 
 主要职责：汇总字段、二维码和跨材料检查并形成安全建议。
 修改日期：2026-08-26
-修改人：wuyi
 """
 
 from forj_review_assistant.businesses.fields import PAGE_FIELD_LABELS
@@ -150,6 +149,8 @@ def build_final_advice(
         basis.add("资料图片识别")
     if qr_checks:
         basis.add("二维码官网核验")
+    if any(item.source == "能力核验" for comparison in comparisons for item in comparison.evidence):
+        basis.add("注册能力核验")
     advice = AgentAdvice(
         decision=decision,
         title="建议人工复核" if findings else "建议通过",
@@ -165,6 +166,7 @@ def build_final_advice(
                 "页面申请信息",
                 "资料图片识别",
                 "二维码官网核验",
+                "注册能力核验",
                 "确定性审核规则",
             )
             if item in basis

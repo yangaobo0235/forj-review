@@ -5,7 +5,7 @@ from dataclasses import replace
 from forj_review_assistant.businesses.context import business_context
 from forj_review_assistant.businesses.profiles import SCRAP_REPLACEMENT_CHANGCHUN
 from forj_review_assistant.contracts.review import FieldObservation, ReviewRequest
-from forj_review_assistant.presentation.response import _build_comparisons
+from forj_review_assistant.evidence.comparison.review import build_field_comparisons
 
 
 def test_display_and_page_interaction_do_not_change_evidence_judgment():
@@ -19,7 +19,7 @@ def test_display_and_page_interaction_do_not_change_evidence_judgment():
     for interaction in (True, False):
         profile = replace(SCRAP_REPLACEMENT_CHANGCHUN, page_interaction=interaction)
         with business_context(profile):
-            results.append(_build_comparisons(request, profile, observations))
+            results.append(build_field_comparisons(request, profile, observations))
     assert results[0] == results[1]
     assert next(result for result in results[0] if result.field == "new_vehicle.vin").status == "REVIEW_REQUIRED"
 

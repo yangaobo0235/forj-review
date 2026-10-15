@@ -27,6 +27,7 @@ class BusinessRuleRegistry:
         checks = []
         actions = []
         intents = []
+        evidence = []
         for rule_group_id in dict.fromkeys(rule_group_ids):
             handler = self._handlers.get(rule_group_id)
             if handler is None:
@@ -35,10 +36,12 @@ class BusinessRuleRegistry:
             checks.extend(result.checks)
             actions.extend(result.page_action_candidates)
             intents.extend(result.page_action_intents)
+            evidence.extend(result.evidence)
         return RuleExecutionResult(
             checks=tuple(unique_checks(checks)),
             page_action_candidates=tuple(actions),
             page_action_intents=tuple(intents),
+            evidence=tuple(evidence),
         )
 
     def validate(self, rule_group_ids: tuple[str, ...]) -> None:

@@ -5,6 +5,7 @@ import re
 from forj_review_assistant.businesses.routing import route_fields
 from forj_review_assistant.contracts.recognition import AgentBatchResult
 from forj_review_assistant.contracts.review import FieldObservation
+from forj_review_assistant.evidence.comparison.aggregate import EVIDENCE_SOURCE_LABELS
 
 UNREADABLE_VALUES = frozenset(
     {
@@ -81,7 +82,7 @@ def batch_observations(batch: AgentBatchResult) -> list[FieldObservation]:
 def observation_evidence(observations: list[FieldObservation]) -> list[dict]:
     return [
         {
-            "source": "图片识别" if item.source_type == "image" else "申请页面字段",
+            "source": EVIDENCE_SOURCE_LABELS.get(item.source_type, item.source_type),
             **item.model_dump(),
         }
         for item in observations

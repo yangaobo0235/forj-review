@@ -4,7 +4,6 @@ import { executePageActions } from "../../../platform/extension/execute-page-act
  * 功能：管理页面采集、任务轮询和部分结果生命周期。
  * 职责边界：不渲染审核结果，不解释后端规则；页面写入只通过受控动作触发。
  * 修改日期：2026-09-11
- * 修改人：wuyi
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";

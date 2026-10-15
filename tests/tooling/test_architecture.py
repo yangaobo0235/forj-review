@@ -46,3 +46,20 @@ def test_configuration_cannot_execute_generated_python(tmp_path):
     (tmp_path / "businesses/configuration").mkdir(parents=True)
     (tmp_path / "businesses/configuration/loader.py").write_text("exec('print(1)')\n", encoding="utf-8")
     assert any("dynamic code" in item for item in check_architecture(tmp_path))
+
+
+def test_field_decisions_cannot_depend_on_response_rendering(tmp_path):
+    (tmp_path / "evidence").mkdir()
+    (tmp_path / "evidence/comparison.py").write_text(
+        "from forj_review_assistant.presentation.response import build_review_response\n",
+        encoding="utf-8",
+    )
+    assert any("API response rendering" in item for item in check_architecture(tmp_path))
+
+
+def test_graph_cannot_embed_builtin_registration_details(tmp_path):
+    (tmp_path / "runtime/workflow").mkdir(parents=True)
+    (tmp_path / "runtime/workflow/graph.py").write_text(
+        'handlers = {"scrap_certificate_qr": execute}\n', encoding="utf-8",
+    )
+    assert any("business registration" in item for item in check_architecture(tmp_path))

@@ -36,7 +36,7 @@ class AuthorityRule:
     一个专用的裁决函数。`label` 只用于生成面向审核员的理由文本。
     """
 
-    source: Literal["qr_page", "page", "image"]
+    source: Literal["qr_page", "page", "image", "capability"]
     label: str
     document_types: tuple[str, ...] = ()
     match: Literal["full", "suffix8"] = "full"
@@ -44,7 +44,7 @@ class AuthorityRule:
     required: bool = False
 
     def __post_init__(self) -> None:
-        if self.source not in ("qr_page", "page", "image"):
+        if self.source not in ("qr_page", "page", "image", "capability"):
             raise ValueError(f"未知权威来源：{self.source}")
         if self.match not in ("full", "suffix8"):
             raise ValueError(f"未知比较窗口：{self.match}")

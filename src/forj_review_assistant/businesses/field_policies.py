@@ -133,14 +133,21 @@ def date_window_problem(label: str, field: str, value: object, *, today: date | 
 
 
 
-def filter_allowed_observations(field: str, observations):
+def filter_allowed_observations(field: str, observations, *, capability_sources=frozenset()):
     """按实际材料类型过滤证据；未知类型不冒充允许来源。"""
+    observations = [
+        item for item in observations
+        if item.source_type != "capability" or item.source_id in capability_sources
+    ]
     policy = field_policy(field)
     if policy is None or policy.mode in {"SYSTEM", "DERIVED", "PAGE_AUXILIARY"}:
         return list(observations)
     allowed = set(policy.allowed_document_types)
     result = []
     for item in observations:
+        if item.source_type == "capability" and item.source_id in capability_sources:
+            result.append(item)
+            continue
         if item.source_type == "page" or item.source_type in {"image", "qr_page"} and (not item.document_type or item.document_type in allowed):
             result.append(item)
     return result

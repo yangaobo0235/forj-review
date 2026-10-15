@@ -2,7 +2,6 @@
 
 主要职责：定义不同业务、地区和版本的字段与规则开关。
 修改日期：2026-08-26
-修改人：wuyi
 """
 
 from dataclasses import dataclass, replace
@@ -80,7 +79,7 @@ class BusinessProfile:
             if self.material_policy and not any(
                 spec.capability_id == "material_completeness" for spec in specs
             ):
-                specs.append(CapabilitySpec("material_completeness", kind="MATERIAL", stage="INPUT_COVERAGE"))
+                specs.append(CapabilitySpec("material_completeness", kind="MATERIAL", stage="EVIDENCE_VALIDATION"))
             return tuple(specs)
         templates = {spec.capability_id: spec for spec in self.capability_specs}
         specs: list[CapabilitySpec] = []
@@ -113,13 +112,13 @@ class BusinessProfile:
             ))
         if self.material_policy:
             template = templates.get("material_completeness", CapabilitySpec(
-                "material_completeness", kind="MATERIAL", stage="INPUT_COVERAGE"
+                "material_completeness", kind="MATERIAL", stage="EVIDENCE_VALIDATION"
             ))
             specs.append(replace(
                 template,
                 capability_id="material_completeness",
                 kind="MATERIAL",
-                stage="INPUT_COVERAGE",
+                stage="EVIDENCE_VALIDATION",
             ))
         return tuple(specs)
 

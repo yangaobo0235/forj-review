@@ -61,6 +61,8 @@ def check_architecture(source: Path = SOURCE) -> list[str]:
                     reason = "domain module imports runtime or a concrete external client"
                 elif group == "integrations" and target in {"runtime", "presentation"}:
                     reason = "external adapter imports orchestration or presentation"
+                elif group == "evidence" and target == "presentation":
+                    reason = "evidence decisions import API response rendering"
             if reason:
                 findings.append(f"{relative.as_posix()}:{line}: {reason}: {module}")
             if relative.as_posix() == "runtime/workflow/graph.py" and module.startswith(
@@ -78,6 +80,11 @@ def check_architecture(source: Path = SOURCE) -> list[str]:
                     "eval", "exec", "__import__",
                 }:
                     findings.append(f"{relative.as_posix()}:{node.lineno}: configuration executes dynamic code")
+        if relative.as_posix() == "runtime/workflow/graph.py":
+            business_ids = {"scrap_certificate_qr", "fill_affiliation_fields", "verify_invoice", "old_vehicle.affiliation", "new_vehicle.affiliation", "scrap_replacement"}
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value in business_ids:
+                    findings.append(f"{relative.as_posix()}:{node.lineno}: workflow embeds business registration: {node.value}")
     return findings
 
 
