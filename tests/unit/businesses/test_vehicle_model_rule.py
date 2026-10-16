@@ -344,3 +344,30 @@ def test_emission_reason_says_when_it_was_inferred() -> None:
     assert "由发动机型号的排放后缀推导" not in declared["VEHICLE-MODEL-EMISSION"].reason
     # 证件上直接印的排放标准不加推导说明。
     assert material_values(declared["VEHICLE-MODEL-EMISSION"])[0].value == "国五"
+
+
+def test_uncertain_vehicle_derivation_cannot_prove_conflict():
+    checks = run(observations=[observation("vehicle.engine_model", "CA4DK1-48E6").model_copy(update={"uncertain": True})])
+    for cid in ("VEHICLE-MODEL-POWER", "VEHICLE-MODEL-EMISSION"):
+        check = checks[cid]
+        assert check.status == "INSUFFICIENT"
+        assert check.reason_codes == ["RECOGNITION_UNCERTAIN"]
+        assert all(v.uncertain and v.comparison_status == "INSUFFICIENT" for v in material_values(check))
+
+
+def test_reliable_vehicle_conflict_survives_uncertain_extra_material():
+    checks = run(observations=[
+        observation("vehicle.engine_model", "CA4DK1-48E6"),
+        observation("vehicle.engine_model", "CA4DK1-22E5", REGISTRATION, 2).model_copy(update={"uncertain": True}),
+    ])
+    check = checks["VEHICLE-MODEL-POWER"]
+    assert check.status == "CONFLICT"
+    assert "VALUE_MISMATCH" in check.reason_codes
+    assert material_values(check)[0].comparison_status == "CONFLICT"
+    assert material_values(check)[1].comparison_status == "INSUFFICIENT"
+
+
+def test_vehicle_conflict_cannot_ignore_uncertainty_in_a_duplicate_read():
+    engine = observation("vehicle.engine_model", "CA4DK1-48E6")
+    check = run(observations=[engine, engine.model_copy(update={"uncertain": True})])["VEHICLE-MODEL-POWER"]
+    assert check.status == "INSUFFICIENT"

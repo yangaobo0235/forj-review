@@ -3,6 +3,8 @@
 import logging
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
+from uuid import uuid4
 
 from fastapi import FastAPI
 
@@ -23,6 +25,8 @@ def create_app(*, review_service: ReviewService | None = None) -> FastAPI:
             jobs = ReviewJobManager(service)
             app.state.review_service = service
             app.state.review_jobs = jobs
+            app.state.process_instance_id = uuid4().hex
+            app.state.configuration_directory = str(Path(os.environ["REVIEW_PAGES_DIR"]).resolve()) if os.getenv("REVIEW_PAGES_DIR") else None
             logger.info("review service started release=%s profiles=%d model_configured=%s model_global=%d model_per_job=%d finalize=%d",
                         os.getenv("REVIEW_RELEASE_ID", "development"), len(service.registry.active_profiles),
                         service.agent is not None, jobs.scheduler.global_limit, jobs.scheduler.per_job_limit,

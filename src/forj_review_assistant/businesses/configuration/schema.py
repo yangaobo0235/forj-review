@@ -72,7 +72,9 @@ class FieldConfig(Declaration):
     required: StrictBool = True
     writable: StrictBool = False
     allow_single_evidence: StrictBool = True
-    uncertain_requires_review: StrictBool = True
+    uncertain_requires_review: StrictBool = Field(
+        default=True, description="必须为 true；不确定读值不能证明通过或冲突",
+    )
     page_evidence_required: StrictBool = True
     material_field: Key | None = None
     max_age_days: int | None = Field(default=None, ge=1)
@@ -81,6 +83,12 @@ class FieldConfig(Declaration):
     occurrence: int = Field(default=1, ge=1)
     checks: tuple[Text, ...] = ()
     task_projector: TaskProjectorId = ""
+
+    @model_validator(mode="after")
+    def protect_uncertain_evidence(self):
+        if not self.uncertain_requires_review:
+            raise ValueError("uncertain_requires_review 必须为 true，不能关闭识别不确定性保护")
+        return self
 
 
 class MaterialConfig(Declaration):

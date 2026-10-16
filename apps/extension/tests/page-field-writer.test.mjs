@@ -172,6 +172,38 @@ test("组合字段回填用同一份业务白名单，不退回内置的报废�
   assert.match(rejected.message, /控件类型暂不支持/);
 });
 
+test("composite fill reveals the first target once after every value is accepted and highlights all targets", async () => {
+  const first = valueInput("FIRST");
+  const second = valueInput("SECOND");
+  const calls = [];
+  for (const [index, input] of [first, second].entries()) {
+    input.scrollIntoView = options => {
+      assert.equal(first.value, "NEW");
+      assert.equal(second.value, "NEW");
+      assert.deepEqual(options, { behavior: "smooth", block: "center", inline: "nearest" });
+      calls.push(`scroll:${index}`);
+    };
+    input.focus = options => {
+      assert.deepEqual(options, { preventScroll: true });
+      calls.push(`focus:${index}`);
+    };
+    input.animate = (frames, options) => {
+      assert.equal(options.duration, 4000);
+      assert.equal(frames[1].offset, 0.85);
+      calls.push(`highlight:${index}`);
+    };
+  }
+  const result = await ReviewPageFieldWriter.executeValueGroup(
+    { defaultView: { Event: class Event {} } },
+    [{ field: "invoice.code", element: first }, { field: "invoice.invoice_no", element: second }],
+    { fields: ["invoice.code", "invoice.invoice_no"], value: "NEW", expectedValues: { "invoice.code": "FIRST", "invoice.invoice_no": "SECOND" } },
+    () => true,
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.actions.length, 2);
+  assert.deepEqual(calls, ["scroll:0", "focus:0", "highlight:0", "highlight:1"]);
+});
+
 test("single-field writer restores the original value after failed readback", async () => {
   const input = valueInput("VIN-OLD");
   let events = 0;
@@ -240,6 +272,12 @@ test("a rejected original-value restore is reported as a rollback failure", asyn
 test("composite rollback reads both restored values before reporting success", async () => {
   const first = valueInput("FIRST");
   const second = valueInput("SECOND");
+  const revealCalls = [];
+  for (const input of [first, second]) {
+    input.scrollIntoView = () => revealCalls.push("scroll");
+    input.focus = () => revealCalls.push("focus");
+    input.animate = () => revealCalls.push("highlight");
+  }
   second.dispatchEvent = () => { second.value = "FRAMEWORK-REJECTED"; };
   const result = await ReviewPageFieldWriter.executeValueGroup(
     { defaultView: { Event: class Event {} } },
@@ -249,6 +287,7 @@ test("composite rollback reads both restored values before reporting success", a
   assert.equal(result.ok, false);
   assert.equal(first.value, "FIRST");
   assert.match(result.message, /自动回滚未完成/);
+  assert.deepEqual(revealCalls, []);
 });
 
 test("Ant virtual select clicks visible sibling options, never the accessibility mirror", async () => {
@@ -284,18 +323,18 @@ test("Ant virtual select clicks visible sibling options, never the accessibility
 
 const classes = (...names) => ({ contains: name => names.includes(name) });
 
-function calendarFixture({ initial = "2026-10-12", disabledDate = "", blockedNavigation = false, closingDelay = 0 } = {}) {
+function calendarFixture({ initial = "2026-10-12", disabledDate = "", blockedNavigation = false, closingDelay = 0, stickyFirstSelection = false } = {}) {
   let committed = initial;
   let open = false;
   let closingUntil = 0;
   const close = () => { if (open) closingUntil = Date.now() + closingDelay; open = false; };
-  const visible = () => open || Date.now() < closingUntil;
+  const visible = () => (stickyFirstSelection && selectionClicks === 1) || open || Date.now() < closingUntil;
   let month = initial ? initial.slice(0, 7) : "2026-10";
   let navigations = 0;
   let selectionClicks = 0;
   const plain = { getAttribute: () => null, dispatchEvent() {} };
   const picker = {
-    ...plain, classList: classes("ant-picker"),
+    ...plain, classList: classes("ant-picker", ...(stickyFirstSelection ? ["ant-picker-focused"] : [])),
     querySelectorAll: () => [control],
     querySelector: () => ({ ...plain, click() {}, dispatchEvent(event) { if (event.type === "mouseup") committed = ""; } }),
   };
@@ -414,4 +453,49 @@ test("composite rollback clears a formerly empty Ant date using its mouseup hand
     { fields: ["old_vehicle.recycle_date", "new_vehicle.vin"], value: "2026-10-13", expectedValues: { "old_vehicle.recycle_date": "", "new_vehicle.vin": "ORIGINAL" } }, () => true);
   assert.equal(result.ok, false);
   assert.equal(fixture.value(), "");
+});
+
+test("a calendar committed before its close failure is included in composite rollback", async () => {
+  const fixture = calendarFixture({stickyFirstSelection: true});
+  const other = valueInput("original");
+  const result = await ReviewPageFieldWriter.executeValueGroup(fixture.root,
+    [{field: "old_vehicle.recycle_date", element: fixture.control}, {field: "new_vehicle.vin", element: other}],
+    {fields: ["old_vehicle.recycle_date", "new_vehicle.vin"], value: "2026-10-13", expectedValues: {}}, () => true);
+  assert.equal(result.ok, false);
+  assert.match(result.message, /日历未关闭.*已回滚/);
+  assert.equal(fixture.value(), "2026-10-12");
+  assert.equal(other.value, "original");
+});
+
+
+test("page writes serialize single and composite operations and release the lock", async () => {
+  const root = {defaultView: {Event: class Event {}}};
+  const first = valueInput("old-a"), second = valueInput("old-b");
+  const writer = loadWriter({setTimeout});
+  const pending = writer.executeValueGroup(root,
+    [{field: "old_vehicle.vin", element: first}, {field: "new_vehicle.vin", element: second}],
+    {fields: ["old_vehicle.vin", "new_vehicle.vin"], value: "new", expectedValues: {}},
+  );
+  const blocked = await writer.executeValue(root, second, {field: "new_vehicle.vin", value: "interleaved"});
+  assert.equal(blocked.code, "WRITE_IN_PROGRESS");
+  assert.equal((await pending).ok, true);
+  assert.equal(first.value, "new");
+  assert.equal(second.value, "new");
+  assert.equal((await writer.executeValue(root, second, {field: "new_vehicle.vin", value: "after"})).ok, true);
+  assert.equal(second.value, "after");
+});
+
+test("composite writes reject duplicated fields and aliased DOM controls before mutation", async () => {
+  const root = {defaultView: {Event: class Event {}}};
+  const first = valueInput("old-a"), second = valueInput("old-b");
+  const writer = loadWriter({setTimeout});
+  const action = {fields: ["old_vehicle.vin", "new_vehicle.vin"], value: "new", expectedValues: {}};
+  for (const entries of [
+    [{field: "old_vehicle.vin", element: first}, {field: "old_vehicle.vin", element: second}],
+    [{field: "old_vehicle.vin", element: first}, {field: "new_vehicle.vin", element: first}],
+  ]) {
+    assert.equal((await writer.executeValueGroup(root, entries, action)).ok, false);
+    assert.equal(first.value, "old-a");
+    assert.equal(second.value, "old-b");
+  }
 });

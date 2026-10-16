@@ -189,8 +189,11 @@ def test_unreadable_material_values_do_not_invent_a_conflict() -> None:
     observations[1] = observation("old_vehicle.owner", "无法识别", "scrap_certificate", OLD, index=2)
     check = run(observations=observations)
 
-    assert check.status == "MATCH"
-    assert [value.value for value in check.values] == [COMPANY, COMPANY, COMPANY]
+    assert check.status == "INSUFFICIENT"
+    assert check.reason_codes == ["RECOGNITION_UNCERTAIN"]
+    assert check.values[1].value == "无法识别"
+    assert check.values[1].uncertain
+    assert check.values[1].comparison_status == "INSUFFICIENT"
 
 
 def test_owner_consistency_task_has_page_values_and_no_write_target() -> None:
@@ -220,3 +223,30 @@ def test_owner_consistency_task_has_page_values_and_no_write_target() -> None:
     assert len(step.values) == 4
     # page_values 只是装卸用的传递键，不应再留在 details 里重复一份。
     assert "page_values" not in step.details
+
+
+def test_uncertain_owner_difference_requires_review_but_reliable_difference_conflicts():
+    materials = all_materials()
+    materials[-1] = materials[-1].model_copy(update={"value": "其他公司", "uncertain": True})
+    check = run(observations=materials)
+    assert check.status == "INSUFFICIENT"
+    assert check.reason_codes == ["RECOGNITION_UNCERTAIN"]
+    assert check.values[-1].uncertain
+    assert check.values[-1].comparison_status == "INSUFFICIENT"
+    materials[0] = materials[0].model_copy(update={"value": "明确不同的公司"})
+    check = run(observations=materials)
+    assert check.status == "CONFLICT"
+    assert check.values[0].comparison_status == "CONFLICT"
+    assert check.values[-1].comparison_status == "INSUFFICIENT"
+
+
+def test_missing_other_side_does_not_hide_confirmed_owner_conflict():
+    check = run(observations=[observation("old_vehicle.owner", "明确不同的公司", "vehicle_license", OLD)])
+    assert check.status == "CONFLICT"
+
+
+def test_page_owner_conflict_is_independent_of_uncertain_materials():
+    materials = [item.model_copy(update={"uncertain": True}) for item in all_materials()]
+    check = run(page_fields={**PAGE, "new_vehicle.owner": "不同公司"}, observations=materials)
+    assert check.status == "CONFLICT"
+    assert all(item.comparison_status == "INSUFFICIENT" for item in check.values)

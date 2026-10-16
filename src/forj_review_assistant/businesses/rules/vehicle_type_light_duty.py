@@ -84,6 +84,8 @@ def build_vehicle_type_light_duty_check(
         check_id=VEHICLE_TYPE_LIGHT_DUTY_CHECK_ID,
         label=LABEL,
         status="INSUFFICIENT",
+        reason_codes=(["RECOGNITION_UNCERTAIN"] if any(item.uncertain for item in hits)
+                      else ["POLICY_REVIEW"]),
         reason=(
             f"材料识别的车辆类型含「{'」「'.join(matched)}」：{detail}。"
             "页面按大类填写、比对折叠后看不出档位差异，请人工复核该档位是否属于本次补贴范围"

@@ -199,7 +199,9 @@ class ReviewWorkflow:
                 builder.add_edge(source, target)
         builder.add_edge("build_error_response", END)
         builder.add_edge(WORKFLOW_NODE_ORDER[-1], END)
-        self.graph = builder.compile()
+        # Reviews own transient execution state, including callbacks. When invoked by
+        # a durable configuration graph, never inherit its session checkpointer.
+        self.graph = builder.compile(checkpointer=False)
 
     @staticmethod
     def _instrument(name: str, fn: Callable[..., Any]) -> Callable[..., Any]:

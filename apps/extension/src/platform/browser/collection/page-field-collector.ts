@@ -738,10 +738,21 @@ const isDomElement = (value: unknown): value is DomElement => {
   };
 
   export const ReviewPageFieldCollector = {
+    // Discovery uses raw candidates without canonical field definitions or a backend manifest.
+    discover: (root: DomRoot) => {
+      const scoped = reviewRoot(root);
+      const controls = queryAll(scoped, CONTROL_SELECTOR)
+        .filter(control => isDataControl(control) && isVisibleControl(control) && !isSearchFilterControl(control));
+      return [...controlCandidates(scoped, controls), ...structuredCandidates(scoped), ...adjacentCandidates(scoped)]
+        .filter(candidate => candidate.label && !isSystemControlLabel(candidate.label)
+          && !isIgnoredControlLabel(candidate.label) && !isVerificationCandidate(candidate)
+          && !isSearchFilterControl(candidate.element));
+    },
     collect,
     // 写回守卫只需要身份字段；仍实时解析 DOM 并保留重复目标的歧义检查。
     collectIdentity: (root: DomRoot, fields: readonly string[]) => collect(root, null, new Set(fields)),
     collectCandidates,
+    isEditableControl,
     definitionForLabel,
     isSectionRequired,
     sectionFromText,

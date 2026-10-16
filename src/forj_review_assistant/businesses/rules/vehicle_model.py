@@ -14,6 +14,7 @@
 """
 
 import re
+from dataclasses import replace
 from typing import Literal
 
 from forj_review_assistant.capabilities.specs import (
@@ -29,6 +30,7 @@ from forj_review_assistant.evidence.comparison.aggregate import (
 from forj_review_assistant.evidence.comparison.evidence_values import (
     observation_evidence,
     readable_value,
+    trusted_page_value,
 )
 
 PAGE_MODEL_FIELD = "vehicle.model"
@@ -90,7 +92,7 @@ _ENGINE_MODEL_EMISSION_BY_DIGIT = {"4": "国四", "5": "国五", "6": "国六"}
 
 
 def _page_model(context: ReviewExecutionContext) -> str:
-    return str(context.request.page_fields.get(PAGE_MODEL_FIELD) or "")
+    return str(trusted_page_value(context.request, PAGE_MODEL_FIELD) or "")
 
 
 def _readable_values(
@@ -154,12 +156,13 @@ def _conclusion(
     return CheckResultValue(
         source=label,
         value=text,
-        conflicting=conflicting,
+        conflicting=None if source.uncertain else conflicting,
         detail=str(source.value),
         source_id=source.source_id,
         image_id=source.image_id,
         image_index=source.image_index,
         document_type=source.document_type,
+        uncertain=source.uncertain,
     )
 
 
@@ -182,6 +185,8 @@ def _collapse(candidates):
         if value not in merged:
             merged[value] = ([], item)
             order.append(value)
+        elif merged[value][1].uncertain and not item.uncertain:
+            merged[value] = (merged[value][0], item)
         if note is None:
             direct.add(value)
             continue
@@ -203,14 +208,16 @@ def _result(
     values: list[CheckResultValue],
     details: dict[str, object],
 ) -> CheckResult:
-    if status == "MATCH" and any(item.uncertain for item in sources):
+    uncertain = any(item.uncertain for item in sources)
+    if uncertain:
         status = "INSUFFICIENT"
-        reason = f"{reason}；材料识别不确定，请核对原图"
+        reason = "材料识别不确定，无法确认车型比对结论，请核对原图"
     return CheckResult(
         check_id=check_id,
         label=label,
         status=status,
         reason=reason,
+        reason_codes=["RECOGNITION_UNCERTAIN"] if uncertain else [],
         values=values,
         evidence=observation_evidence(sources),
         details=details,
@@ -483,13 +490,30 @@ def _emission_check(context: ReviewExecutionContext) -> CheckResult:
 
 def build_vehicle_model_checks(context: ReviewExecutionContext) -> RuleExecutionResult:
     """车源车型三项结论：马力、整车型号、排放标准。"""
-    return RuleExecutionResult(
-        checks=(
-            _power_check(context),
-            _model_code_check(context),
-            _emission_check(context),
-        )
-    )
+    # 保留全部候选供人工查看，但冲突证明只允许使用可靠材料。
+    # 先按材料合并再筛可靠读值，避免同一材料的另一张不确定读图被过滤后丢失。
+    merged = [item for field in dict.fromkeys(item.field for item in context.observations)
+              for item in deduplicate_sources(field, [
+                  item for item in context.observations if item.field == field
+              ])]
+    reliable_context = replace(context, observations=tuple(item for item in merged if not item.uncertain))
+    checks = []
+    for handler in (_power_check, _model_code_check, _emission_check):
+        check = handler(context)
+        if "RECOGNITION_UNCERTAIN" in check.reason_codes:
+            confirmed = handler(reliable_context)
+            if confirmed.status == "CONFLICT":
+                check = check.model_copy(update={
+                    "status": "CONFLICT",
+                    "reason": confirmed.reason + "；另有识别不确定的证据，请核对原图",
+                    "reason_codes": ["VALUE_MISMATCH", "RECOGNITION_UNCERTAIN"],
+                })
+        check.values = [item.model_copy(update={
+            "comparison_status": "INSUFFICIENT" if item.uncertain or check.status == "INSUFFICIENT"
+            else "CONFLICT" if item.conflicting else "MATCH",
+        }) for item in check.values]
+        checks.append(check)
+    return RuleExecutionResult(checks=tuple(checks))
 
 
 def run_vehicle_model(context: ReviewExecutionContext) -> RuleExecutionResult:

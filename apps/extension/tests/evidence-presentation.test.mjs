@@ -151,26 +151,26 @@ test("three conflicting sources without a majority are fully marked", () => {
 
 test("comparison wires majority highlight plans instead of a fixed page baseline", () => {
   const source = readFileSync(
-    new URL("../src/features/review/ui/ReviewResults.tsx", import.meta.url),
+    new URL("../src/features/review/ui/ResultGroup.vue", import.meta.url),
     "utf8",
   );
 
-  assert.match(source, /<strong>{statusLabel\(comparison\.status\)}<\/strong>/);
-  assert.doesNotMatch(source, /<small>{comparison\.message}<\/small>/);
-  assert.match(source, /const highlightPlans = evidenceHighlightPlans\(sourceValues\)/);
-  assert.match(source, /highlightPlan=\{highlightPlans\[index\]\}/);
+  assert.match(source, /<strong>\{\{ statusLabel\(comparison\.status\) \}\}<\/strong>/);
+  assert.doesNotMatch(source, /comparison\.message/);
+  assert.match(source, /highlightPlans: evidenceHighlightPlans\(sourceValues\)/);
+  assert.match(source, /:highlight-plan="highlightPlans\[index\]!"/);
   assert.doesNotMatch(source, /pageCompareTo/);
 });
 
 test("vin and plate evidence use position-based differences", () => {
   const source = readFileSync(
-    new URL("../src/features/review/ui/ReviewResults.tsx", import.meta.url),
+    new URL("../src/features/review/ui/ResultGroup.vue", import.meta.url),
     "utf8",
   );
 
   assert.match(source, /comparison\.field\.endsWith\("\.vin"\)/);
   assert.match(source, /comparison\.field\.endsWith\("\.plate_no"\)/);
-  assert.match(source, /compareByPosition\s*\?\s*diffValueByPosition/);
+  assert.match(readFileSync(new URL("../src/features/review/ui/EvidenceSource.vue", import.meta.url), "utf8"), /compareByPosition\s*\?\s*diffValueByPosition/);
 });
 
 test("page and image values use a readable value column", () => {
@@ -188,7 +188,7 @@ test("page and image values use a readable value column", () => {
 
 test("conflicting evidence keeps the full value readable and soft-highlights differences", () => {
   const source = readFileSync(
-    new URL("../src/features/review/ui/ReviewResults.tsx", import.meta.url),
+    new URL("../src/features/review/ui/EvidenceSource.vue", import.meta.url),
     "utf8",
   );
   const css = (readFileSync(new URL("../src/app/App.css", import.meta.url), "utf8") + readFileSync(new URL("../src/features/review/ui/EvidenceReviewWorkbench.css", import.meta.url), "utf8"));
@@ -199,9 +199,9 @@ test("conflicting evidence keeps the full value readable and soft-highlights dif
   );
   assert.match(
     css,
-    /\.evidence-source\.evidence-conflicting\s+\.evidence-value\s*{[^}]*color:\s*#101828;[^}]*font-weight:\s*500/s,
+    /\.evidence-source\.evidence-conflicting\s+\.evidence-value\s*{[^}]*color:\s*var\(--review-text\);[^}]*font-weight:\s*500/s,
   );
-  assert.match(css, /\.evidence-value mark\s*{[^}]*background:\s*#fee4e2;[^}]*color:\s*#b42318/s);
+  assert.match(css, /\.evidence-value mark\s*{[^}]*background:\s*#fee4e2;[^}]*color:\s*var\(--review-danger\)/s);
   assert.doesNotMatch(css, /\.evidence-value mark\s*{[^}]*display:\s*inline-block/s);
   assert.doesNotMatch(
     css,

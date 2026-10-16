@@ -85,6 +85,47 @@ def check_architecture(source: Path = SOURCE) -> list[str]:
             for node in ast.walk(tree):
                 if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value in business_ids:
                     findings.append(f"{relative.as_posix()}:{node.lineno}: workflow embeds business registration: {node.value}")
+    if source == SOURCE:
+        findings.extend(check_configuration_agent())
+    return findings
+
+
+def check_configuration_agent(source: Path | None = None) -> list[str]:
+    source = source or ROOT / "src/forj_configuration_agent"
+    findings = []
+    shared = (
+        "forj_review_assistant.businesses.configuration.",
+        "forj_review_assistant.businesses.packs.",
+        "forj_review_assistant.businesses.page_catalog.",
+        "forj_review_assistant.businesses.rules.catalog.",
+        "forj_review_assistant.config.configuration_io.",
+        "forj_review_assistant.runtime.configuration.service.",
+    )
+    for path in sorted(source.rglob("*.py")):
+        relative = path.relative_to(source)
+        group = relative.parts[0] if len(relative.parts) > 1 else "entrypoint"
+        package = ".".join(["forj_configuration_agent", *relative.parts[:-1]])
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for line, module in runtime_imports(tree, package):
+            reason = None
+            if module.startswith("forj_review_assistant"):
+                if relative.parts[:2] != ("integrations", "review_kernel") or not module.startswith(shared):
+                    reason = "cross-package access must use the registered review_kernel adapter API"
+            elif module.startswith("forj_configuration_agent."):
+                target = module.split(".")[1]
+                if group in {"contracts", "config"} and target != group:
+                    reason = "foundation imports execution"
+                elif group in {"application", "workflow", "tools"} and target in {"integrations", "interfaces", "bootstrap"}:
+                    reason = "orchestration imports a concrete adapter or entrypoint"
+                elif group == "integrations" and target in {"application", "workflow", "interfaces", "bootstrap"}:
+                    reason = "adapter imports orchestration"
+            if reason:
+                findings.append(f"forj_configuration_agent/{relative.as_posix()}:{line}: {reason}: {module}")
+    # The old package must never depend on the configuration agent.
+    if source == ROOT / "src/forj_configuration_agent":
+        for path in SOURCE.rglob("*.py"):
+            if "forj_configuration_agent" in path.read_text(encoding="utf-8"):
+                findings.append(f"{path.name}: audit package depends on configuration agent")
     return findings
 
 

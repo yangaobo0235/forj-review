@@ -637,3 +637,43 @@ async def test_custom_material_uses_generated_extraction_allowlist(declaration):
         )
     assert batch.observations[0].field == "permit.vin"
     assert batch.observations[0].value == "VIN1"
+
+
+def test_new_configuration_cannot_disable_uncertain_evidence_protection(declaration):
+    declaration["fields"][0]["uncertain_requires_review"] = False
+    with pytest.raises(ValidationError, match="uncertain_requires_review"):
+        _compile(declaration)
+
+
+@pytest.mark.parametrize("material_value, uncertain, expected", [
+    ("VIN-A", False, "MATCH"), ("VIN-B", False, "CONFLICT"),
+    ("VIN-B", True, "REVIEW_REQUIRED"), ("VIN-A", True, "REVIEW_REQUIRED"),
+])
+def test_configured_page_uses_the_shared_decision_boundary(declaration, material_value, uncertain, expected):
+    from forj_review_assistant.evidence.comparison.review import build_field_comparisons
+    profile = _compile(declaration)
+    request = ReviewRequest(page_url="https://example.test/permit-review", business_type="permit_review",
+                            region="new_city", page_fields={"permit.vin": "VIN-A"})
+    observations = [FieldObservation(field="permit.vin", source_type="page", source_id="page", value="VIN-A"),
+                    FieldObservation(field="permit.vin", source_type="image", source_id="permit1",
+                                     document_type="permit", value=material_value, uncertain=uncertain)]
+    with business_context(profile):
+        result = build_field_comparisons(request, profile, observations)
+    assert result[0].status == expected
+    if uncertain:
+        assert result[0].reason_codes == ["RECOGNITION_UNCERTAIN"]
+
+
+def test_ambiguous_page_control_cannot_prove_conflict(declaration):
+    from forj_review_assistant.evidence.comparison.review import build_field_comparisons
+    profile = _compile(declaration)
+    request = ReviewRequest(page_url="https://example.test/permit-review", business_type="permit_review",
+                            region="new_city", page_fields={"permit.vin": "WRONG"},
+                            collection_diagnostics={"ambiguous_fields": ["permit.vin"]})
+    observations = [FieldObservation(field="permit.vin", source_type="page", source_id="page", value="WRONG"),
+                    FieldObservation(field="permit.vin", source_type="image", source_id="permit1",
+                                     document_type="permit", value="VIN-A")]
+    with business_context(profile):
+        result = build_field_comparisons(request, profile, observations)
+    assert result[0].status == "REVIEW_REQUIRED"
+    assert result[0].reason_codes == ["PAGE_VALUE_MISSING"]

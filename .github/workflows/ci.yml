@@ -84,6 +84,35 @@ jobs:
       - name: Check extension architecture
         run: node ../../scripts/ci/check-extension-architecture.mjs
 
+  configuration-web:
+    name: Configuration Web
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/configuration-web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.18.0"
+          cache: npm
+          cache-dependency-path: apps/configuration-web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Build configuration Web
+        run: npm run build
+
   container:
     name: Production container smoke
     runs-on: ubuntu-latest
@@ -93,7 +122,7 @@ jobs:
       - name: Build production image
         run: docker build --file deploy/Dockerfile --tag forj-review-api:ci .
       - name: Validate deployment Compose
-        run: docker compose --env-file .env.example -f docker-compose.server.yml config --quiet
+        run: docker compose --env-file src/forj_review_assistant/.env.example -f docker-compose.server.yml config --no-env-resolution --quiet
       - name: Verify health and persistent application logs
         run: python3 scripts/ci/smoke-container.py forj-review-api:ci
 

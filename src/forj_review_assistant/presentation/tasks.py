@@ -32,6 +32,7 @@ def _merge(base: ReviewTask, members: Sequence[ReviewTask]) -> ReviewTask:
     return base.model_copy(update={
         "result_status": status,
         "requires_reviewer_action": status != "MATCH",
+        "reason_codes": list(dict.fromkeys(code for item in all_tasks for code in item.reason_codes)),
         "reason": "；".join(dict.fromkeys(item.reason for item in all_tasks if item.reason)),
         "values": [value for item in all_tasks for value in item.values],
         "evidence": [value for item in all_tasks for value in item.evidence],

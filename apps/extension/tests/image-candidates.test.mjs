@@ -1,3 +1,4 @@
+import { classifyImage } from "../src/platform/browser/collection/material-hints.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
@@ -165,9 +166,5 @@ test("content collector reserves enough capacity for fixed and conditional mater
 });
 
 test("content collector classifies invoices before generic new-vehicle groups", () => {
-  const content = readFileSync(new URL("../src/entrypoints/content.ts", import.meta.url), "utf8");
-
-  assert.ok(
-    content.indexOf('text.includes("发票")') < content.indexOf('text.includes("新车资料")'),
-  );
+  assert.equal(classifyImage("新车资料 发票"), "invoice");
 });

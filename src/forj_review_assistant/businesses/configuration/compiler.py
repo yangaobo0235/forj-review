@@ -153,6 +153,10 @@ def compile_page(
             bindings = [binding for binding in bindings if binding[1] != item.key]
             bindings.extend((check_id, item.key) for check_id in item.checks)
 
+    for field in fields.values():
+        if not field.uncertain_requires_review and field.mode != "SYSTEM":
+            raise ValueError(f"字段 {field.key} 不能关闭识别不确定性保护")
+
     materials = _extraction_seeds(base)
     unknown_materials = set(definition.remove_materials) - materials.keys()
     if unknown_materials:

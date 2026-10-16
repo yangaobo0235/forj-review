@@ -10,9 +10,12 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass
+from io import BytesIO
 from urllib.parse import urlparse
 
 import httpx
+
+from forj_review_assistant.integrations.qr.image_transport import ImageTransport
 
 
 @dataclass(frozen=True)
@@ -22,7 +25,6 @@ class QrDecodeResult:
     values: tuple[str, ...] = ()
     decoder: str = "none"
     error_code: str | None = None
-    error_detail: str | None = None
     elapsed_ms: int = 0
 
 
@@ -36,11 +38,13 @@ class QrImageDecoder:
         max_bytes: int = 8_000_000,
         max_redirects: int = 2,
         transport: httpx.AsyncBaseTransport | httpx.BaseTransport | None = None,
+        private_hosts: tuple[str, ...] = (),
     ) -> None:
         self.timeout_seconds = timeout_seconds
         self.max_bytes = max_bytes
         self.max_redirects = max_redirects
         self.transport = transport
+        self.private_hosts = private_hosts
 
     async def decode(self, image_url: str | None) -> QrDecodeResult:
         started = time.monotonic()
@@ -50,19 +54,19 @@ class QrImageDecoder:
             content = await self._read_image(image_url or "")
         except TimeoutError:
             return self._result(started, error_code="download_timeout")
-        except httpx.HTTPStatusError as exc:
-            return self._result(started, error_code="http_status", error_detail=str(exc))
-        except httpx.HTTPError as exc:
-            return self._result(started, error_code="download_error", error_detail=str(exc))
-        except ValueError as exc:
-            return self._result(started, error_code="image_rejected", error_detail=str(exc))
-        except (OSError, RuntimeError, TypeError) as exc:  # pragma: no cover - transport boundary
-            return self._result(started, error_code="download_error", error_detail=str(exc))
+        except httpx.HTTPStatusError:
+            return self._result(started, error_code="http_status")
+        except httpx.HTTPError:
+            return self._result(started, error_code="download_error")
+        except ValueError:
+            return self._result(started, error_code="image_rejected")
+        except (OSError, RuntimeError, TypeError):  # pragma: no cover - transport boundary
+            return self._result(started, error_code="download_error")
 
         try:
             values = await asyncio.to_thread(self._decode_bytes, content)
-        except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:  # pragma: no cover - native boundary
-            return self._result(started, error_code="decoder_error", error_detail=str(exc))
+        except (ImportError, OSError, RuntimeError, TypeError, ValueError):  # pragma: no cover - native boundary
+            return self._result(started, error_code="decoder_error")
         if values:
             return self._result(started, values=values[0], decoder=values[1])
         return self._result(started, error_code="decode_empty")
@@ -72,7 +76,8 @@ class QrImageDecoder:
         async with httpx.AsyncClient(
             follow_redirects=False,
             timeout=httpx.Timeout(self.timeout_seconds),
-            transport=self.transport,
+            transport=self.transport or ImageTransport(private_hosts=self.private_hosts),
+            trust_env=False,
         ) as client:
             for _ in range(self.max_redirects + 1):
                 if not self._is_http_url(current):
@@ -105,17 +110,30 @@ class QrImageDecoder:
             return False
         try:
             parsed = urlparse(url)
+            _ = parsed.port
         except ValueError:
             return False
-        return parsed.scheme in {"http", "https"} and bool(parsed.hostname)
+        return (parsed.scheme in {"http", "https"} and bool(parsed.hostname)
+                and parsed.username is None and parsed.password is None)
 
     @staticmethod
     def _decode_bytes(content: bytes) -> tuple[tuple[str, ...], str] | None:
         """ZXing 优先；OpenCV 仅在 ZXing 没有结果时兜底。"""
         import cv2
         import numpy as np
+        from PIL import Image, UnidentifiedImageError
 
-        image = cv2.imdecode(np.frombuffer(content, dtype=np.uint8), cv2.IMREAD_COLOR)
+        # 压缩字节数不能限制解压后的内存；必须在原生解码分配像素前检查尺寸。
+        try:
+            with Image.open(BytesIO(content)) as header:
+                if header.width * header.height > 20_000_000:
+                    raise ValueError("二维码图片像素超过限制")
+        except (UnidentifiedImageError, Image.DecompressionBombError, OSError) as exc:
+            raise ValueError("二维码图片格式或尺寸无效") from exc
+        try:
+            image = cv2.imdecode(np.frombuffer(content, dtype=np.uint8), cv2.IMREAD_COLOR)
+        except cv2.error as exc:
+            raise ValueError("二维码图片无法解码") from exc
         if image is None:
             return None
 
@@ -162,12 +180,10 @@ class QrImageDecoder:
         values: tuple[str, ...] = (),
         decoder: str = "none",
         error_code: str | None = None,
-        error_detail: str | None = None,
     ) -> QrDecodeResult:
         return QrDecodeResult(
             values=values,
             decoder=decoder,
             error_code=error_code,
-            error_detail=error_detail,
             elapsed_ms=max(0, int((time.monotonic() - started) * 1000)),
         )

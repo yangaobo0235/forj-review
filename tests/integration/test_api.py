@@ -3,9 +3,33 @@ import logging
 import os
 import threading
 
+import pytest
+
 from forj_review_assistant.contracts.review import ReviewRequest
 from forj_review_assistant.observability.logging import configure_log_file
 from forj_review_assistant.runtime.review_service import ReviewService
+
+
+@pytest.mark.parametrize("route", ["assist", "jobs", "jobs/urls"])
+@pytest.mark.parametrize("case", ["overflow", "duplicate_id", "duplicate_index", "non_http",
+                                  "invalid_port", "credentials"])
+def test_all_review_entrypoints_reject_invalid_image_lists(client, route, case):
+    images = [{"index": i, "image_id": f"img-{i}", "src": f"https://images.example.test/{i}.png"}
+              for i in range(17 if case == "overflow" else 2)]
+    if case == "duplicate_id":
+        images[1]["image_id"] = images[0]["image_id"]
+    elif case == "duplicate_index":
+        images[1]["index"] = images[0]["index"]
+    elif case == "non_http":
+        images[1]["src"] = "file:///private.png"
+    elif case == "invalid_port":
+        images[1]["src"] = "https://images.example.test:invalid/a.png"
+    elif case == "credentials":
+        images[1]["src"] = "https://user:secret@images.example.test/a.png"
+    response = client.post(f"/api/review/{route}", json={
+        "page_url": "https://example.test/review", "region": "qingdao", "images": images,
+    })
+    assert response.status_code == 422
 
 
 def test_health_endpoint(client) -> None:

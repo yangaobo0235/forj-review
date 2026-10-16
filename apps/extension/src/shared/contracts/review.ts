@@ -166,8 +166,10 @@ export interface RetrySummary {
 export type FieldStatus = "MATCH" | "CONFLICT" | "REVIEW_REQUIRED";
 export type Recommendation = "PASS" | "REVIEW_REQUIRED";
 export type CheckResultStatus = "MATCH" | "CONFLICT" | "INSUFFICIENT";
+export type ReasonCode = "VALUE_MISMATCH" | "RULE_VIOLATION" | "EVIDENCE_MISSING" | "RECOGNITION_UNCERTAIN" | "AUTHORITY_MISSING" | "PAGE_VALUE_MISSING" | "POLICY_REVIEW" | "EXTERNAL_UNAVAILABLE" | "SYSTEM_INPUT";
 
 export interface CheckResultValue {
+  comparison_status?: CheckResultStatus | null;
   uncertain?: boolean;
   group_title?: string | null;
   differences?: DifferenceRange[];
@@ -187,6 +189,7 @@ export interface CheckResultValue {
 }
 
 export interface CheckResult {
+  reason_codes?: ReasonCode[];
   check_id: string;
   label: string;
   status: CheckResultStatus;
@@ -225,6 +228,7 @@ export interface AuxiliaryCheckSummary {
 }
 
 export interface EvidenceFact {
+  comparison_status?: CheckResultStatus | null;
   source: string;
   uncertain?: boolean;
   field?: string | null;
@@ -245,6 +249,7 @@ export interface EvidenceFact {
 
 
 export interface FieldComparison {
+  reason_codes?: ReasonCode[];
   field: string;
   left_value?: string | null;
   right_value?: string | null;
@@ -341,6 +346,7 @@ export interface CapabilityResult {
 export type ReviewDisplayTarget = "PAGE_FIELD" | "ASSISTANT";
 
 export interface ReviewTask {
+  reason_codes?: ReasonCode[];
   step_id: string;
   /** Business visibility is projected by the backend; it does not change machine status. */
   visible?: boolean;

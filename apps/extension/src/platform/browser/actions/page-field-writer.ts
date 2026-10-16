@@ -3,6 +3,14 @@ import { antDatePicker, formControlKind } from "../form-controls.ts";
 import { calendarDate, selectCalendarDate } from "./date-picker.ts";
 import type { PageWriteAction, PageWriteGroupAction } from "../../../shared/contracts/review.ts";
 type Guard = (() => boolean) | undefined;
+const activeWrites = new WeakSet<DomRoot>();
+
+async function withPageWrite<T>(root: DomRoot, operation: () => Promise<T>) {
+  if (activeWrites.has(root)) return { ok: false as const, code: "WRITE_IN_PROGRESS",
+    message: "页面正在执行其他回填，请稍后重试", currentValue: undefined, actions: [] };
+  activeWrites.add(root);
+  try { return await operation(); } finally { activeWrites.delete(root); }
+}
 interface PopupControl { control: DomElement; trigger?: DomElement | null; listboxId?: string | null; }
 type GroupPrepared = {
   field: string;
@@ -135,6 +143,7 @@ type GroupPreparationFailure = {
   }
 
   function triggerInvoiceVerification(root: DomRoot, target: DomElement, expectedValue: string) {
+    if (activeWrites.has(root)) return { ok: false, message: "页面正在回填，请完成后再核验" };
     const snapshot = captureValue(target);
     if (!snapshot || hidden(target) || !connected(target) || !normalize(expectedValue)
       || normalize(snapshot.value) !== normalize(expectedValue)) {
@@ -286,6 +295,21 @@ type GroupPreparationFailure = {
   const fieldAllowed = (field: string, policy: WritePolicy | undefined) =>
     !policy?.fields ? ALLOWED_VALUE_FIELDS.has(field) : policy.fields.has(field);
 
+  function revealControl(control: DomElement) {
+    try { control.scrollIntoView?.({ behavior: "smooth", block: "center", inline: "nearest" }); } catch { control.scrollIntoView?.(); }
+    // Refocusing an Ant selector or calendar after committing can reopen its popup.
+    if (control.getAttribute?.("role") !== "combobox" && !antDatePicker(control)) control.focus?.({ preventScroll: true });
+  }
+
+  function highlightControl(control: DomElement) {
+    const target = control.closest?.<DomElement>(".ant-input-affix-wrapper, .ant-select, .ant-picker, .el-input, .el-select, .el-date-editor") || control;
+    target.animate?.([
+      { outline: "3px solid #1677ff", outlineOffset: "3px", backgroundColor: "#e6f4ff" },
+      { outline: "3px solid #1677ff", outlineOffset: "3px", backgroundColor: "#e6f4ff", offset: 0.85 },
+      { outline: "3px solid transparent", outlineOffset: "3px" },
+    ], { duration: 4000 });
+  }
+
   async function executeValue(root: DomRoot, entry: DomElement | null | undefined, action: PageWriteAction, guard: Guard, policy?: WritePolicy) {
     if (!action || !fieldAllowed(action.field, policy)) return { ok: false, message: "该字段不在允许回填范围内" };
     if (!entry || !sameCollectedRecord(guard)) return { ok: false, message: guardError };
@@ -332,15 +356,8 @@ type GroupPreparationFailure = {
       }
       return { ok: false, message: "回填后回读失败" };
     }
-    try { control.scrollIntoView?.({ behavior: "smooth", block: "center", inline: "nearest" }); } catch { control.scrollIntoView?.(); }
-    // Refocusing an Ant selector after committing can reopen its dropdown.
-    if (!custom && !antDatePicker(control)) control.focus?.({ preventScroll: true });
-    const highlightTarget = control.closest?.<DomElement>(".ant-input-affix-wrapper, .ant-select, .ant-picker, .el-input, .el-select, .el-date-editor") || control;
-    highlightTarget.animate?.([
-      { outline: "3px solid #1677ff", outlineOffset: "3px", backgroundColor: "#e6f4ff" },
-      { outline: "3px solid #1677ff", outlineOffset: "3px", backgroundColor: "#e6f4ff", offset: 0.85 },
-      { outline: "3px solid transparent", outlineOffset: "3px" },
-    ], { duration: 4000 });
+    revealControl(control);
+    highlightControl(control);
     return { ok: true, message: "字段已回填并回读，已定位到页面字段", actions: [{ field: action.field, label: action.field, value: after, status: "FILLED" }] };
   }
 
@@ -351,7 +368,9 @@ type GroupPreparationFailure = {
     guard: Guard,
     policy?: WritePolicy,
   ) {
-    if (!action.fields.length || action.fields.length !== entries.length || !String(action.value || "").trim()) {
+    if (!action.fields.length || action.fields.length !== entries.length || !String(action.value || "").trim()
+      || new Set(action.fields).size !== action.fields.length || new Set(entries.map(entry => entry.field)).size !== entries.length
+      || entries.some(entry => !action.fields.includes(entry.field))) {
       return { ok: false, message: "组合字段回填参数不完整", actions: [] };
     }
     const prepared: Array<GroupPrepared | GroupPreparationFailure> = entries.map((entry) => {
@@ -382,6 +401,9 @@ type GroupPreparationFailure = {
     const failed = prepared.find((item): item is GroupPreparationFailure => "error" in item);
     if (failed) return { ok: false, message: failed.error, code: failed.code, currentValue: failed.currentValue, actions: [] };
     const successful = prepared.filter((item): item is GroupPrepared => "control" in item);
+    if (new Set(successful.map(item => item.control)).size !== successful.length) {
+      return { ok: false, message: "组合字段指向重复的页面控件，请重新采集", actions: [] };
+    }
     const written: GroupPrepared[] = [];
     const rollback = async (message: string) => {
       const errors: string[] = [];
@@ -403,9 +425,13 @@ type GroupPreparationFailure = {
     };
     for (const item of successful) {
       if (!sameCollectedRecord(guard)) return await rollback("页面身份已失效，已停止组合回填");
-      const error = await writeControl(root, item.resolved, item.field, action.value, guard);
-      if (error) return await rollback(String(error));
       written.push(item);
+      const error = await writeControl(root, item.resolved, item.field, action.value, guard);
+      if (error) {
+        // 日历可能已提交日期但在关闭弹层时失败；该控件也必须进入回滚。
+        if (readValueControl(item.control) === item.original) written.pop();
+        return await rollback(String(error));
+      }
       await settle();
     }
     if (!sameCollectedRecord(guard)) return await rollback("页面身份已失效，已停止组合回填");
@@ -414,13 +440,16 @@ type GroupPreparationFailure = {
       const after = readValueControl(item.control);
       if (normalizeFieldValue(item.field, after) !== normalizeFieldValue(item.field, action.value)) return await rollback(`${item.field}回填后回读失败`);
       results.push({ field: item.field, label: item.field, value: after, status: "FILLED" });
-      const target = item.control.closest?.<DomElement>(".ant-input-affix-wrapper, .ant-select, .ant-picker, .el-input, .el-select, .el-date-editor") || item.control;
-      target.animate?.([
-        { outline: "3px solid #1677ff", outlineOffset: "3px", backgroundColor: "#e6f4ff" },
-        { outline: "3px solid transparent", outlineOffset: "3px" },
-      ], { duration: 4000 });
     }
-    return { ok: true, message: "组合字段已同时回填并回读", actions: results };
+    // Reveal once, after every readback succeeds, so multiple smooth scrolls do not compete.
+    revealControl(successful[0].control);
+    for (const item of successful) highlightControl(item.control);
+    return { ok: true, message: "组合字段已同时回填并回读，已定位到页面字段", actions: results };
   }
 
-  export const ReviewPageFieldWriter = { defaultWritableFields: ALLOWED_VALUE_FIELDS, executeValue, executeValueGroup, captureValue, triggerInvoiceVerification, controlKind };
+  export const ReviewPageFieldWriter = {
+    defaultWritableFields: ALLOWED_VALUE_FIELDS,
+    executeValue: (...args: Parameters<typeof executeValue>) => withPageWrite(args[0], () => executeValue(...args)),
+    executeValueGroup: (...args: Parameters<typeof executeValueGroup>) => withPageWrite(args[0], () => executeValueGroup(...args)),
+    captureValue, triggerInvoiceVerification, controlKind,
+  };

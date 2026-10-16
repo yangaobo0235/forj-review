@@ -530,19 +530,21 @@ def run_affiliation_subject(context: ReviewExecutionContext) -> RuleExecutionRes
     写回候选只在结论为 MATCH、且恰好是两个挂靠字段、主体类型唯一且属于
     个人/公司时才产出——这是**业务门槛**，不是编排，所以它属于这里而不是主图。
     """
+    page_fields = {key: value for key, value in context.request.page_fields.items()
+                   if key not in context.request.collection_diagnostics.ambiguous_fields}
     comparisons = {item.field: item for item in context.comparisons}
     result = build_affiliation_subject_check(
-        context.request.page_fields.get("old_vehicle.owner")
+        page_fields.get("old_vehicle.owner")
         or raw_settled_value(comparisons, "old_vehicle.owner"),
-        context.request.page_fields.get("new_vehicle.owner")
+        page_fields.get("new_vehicle.owner")
         or raw_settled_value(comparisons, "new_vehicle.owner"),
         list(context.observations),
-        context.request.page_fields.get("application.owner_type"),
+        page_fields.get("application.owner_type"),
     )
     auxiliary_checks = build_affiliation_auxiliary_checks(
-        page_fields=context.request.page_fields,
+        page_fields=page_fields,
         new_owner_type=result.owner_types[1],
-        new_owner=context.request.page_fields.get("new_vehicle.owner")
+        new_owner=page_fields.get("new_vehicle.owner")
         or raw_settled_value(comparisons, "new_vehicle.owner"),
     )
     action_fields = {action.field for action in result.page_actions}

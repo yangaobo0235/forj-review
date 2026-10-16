@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { h } from "vue";
+import { renderToString } from "vue/server-renderer";
 
-import { loadSource } from "./tsx-loader.mjs";
+import { loadSource } from "./vue-loader.mjs";
 
 /** 构造一个审核任务；页面字段由 step_id 前缀推导。 */
 const makeStep = (overrides) => ({
@@ -22,8 +22,8 @@ const makeStep = (overrides) => ({
 });
 
 
-const { EvidenceReviewWorkbench } = loadSource("features/review/ui/EvidenceReviewWorkbench.tsx");
-const { ReviewResults } = loadSource("features/review/ui/ReviewResults.tsx");
+const { default: EvidenceReviewWorkbench } = loadSource("features/review/ui/EvidenceReviewWorkbench.vue");
+const { default: ReviewResults } = loadSource("features/review/ui/ReviewResults.vue");
 
 function workbenchReview(reviewSteps, overrides = {}) {
   return {
@@ -38,7 +38,7 @@ function workbenchReview(reviewSteps, overrides = {}) {
   };
 }
 
-test("all profiles keep exactly three views and ignore complete, missing and uncertain legacy material tasks", () => {
+test("all profiles keep exactly three views and ignore complete, missing and uncertain legacy material tasks", async () => {
   for (const [business_type, region] of [["scrap_replacement", "qingdao"], ["scrap_replacement", "changchun"], ["vehicle_source", "default"], ["transfer", "default"], ["generated_page", "generated_region"]]) {
     for (const result_status of ["MATCH", "INSUFFICIENT"]) {
       const tasks = [
@@ -47,7 +47,7 @@ test("all profiles keep exactly three views and ignore complete, missing and unc
         makeStep({ step_id: "BUSINESS-OWNER-CONSISTENCY-001", label: "车辆所有人一致性", result_status: "CONFLICT", requires_reviewer_action: true, reason: "所有人不一致" }),
         makeStep({ step_id: "QR-GROUP", category: "EXTERNAL", label: "二维码官网核验", result_status: "INSUFFICIENT", requires_reviewer_action: true }),
       ];
-      const html = renderToStaticMarkup(React.createElement(ReviewResults, {
+      const html = await renderToString(h(ReviewResults, {
         review: workbenchReview(tasks, { business_type, region, material_completeness: { status: result_status === "MATCH" ? "COMPLETE" : "UNCERTAIN", issues: [] } }),
         pageData: { pageFields: {}, images: [] },
       }));
@@ -61,9 +61,9 @@ test("all profiles keep exactly three views and ignore complete, missing and unc
   }
 });
 
-test("legacy result fallback also removes material cards and checks without changing the recommendation", () => {
+test("legacy result fallback also removes material cards and checks without changing the recommendation", async () => {
   const material = { check_id: "MATERIAL-COMPLETENESS", label: "材料完整性", status: "INSUFFICIENT", reason: "材料诊断" };
-  const html = renderToStaticMarkup(React.createElement(ReviewResults, {
+  const html = await renderToString(h(ReviewResults, {
     review: workbenchReview(undefined, { recommendation: "REVIEW_REQUIRED", comparisons: [], sections: [], issues: [],
       cross_checks: [material, { check_id: "OWNER-001", label: "所有人一致性", status: "CONFLICT", reason: "所有人不一致" }],
       agent_advice: { title: "建议人工复核", summary: "仍需复核", findings: [material, { ...material, check_id: "MATERIAL-MISSING_MATERIAL-1" }] },
@@ -76,9 +76,9 @@ test("legacy result fallback also removes material cards and checks without chan
   assert.match(html, /recommendation-review_required/);
 });
 
-test("generated profiles keep page values, source thumbnails and complete rule explanations", () => {
+test("generated profiles keep page values, source thumbnails and complete rule explanations", async () => {
   const field = "new_page__vehicle.identity";
-  const html = renderToStaticMarkup(React.createElement(ReviewResults, {
+  const html = await renderToString(h(ReviewResults, {
     review: workbenchReview([makeStep({step_id: `FIELD-${field}`, category: "FIELD", label: "车辆识别代号",
       result_status: "CONFLICT", requires_reviewer_action: true, reason: "登记证书与页面的车辆标识不一致",
       values: [{source: "机动车登记证书 · 当前车辆", value: "MATERIAL-VIN", image_id: "registration"}],
@@ -95,10 +95,10 @@ test("generated profiles keep page values, source thumbnails and complete rule e
   assert.match(html, /class="workbench-content"/);
 });
 
-test("manual input defaults to the page value below material candidates on every field card", () => {
+test("manual input defaults to the page value below material candidates on every field card", async () => {
   for (const name of ["scrap_certificate.certificate_no", "application.terminal_phone", "old_vehicle.engine_model"]) {
     const step = makeStep({ step_id: `FIELD-${name}`, category: "FIELD", label: "审核字段", requires_reviewer_action: true, result_status: "CONFLICT", values: [{ source: "材料", value: "OCR-WRONG" }] });
-    const html = renderToStaticMarkup(React.createElement(EvidenceReviewWorkbench, {
+    const html = await renderToString(h(EvidenceReviewWorkbench, {
       review: workbenchReview([step]), pageData: { pageFields: { [name]: "PAGE-WRONG" }, images: [] },
     }));
     assert.match(html, /<input[^>]*value="PAGE-WRONG"/);
@@ -108,7 +108,7 @@ test("manual input defaults to the page value below material candidates on every
   }
 });
 
-test("workbench shows a merged rule conclusion once, under its field", () => {
+test("workbench shows a merged rule conclusion once, under its field", async () => {
   // 合并是**后端**做的：规则检查项声明了所属字段（`field_check_bindings`），
   // 结论就并进那一行，后端也不再把它单独发出来。前端原样渲染，不自己拿表
   // 去猜该藏哪条——前端持有那张表时，新增一个带日期规则的业务得回来补一行。
@@ -122,7 +122,7 @@ test("workbench shows a merged rule conclusion once, under its field", () => {
     label: "开票日期",
     reason: "页面与发票日期冲突；开票日期不符合政策范围",
   });
-  const html = renderToStaticMarkup(React.createElement(EvidenceReviewWorkbench, {
+  const html = await renderToString(h(EvidenceReviewWorkbench, {
     review: workbenchReview([dateField]),
     pageData: { pageFields: { "invoice.invoice_date": "2024-06-25" }, images: [] },
   }));
@@ -131,9 +131,9 @@ test("workbench shows a merged rule conclusion once, under its field", () => {
   assert.match(html, /开票日期/);
 });
 
-test("workbench excludes hidden material failures from pending and external counts", () => {
+test("workbench excludes hidden material failures from pending and external counts", async () => {
   const step = makeStep({visible: false, step_id: "MATERIAL-GROUP", category: "MATERIAL", result_status: "INSUFFICIENT", requires_reviewer_action: true, reason: "报废证明存在无法确认的字段"});
-  const html = renderToStaticMarkup(React.createElement(EvidenceReviewWorkbench, {
+  const html = await renderToString(h(EvidenceReviewWorkbench, {
     review: workbenchReview([step], {material_completeness: {status: "UNCERTAIN", issues: [{
       field_details: [
         {field: "old_vehicle.vin", field_label: "报废车辆车架号", material_name: "报废证明", value: "LG6?123", image_id: "scrap-1"},
@@ -152,10 +152,10 @@ test("workbench excludes hidden material failures from pending and external coun
   assert.match(html, /页面外核验 \(0\)/);
 });
 
-test("field and external reviews only expose the manual review completion action", () => {
+test("field and external reviews only expose the manual review completion action", async () => {
   for (const category of ["FIELD", "BUSINESS_RULE"]) {
     const step = makeStep({ step_id: category === "FIELD" ? "FIELD-page_ocr.new_vehicle_vin" : "BUSINESS-POLICY-NEW-ORIGIN", category, requires_reviewer_action: true, result_status: "CONFLICT", label: "核验项" });
-    const html = renderToStaticMarkup(React.createElement(EvidenceReviewWorkbench, {
+    const html = await renderToString(h(EvidenceReviewWorkbench, {
       review: workbenchReview([step]), pageData: { pageFields: {}, images: [] },
     }));
     assert.match(html, /标记人工复核/);
@@ -163,10 +163,10 @@ test("field and external reviews only expose the manual review completion action
   }
 });
 
-test("invoice origin candidates show their matching invoice thumbnail and original image action", () => {
+test("invoice origin candidates show their matching invoice thumbnail and original image action", async () => {
   for (const reference of [{image_id: "invoice-img"}, {image_index: 3}]) {
     const step = makeStep({step_id: "BUSINESS-POLICY-NEW-ORIGIN", category: "BUSINESS_RULE", result_status: "INSUFFICIENT", requires_reviewer_action: true, label: "新车发票产地", values: [{source: "新车销售发票", value: "长春", ...reference}]});
-    const html = renderToStaticMarkup(React.createElement(EvidenceReviewWorkbench, {
+    const html = await renderToString(h(EvidenceReviewWorkbench, {
       review: workbenchReview([step]), pageData: {pageFields: {}, images: [
         {imageId: "unrelated", index: 1, src: "unrelated.jpg"},
         {imageId: "invoice-img", index: 3, src: "invoice.jpg"},
@@ -180,11 +180,11 @@ test("invoice origin candidates show their matching invoice thumbnail and origin
   }
 });
 
-test("QR official links remain clickable for manual review when backend access fails", () => {
+test("QR official links remain clickable for manual review when backend access fails", async () => {
   const url = "https://qclt.mofcom.gov.cn/deal/scrap/validdata/test";
   const step = makeStep({ step_id: "QR-GROUP", category: "EXTERNAL", result_status: "INSUFFICIENT", requires_reviewer_action: true });
   for (const accessible of [false, null]) {
-    const html = renderToStaticMarkup(React.createElement(EvidenceReviewWorkbench, {
+    const html = await renderToString(h(EvidenceReviewWorkbench, {
       review: workbenchReview([step], { qr_checks: [{ url, raw_value: url, domain_valid: true, accessible, page_fields: {}, status: "REVIEW_REQUIRED" }] }),
       pageData: { pageFields: {}, images: [] },
     }));
@@ -196,7 +196,7 @@ test("QR official links remain clickable for manual review when backend access f
     assert.match(html, /待复核/);
   }
   for (const domain_valid of [false, null]) {
-    const html = renderToStaticMarkup(React.createElement(EvidenceReviewWorkbench, {
+    const html = await renderToString(h(EvidenceReviewWorkbench, {
       review: workbenchReview([step], { qr_checks: [{ url, raw_value: url, domain_valid, accessible: false, page_fields: {}, status: "REVIEW_REQUIRED" }] }),
       pageData: { pageFields: {}, images: [] },
     }));
@@ -205,20 +205,20 @@ test("QR official links remain clickable for manual review when backend access f
   }
 });
 
-test("workbench exposes only a backend-verified QR URL as a new-tab link", () => {
+test("workbench exposes only a backend-verified QR URL as a new-tab link", async () => {
   const qrStep = makeStep({ step_id: "QR-GROUP", sequence: 1, category: "EXTERNAL", result_status: "CONFLICT", requires_reviewer_action: true, label: "二维码官网核验", reason: "官网字段与图片不一致" });
   const url = "https://qcar.mofcom.gov.cn/query/1";
-  const html = renderToStaticMarkup(React.createElement(EvidenceReviewWorkbench, { review: workbenchReview([qrStep], { qr_checks: [{ url, domain_valid: true, accessible: true, page_fields: {}, status: "CONFLICT", message: "不一致" }] }), pageData: { pageFields: {}, images: [] } }));
+  const html = await renderToString(h(EvidenceReviewWorkbench, { review: workbenchReview([qrStep], { qr_checks: [{ url, domain_valid: true, accessible: true, page_fields: {}, status: "CONFLICT", message: "不一致" }] }), pageData: { pageFields: {}, images: [] } }));
 
   assert.match(html, new RegExp(`href="${url}"`));
   assert.match(html, /target="_blank"/);
   assert.match(html, /noopener/);
 });
 
-test("technical QR details keep a verified raw URL clickable for manual review", () => {
+test("technical QR details keep a verified raw URL clickable for manual review", async () => {
   const url = "https://qclt.mofcom.gov.cn/deal/scrap/validdata/manual";
   const step = makeStep({ step_id: "QR-GROUP", sequence: 1, category: "EXTERNAL", result_status: "INSUFFICIENT", requires_reviewer_action: true, label: "二维码官网核验" });
-  const html = renderToStaticMarkup(React.createElement(EvidenceReviewWorkbench, {
+  const html = await renderToString(h(EvidenceReviewWorkbench, {
     review: workbenchReview([step], { qr_checks: [{ url, raw_value: url, domain_valid: true, accessible: false, page_fields: {}, status: "REVIEW_REQUIRED" }] }),
     pageData: { pageFields: {}, images: [] },
   }));
@@ -229,7 +229,7 @@ test("technical QR details keep a verified raw URL clickable for manual review",
   assert.match(html, /后台暂未访问成功/);
 });
 
-test("workbench keeps page values at the top and shows a material thumbnail beside its image action", () => {
+test("workbench keeps page values at the top and shows a material thumbnail beside its image action", async () => {
   const field = makeStep({
     step_id: "FIELD-old_vehicle.type",
     sequence: 1,
@@ -243,7 +243,7 @@ test("workbench keeps page values at the top and shows a material thumbnail besi
       { source: "图片识别", value: "重型半挂牵引车", image_id: "vehicle-license", image_index: 2, document_type: "vehicle_license" },
     ],
   });
-  const html = renderToStaticMarkup(React.createElement(EvidenceReviewWorkbench, {
+  const html = await renderToString(h(EvidenceReviewWorkbench, {
     review: workbenchReview([field]),
     pageData: { pageFields: { "old_vehicle.type": "牵引车" }, images: [{ imageId: "vehicle-license", src: "vehicle-license.jpg", alt: "旧车行驶证" }] },
   }));
@@ -259,7 +259,7 @@ test("workbench keeps page values at the top and shows a material thumbnail besi
   assert.doesNotMatch(html, /申请页面字段/);
 });
 
-test("workbench marks differing identifier positions in red", () => {
+test("workbench marks differing identifier positions in red", async () => {
   const field = makeStep({
     step_id: "FIELD-new_vehicle.vin",
     sequence: 1,
@@ -270,7 +270,7 @@ test("workbench marks differing identifier positions in red", () => {
     requires_reviewer_action: true,
     values: [{ source: "图片识别", value: "LFW5RX9L9TAA15082", image_id: "vin", document_type: "vehicle_license", differences: [{ kind: "REPLACE", start: 14, end: 15, page_start: 14, page_end: 15, page_text: "8" }] }],
   });
-  const html = renderToStaticMarkup(React.createElement(EvidenceReviewWorkbench, {
+  const html = await renderToString(h(EvidenceReviewWorkbench, {
     review: workbenchReview([field]),
     pageData: { pageFields: { "new_vehicle.vin": "LFW5RX9L9TAA15882" }, images: [] },
   }));
@@ -279,7 +279,7 @@ test("workbench marks differing identifier positions in red", () => {
   assert.match(html, /<mark class="value-diff"[^>]*>0<\/mark>/);
 });
 
-test("old vehicle VIN keeps the page value plain and marks differing material characters", () => {
+test("old vehicle VIN keeps the page value plain and marks differing material characters", async () => {
   const difference = { kind: "REPLACE", start: 16, end: 17, page_start: 16, page_end: 17, page_text: "5" };
   const field = makeStep({
     step_id: "FIELD-old_vehicle.vin",
@@ -296,7 +296,7 @@ test("old vehicle VIN keeps the page value plain and marks differing material ch
       { source: "二维码官网字段", value: "LFNAFRJM6BAK00024", differences: [difference] },
     ],
   });
-  const html = renderToStaticMarkup(React.createElement(EvidenceReviewWorkbench, {
+  const html = await renderToString(h(EvidenceReviewWorkbench, {
     review: workbenchReview([field]),
     pageData: { pageFields: { "old_vehicle.vin": "LFNAFRJM6BAK00025" }, images: [] },
   }));
@@ -305,7 +305,7 @@ test("old vehicle VIN keeps the page value plain and marks differing material ch
   assert.equal((html.match(/<mark class="value-diff"[^>]*>4<\/mark>/g) ?? []).length, 3);
 });
 
-test("composite VIN task uses Chinese page labels and preserves material diff marks", () => {
+test("composite VIN task uses Chinese page labels and preserves material diff marks", async () => {
   const field = makeStep({
     step_id: "FIELD-NEW-VEHICLE-VIN",
     sequence: 1,
@@ -328,7 +328,7 @@ test("composite VIN task uses Chinese page labels and preserves material diff ma
       differences: [{ kind: "REPLACE", start: 4, end: 5, page_start: 4, page_end: 5, page_text: "P" }],
     }],
   });
-  const html = renderToStaticMarkup(React.createElement(EvidenceReviewWorkbench, {
+  const html = await renderToString(h(EvidenceReviewWorkbench, {
     review: workbenchReview([field]),
     pageData: { pageFields: { "new_vehicle.vin": "VIN-PAGE", "page_ocr.new_vehicle_vin": "VIN-PAGE" }, images: [] },
     onApplyPageFieldGroupValue: async () => ({ ok: true, message: "组合字段已同时回填并回读" }),
@@ -342,7 +342,7 @@ test("composite VIN task uses Chinese page labels and preserves material diff ma
   assert.match(html, /回填此值/);
 });
 
-test("composite invoice task uses Chinese page labels and keeps both write targets", () => {
+test("composite invoice task uses Chinese page labels and keeps both write targets", async () => {
   const field = makeStep({
     step_id: "FIELD-INVOICE-CODE-NO",
     sequence: 1,
@@ -359,7 +359,7 @@ test("composite invoice task uses Chinese page labels and keeps both write targe
     requires_reviewer_action: true,
     values: [{ source: "机动车销售发票", value: "INV-MATERIAL", differences: [{ kind: "REPLACE", start: 4, end: 5, page_start: 4, page_end: 5, page_text: "P" }] }],
   });
-  const html = renderToStaticMarkup(React.createElement(EvidenceReviewWorkbench, {
+  const html = await renderToString(h(EvidenceReviewWorkbench, {
     review: workbenchReview([field]),
     pageData: { pageFields: { "invoice.code": "INV-PAGE", "invoice.invoice_no": "INV-PAGE" }, images: [] },
   }));
@@ -372,7 +372,7 @@ test("composite invoice task uses Chinese page labels and keeps both write targe
   assert.match(html, /回填此值/);
 });
 
-test("workbench labels a page invoice code derived from the invoice digital number", () => {
+test("workbench labels a page invoice code derived from the invoice digital number", async () => {
   const field = makeStep({
     step_id: "FIELD-invoice.code",
     sequence: 1,
@@ -391,7 +391,7 @@ test("workbench labels a page invoice code derived from the invoice digital numb
       },
     ],
   });
-  const html = renderToStaticMarkup(React.createElement(EvidenceReviewWorkbench, {
+  const html = await renderToString(h(EvidenceReviewWorkbench, {
     review: workbenchReview([field]),
     pageData: { pageFields: { "invoice.code": "2632000000731322946" }, images: [] },
   }));
@@ -399,10 +399,10 @@ test("workbench labels a page invoice code derived from the invoice digital numb
   assert.match(html, /由发票数电号码适配/);
 });
 
-test("workbench reports the actual DOM-derived field count and unknown controls", () => {
+test("workbench reports the actual DOM-derived field count and unknown controls", async () => {
   const known = makeStep({ step_id: "FIELD-new_vehicle.vin", sequence: 1, category: "FIELD", label: "新车车架号" });
   const added = makeStep({ step_id: "FIELD-DOM-2", sequence: 2, category: "FIELD", label: "页面新增字段", page_value: "新增值", result_status: "INSUFFICIENT", requires_reviewer_action: true, reason: "未配置核验来源" });
-  const html = renderToStaticMarkup(React.createElement(EvidenceReviewWorkbench, { review: workbenchReview([known, added]), pageData: { pageFields: {}, reviewFields: [], images: [] } }));
+  const html = await renderToString(h(EvidenceReviewWorkbench, { review: workbenchReview([known, added]), pageData: { pageFields: {}, reviewFields: [], images: [] } }));
 
   assert.match(html, /全部字段 \(2\)/);
   assert.match(html, /全部字段 \(2\)/);
@@ -411,7 +411,7 @@ test("workbench reports the actual DOM-derived field count and unknown controls"
   assert.match(html, /新增值/);
 });
 
-test("workbench excludes legacy material tasks and reports from every display count", () => {
+test("workbench excludes legacy material tasks and reports from every display count", async () => {
   const materialStep = makeStep({ step_id: "MATERIAL-GROUP", sequence: 1, category: "MATERIAL", result_status: "INSUFFICIENT", requires_reviewer_action: true, label: "资料完整性", reason: "缺少新车行驶证" });
   const checklist = [
     ["old_vehicle:vehicle_license", "旧车行驶证", "PRESENT"],
@@ -422,7 +422,7 @@ test("workbench excludes legacy material tasks and reports from every display co
     ["new_vehicle:invoice", "新车发票", "PRESENT"],
   ].map(([key, display_name, status]) => ({ key, display_name, status, material_type: key.split(":")[1], business_scope: key.split(":")[0], required_pages: [], present_pages: [], missing_pages: [], image_ids: [], reason: status === "MISSING" ? `缺少${display_name}` : "材料已确认" }));
   const fieldStep = makeStep({ step_id: "FIELD-new_vehicle.vin", category: "FIELD", label: "新车车架号", result_status: "CONFLICT", requires_reviewer_action: true, reason: "车架号不一致" });
-  const html = renderToStaticMarkup(React.createElement(EvidenceReviewWorkbench, { review: workbenchReview([materialStep, fieldStep], { material_completeness: { phase: "EXTRACTED", status: "INCOMPLETE", enforced: true, issues: [], checklist } }), pageData: { pageFields: {}, images: [] } }));
+  const html = await renderToString(h(EvidenceReviewWorkbench, { review: workbenchReview([materialStep, fieldStep], { material_completeness: { phase: "EXTRACTED", status: "INCOMPLETE", enforced: true, issues: [], checklist } }), pageData: { pageFields: {}, images: [] } }));
 
   assert.equal((html.match(/材料已提供/g) ?? []).length, 0);
   assert.doesNotMatch(html, /缺少新车行驶证|资料完整性|材料完整性/);
@@ -433,10 +433,10 @@ test("workbench excludes legacy material tasks and reports from every display co
   assert.match(html, /页面外核验 \(0\)/);
 });
 
-test("registered review results show the field workbench without the large recommendation card", () => {
+test("registered review results show the field workbench without the large recommendation card", async () => {
   for (const [business_type, region] of [["scrap_replacement", "changchun"], ["scrap_replacement", "qingdao"], ["vehicle_source", "default"], ["transfer", "default"]]) {
     const field = makeStep({ step_id: "FIELD-old_vehicle.vin", category: "FIELD", label: "车架号", result_status: "CONFLICT", requires_reviewer_action: true, reason: "车架号待核对" });
-    const html = renderToStaticMarkup(React.createElement(ReviewResults, {
+    const html = await renderToString(h(ReviewResults, {
       review: workbenchReview([field], { business_type, region, recommendation: "REVIEW_REQUIRED", summary: "建议人工复核", cross_checks: [], comparisons: [], sections: [], issues: [] }),
       pageData: { pageFields: {}, images: [] }, job: null, exceptionFilter: "ALL",
     }));
@@ -445,15 +445,15 @@ test("registered review results show the field workbench without the large recom
   }
 });
 
-test("workbench hides the affiliation subject task and its identity requirements", () => {
+test("workbench hides the affiliation subject task and its identity requirements", async () => {
   const subject = makeStep({ step_id: "BUSINESS-AFFILIATION-SUBJECT-001", sequence: 1, category: "BUSINESS_RULE", result_status: "INSUFFICIENT", requires_reviewer_action: true, label: "新旧车挂靠主体关系", reason: "张三缺少身份证反面", details: { subject_requirements: [{ party: "SHARED", subject_name: "张三", subject_type: "PERSONAL", document: "identity_card_front", status: "PRESENT", image_ids: ["id-front"], reason: "身份证正面已确认" }, { party: "SHARED", subject_name: "张三", subject_type: "PERSONAL", document: "identity_card_back", status: "MISSING", image_ids: [], reason: "张三缺少身份证反面" }] } });
-  const html = renderToStaticMarkup(React.createElement(EvidenceReviewWorkbench, { review: workbenchReview([{...subject, visible: false}]), pageData: { pageFields: {}, images: [{ imageId: "id-front", src: "front.jpg", alt: "身份证正面" }] } }));
+  const html = await renderToString(h(EvidenceReviewWorkbench, { review: workbenchReview([{...subject, visible: false}]), pageData: { pageFields: {}, images: [{ imageId: "id-front", src: "front.jpg", alt: "身份证正面" }] } }));
 
   assert.doesNotMatch(html, /新旧车挂靠主体关系|张三|身份证正面|身份证反面|查看原图/);
   assert.match(html, /页面外核验 \(0\)/);
 });
 
-test("workbench hides affiliation auxiliary tasks together with the subject task", () => {
+test("workbench hides affiliation auxiliary tasks together with the subject task", async () => {
   const subject = makeStep({
     step_id: "BUSINESS-AFFILIATION-SUBJECT-001",
     sequence: 1,
@@ -478,7 +478,7 @@ test("workbench hides affiliation auxiliary tasks together with the subject task
     label: "客户名称",
     reason: "页面或材料未取得可比较的明确值",
   });
-  const html = renderToStaticMarkup(React.createElement(EvidenceReviewWorkbench, {
+  const html = await renderToString(h(EvidenceReviewWorkbench, {
     review: workbenchReview([{...subject, visible: false}, {...customer, visible: false}]),
     pageData: { pageFields: {}, images: [
       { imageId: "license", src: "license.jpg", alt: "营业执照原图" },
@@ -491,7 +491,7 @@ test("workbench hides affiliation auxiliary tasks together with the subject task
   assert.match(html, /页面外核验 \(0\)/);
 });
 
-test("规则结论自带页面侧取值时，卡片上先摆「页面原始值」再看材料", () => {
+test("规则结论自带页面侧取值时，卡片上先摆「页面原始值」再看材料", async () => {
   const step = makeStep({
     step_id: "BUSINESS-OWNER-CONSISTENCY-001",
     label: "车辆所有人一致性",
@@ -507,7 +507,7 @@ test("规则结论自带页面侧取值时，卡片上先摆「页面原始值�
       { source: "图片识别", value: "乙公司", detail: "新车行驶证", document_type: "vehicle_license", image_id: "img-2" },
     ],
   });
-  const html = renderToStaticMarkup(React.createElement(EvidenceReviewWorkbench, {
+  const html = await renderToString(h(EvidenceReviewWorkbench, {
     review: workbenchReview([step]),
     pageData: { pageFields: {}, images: [] },
   }));
@@ -520,7 +520,7 @@ test("规则结论自带页面侧取值时，卡片上先摆「页面原始值�
   assert.match(text, /甲公司/);
 });
 
-test("页面原始值不一致时在页面区块下面说一句，整段理由不再重复", () => {
+test("页面原始值不一致时在页面区块下面说一句，整段理由不再重复", async () => {
   const step = makeStep({
     step_id: "BUSINESS-OWNER-CONSISTENCY-001",
     label: "车辆所有人一致性",
@@ -534,7 +534,7 @@ test("页面原始值不一致时在页面区块下面说一句，整段理由�
     ],
     values: [{ source: "旧车行驶证", value: "南城珺顺物流有限公司", conflicting: true, differences: [] }],
   });
-  const html = renderToStaticMarkup(React.createElement(EvidenceReviewWorkbench, {
+  const html = await renderToString(h(EvidenceReviewWorkbench, {
     review: workbenchReview([step]),
     pageData: { pageFields: {}, images: [] },
   }));
@@ -548,7 +548,7 @@ test("页面原始值不一致时在页面区块下面说一句，整段理由�
   assert.match(text, /旧车行驶证/);
 });
 
-test("没有页面侧取值的规则结论不会凭空多出一行「未采集」", () => {
+test("没有页面侧取值的规则结论不会凭空多出一行「未采集」", async () => {
   const step = makeStep({
     step_id: "BUSINESS-POLICY-NEW-ORIGIN",
     label: "新车发票产地",
@@ -556,7 +556,7 @@ test("没有页面侧取值的规则结论不会凭空多出一行「未采集�
     requires_reviewer_action: true,
     values: [{ source: "图片识别", value: "青岛市", document_type: "invoice" }],
   });
-  const html = renderToStaticMarkup(React.createElement(EvidenceReviewWorkbench, {
+  const html = await renderToString(h(EvidenceReviewWorkbench, {
     review: workbenchReview([step]),
     pageData: { pageFields: {}, images: [] },
   }));

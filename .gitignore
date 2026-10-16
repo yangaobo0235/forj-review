@@ -48,3 +48,7 @@ logs/
 .tmp-*
 .worktrees/
 .superpowers/
+
+# Local configuration conversations, checkpoints and credentials
+.review-agent/
+.review-pages.lock

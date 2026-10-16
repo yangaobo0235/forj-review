@@ -1,8 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "赋界审核助手",
+  "name": "赋界资料审核工作台",
   "version": "0.1.0",
   "description": "读取车辆审核页面并提供一致性审核建议",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "permissions": [
     "activeTab",
     "scripting",
@@ -12,6 +18,8 @@
   "host_permissions": [
     "http://127.0.0.1:8010/*",
     "http://localhost:8010/*",
+    "http://127.0.0.1:8011/*",
+    "http://localhost:8011/*",
     "http://175.178.6.214:18110/*",
     "http://test.forjtruck.com/*",
     "https://test.forjtruck.com/*",
@@ -21,8 +29,15 @@
   "background": {
     "service_worker": "background.js"
   },
+  "externally_connectable": {
+    "matches": ["http://127.0.0.1/*", "http://localhost/*"]
+  },
   "action": {
-    "default_title": "打开赋界审核助手"
+    "default_title": "打开赋界资料审核工作台",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
   },
   "side_panel": {
     "default_path": "index.html"

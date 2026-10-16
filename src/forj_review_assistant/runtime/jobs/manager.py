@@ -31,7 +31,6 @@ from forj_review_assistant.observability.context import log_context
 from forj_review_assistant.runtime.scheduling.fair_scheduler import FairAsyncScheduler
 
 JOB_TTL_SECONDS = 600.0
-MAX_IMAGES = 16
 logger = logging.getLogger(__name__)
 
 
@@ -114,16 +113,7 @@ class ReviewJobManager:
     def create_urls(self, request: ReviewRequest) -> ReviewJobCreated:
         """一次提交 URL 清单，全部图片进入公平队列，完成后自动汇总。"""
         self._cleanup()
-        if len(request.images) > MAX_IMAGES:
-            raise ValueError(f"单次审核最多允许 {MAX_IMAGES} 张图片")
-        image_ids = [self._image_id(image) for image in request.images]
-        if len(set(image_ids)) != len(image_ids):
-            raise ValueError("图片清单包含重复标识")
-        if len({image.index for image in request.images}) != len(request.images):
-            raise ValueError("图片清单包含重复序号")
-        for image in request.images:
-            if not image.collection_error and not image.recognition_source:
-                raise ValueError("图片必须提供可由模型访问的 HTTP(S) 地址")
+        request.validate_images()
         request = request.model_copy(deep=True)
         job_id = str(uuid.uuid4())
         if not request.trace_id:

@@ -183,8 +183,8 @@ def test_aggregate_requires_review_for_one_source() -> None:
     assert [item.conflicting for item in comparison.evidence] == [False]
 
 
-def test_uncertain_flag_veto_only_applies_when_explicitly_enabled() -> None:
-    """默认（既有业务）保持分支前语义；目标 Profile 显式启用一票否决。"""
+def test_uncertain_evidence_cannot_pass_even_with_legacy_opt_out() -> None:
+    """统一保护，不允许通过旧参数关闭识别不确定性检查。"""
     observations = [
         FieldObservation(
             field="new_vehicle.vin",
@@ -196,8 +196,10 @@ def test_uncertain_flag_veto_only_applies_when_explicitly_enabled() -> None:
         observation("new_vehicle.vin", "VIN-1", "review_page", "page"),
     ]
 
-    legacy = aggregate_field("new_vehicle.vin", observations)
-    assert legacy.status is FieldStatus.MATCH
+    for options in ({}, {"uncertain_requires_review": False}):
+        legacy = aggregate_field("new_vehicle.vin", observations, **options)
+        assert legacy.status is FieldStatus.REVIEW_REQUIRED
+        assert legacy.reason_codes == ["RECOGNITION_UNCERTAIN"]
 
     target = aggregate_field(
         "new_vehicle.vin", observations, uncertain_requires_review=True
@@ -678,3 +680,58 @@ def test_material_merge_preserves_conflicting_reads_even_when_one_matches_the_pa
     material = [item for item in comparison.evidence if item.document_type == "vehicle_license"]
     assert [item.value for item in material] == ["解放牌CA4250P66K25T1A1E", "解放牌CA4250P66M25T1A1E6"]
     assert comparison.status is FieldStatus.CONFLICT
+
+
+@pytest.mark.parametrize("uncertain_value", ["VIN-A", "VIN-B", "无法识别"])
+def test_uncertain_only_difference_is_review_not_conflict(uncertain_value):
+    items = [observation("new_vehicle.vin", "VIN-A", "page", "page"),
+             observation("new_vehicle.vin", uncertain_value, "img").model_copy(update={"uncertain": True})]
+    result = aggregate_field("new_vehicle.vin", items)
+    assert result.status is FieldStatus.REVIEW_REQUIRED
+    assert result.evidence[1].comparison_status == "INSUFFICIENT"
+    assert not result.evidence[1].conflicting
+
+
+def test_confirmed_conflict_survives_an_unrelated_uncertain_source():
+    result = aggregate_field("new_vehicle.vin", [
+        observation("new_vehicle.vin", "VIN-A", "page", "page"),
+        observation("new_vehicle.vin", "VIN-B", "img1"),
+        observation("new_vehicle.vin", "VIN-C", "img2").model_copy(update={"uncertain": True}),
+    ], required_document_types=("missing_document",))
+    assert result.status is FieldStatus.CONFLICT
+    assert result.reason_codes == ["VALUE_MISMATCH", "RECOGNITION_UNCERTAIN"]
+    assert result.evidence[1].comparison_status == "CONFLICT"
+    assert result.evidence[2].comparison_status == "INSUFFICIENT"
+
+
+def test_unreadable_placeholder_is_not_a_conflicting_value():
+    result = aggregate_field("new_vehicle.vin", [
+        observation("new_vehicle.vin", "VIN-A", "page", "page"),
+        observation("new_vehicle.vin", "无法识别", "img"),
+    ])
+    assert result.status is FieldStatus.REVIEW_REQUIRED
+    assert result.reason_codes == ["RECOGNITION_UNCERTAIN"]
+
+
+def test_authority_ignores_uncertain_head_when_proving_a_conflict():
+    page = vehicle_vin_observation("VIN-000000ABCDEF", "page", "page")
+    reliable = vehicle_vin_observation("VIN-000000ABCDEF", "qr1", "qr_page")
+    uncertain = vehicle_vin_observation("VIN-000000999999", "qr2", "qr_page").model_copy(update={"uncertain": True})
+    result = vin_by_authority([page, reliable, uncertain])
+    assert result.status is FieldStatus.REVIEW_REQUIRED
+    assert not any(item.conflicting for item in result.evidence)
+    assert result.evidence[-1].comparison_status == "INSUFFICIENT"
+    result = vin_by_authority([page.model_copy(update={"value": "PAGE-WRONG"}), reliable, uncertain])
+    assert result.status is FieldStatus.CONFLICT
+    assert result.evidence[-1].comparison_status == "INSUFFICIENT"
+
+
+def test_missing_authority_never_creates_a_confirmed_material_conflict():
+    result = vin_by_authority([
+        vehicle_vin_observation("VIN-000000ABCDEF", "page", "page"),
+        vehicle_vin_observation("VIN-000000999999", "img", "image", "vehicle_license"),
+    ])
+    assert result.status is FieldStatus.REVIEW_REQUIRED
+    assert result.reason_codes == ["AUTHORITY_MISSING"]
+    assert all(not item.conflicting for item in result.evidence)
+    assert result.evidence[-1].comparison_status == "INSUFFICIENT"

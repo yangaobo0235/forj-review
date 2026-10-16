@@ -23,7 +23,7 @@ from forj_review_assistant.capabilities.specs import (
     BusinessRuleHandler,
     ExternalCheckHandler,
 )
-from forj_review_assistant.config.settings import load_qwen_config
+from forj_review_assistant.config.settings import image_private_hosts, load_qwen_config
 from forj_review_assistant.contracts.recognition import (
     AgentBatchResult,
     MaterialCompletenessReport,
@@ -64,12 +64,13 @@ class ReviewService:
         business_rule_handlers: Mapping[str, BusinessRuleHandler] | None = None,
         page_action_handlers: Mapping[str, PageActionHandler] | None = None,
         qr_decoder: QrImageDecoder | None = None,
+        load_model: bool = True,
     ) -> None:
+        config = load_qwen_config() if load_model else None
         self.qr_web = QrWebVerifier(allowed_hosts=["qclt.mofcom.gov.cn"])
-        self.qr_decoder = qr_decoder or QrImageDecoder()
+        self.qr_decoder = qr_decoder or QrImageDecoder(private_hosts=image_private_hosts())
         self.registry = registry or build_business_registry()
-        config = load_qwen_config()
-        self.agent = AgentService(QwenClient(config)) if config.available else None
+        self.agent = AgentService(QwenClient(config)) if config and config.available else None
         self.workflow = ReviewWorkflow(
             self,
             external_check_handlers=external_check_handlers,

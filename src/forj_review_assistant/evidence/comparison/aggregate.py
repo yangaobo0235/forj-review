@@ -7,6 +7,7 @@
 from collections import Counter
 
 from forj_review_assistant.businesses.field_policies import AuthorityRule
+from forj_review_assistant.contracts.decisions import ReasonCode
 from forj_review_assistant.contracts.evidence import (
     DifferenceRange,
     EvidenceFact,
@@ -18,6 +19,7 @@ from forj_review_assistant.evidence.fields.normalize import (
     format_like_page,
     normalize_value,
 )
+from forj_review_assistant.evidence.fields.readability import readable_value
 
 AUTHORITY_SUFFIX_LENGTH = 8
 
@@ -114,11 +116,26 @@ def _mark_conflicting_evidence(
         )
 
 
+def _set_evidence_comparison_status(
+    observations: list[FieldObservation], evidence: list[EvidenceFact], status: FieldStatus,
+) -> None:
+    page = next((item for item in observations if item.source_type == "page"), None)
+    for item, fact in zip(observations, evidence, strict=True):
+        if item.source_type == "page":
+            continue
+        if (item.uncertain or not readable_value(item.value) or page is None
+                or page.uncertain or not readable_value(page.value)
+                or status is FieldStatus.REVIEW_REQUIRED):
+            fact.comparison_status = "INSUFFICIENT"
+        else:
+            fact.comparison_status = "CONFLICT" if fact.differences else "MATCH"
+
+
 def aggregate_field(
     field_name: str,
     observations: list[FieldObservation],
     *,
-    uncertain_requires_review: bool = False,
+    uncertain_requires_review: bool = True,
     single_evidence_requires_review: bool = True,
     page_evidence_required: bool = False,
     required_document_types: tuple[str, ...] = (),
@@ -152,10 +169,19 @@ def aggregate_field(
         for item in valid
     ]
 
-    # 不确定标记的一票否决只服务于字段优先的目标 Profile；
-    # 未配置业务保持历史聚合语义，不因 uncertain 改变状态。
-    if uncertain_requires_review and any(item.uncertain for item in valid):
+    # 兼容旧调用参数 uncertain_requires_review；不确定的材料始终不能证明通过或冲突。
+    reliable = [item for item in valid if not item.uncertain and readable_value(item.value)
+                and normalize_value(field_name, item.value)]
+    uncertain = len(reliable) != len(valid)
+    reason_codes: list[ReasonCode] = []
+    normalized = {normalize_value(field_name, item.value) for item in reliable}
+    if len(normalized) > 1:
+        status = FieldStatus.CONFLICT
+        message = "多个可靠来源存在不同值"
+        reason_codes = ["VALUE_MISMATCH"]
+    elif uncertain:
         status = FieldStatus.REVIEW_REQUIRED
+        reason_codes = ["RECOGNITION_UNCERTAIN"]
         message = (
             "能力核验结果不确定，请人工确认"
             if any(item.uncertain and item.source_type == "capability" for item in valid)
@@ -163,34 +189,35 @@ def aggregate_field(
             if any(item.retried for item in valid)
             else "图片识别结果不确定，请核对原图"
         )
-    elif not valid:
+    elif not reliable:
         status = FieldStatus.REVIEW_REQUIRED
         message = "页面与图片均未取得有效值"
-    elif len(valid) == 1 and valid[0].source_type == "page":
+        reason_codes = ["EVIDENCE_MISSING"]
+    elif len(reliable) == 1 and reliable[0].source_type == "page":
         status = FieldStatus.REVIEW_REQUIRED
         message = "页面字段已采集，但未从材料中取得可核验值"
+        reason_codes = ["EVIDENCE_MISSING"]
     elif page_evidence_required and not page_values:
         status = FieldStatus.REVIEW_REQUIRED
         message = "页面字段未采集或未填写，无法与材料比对，请人工核对"
+        reason_codes = ["PAGE_VALUE_MISSING"]
     elif required_document_types and not set(required_document_types).issubset(
-        {item.document_type for item in valid if item.source_type == "image"}
-    ) and len({normalize_value(field_name, item.value) for item in valid}) == 1:
+        {item.document_type for item in reliable if item.source_type == "image"}
+    ):
         status = FieldStatus.REVIEW_REQUIRED
         message = "需要互相印证的材料来源未齐全，页面填写值不能替代材料证据"
-    elif len(valid) == 1 and single_evidence_requires_review:
+        reason_codes = ["EVIDENCE_MISSING"]
+    elif len(reliable) == 1 and single_evidence_requires_review:
         status = FieldStatus.REVIEW_REQUIRED
         message = "仅有一个有效来源，证据不足"
-    elif len(valid) == 1:
-        status = FieldStatus.MATCH
-        message = "已发现 1 份有效证据，按实际证据核验"
+        reason_codes = ["EVIDENCE_MISSING"]
     else:
-        normalized = {normalize_value(field_name, item.value) for item in valid}
-        if len(normalized) == 1:
-            status = FieldStatus.MATCH
-            message = "多个来源字段一致"
-        else:
-            status = FieldStatus.CONFLICT
-            message = "多个来源存在不同值"
+        status = FieldStatus.MATCH
+        message = ("已发现 1 份有效证据，按实际证据核验"
+                   if len(reliable) == 1 else "多个来源字段一致")
+    if uncertain and "RECOGNITION_UNCERTAIN" not in reason_codes:
+        reason_codes.append("RECOGNITION_UNCERTAIN")
+        message += "；另有识别不确定的证据，请核对原图"
 
     confidences = [item.confidence for item in valid if item.confidence is not None]
     confidence = sum(confidences) / len(confidences) if confidences else None
@@ -203,7 +230,11 @@ def aggregate_field(
         image_value = format_like_page(field_name, image_value, page_value)
     for item in evidence:
         item.differences = value_differences(field_name, page_value, item.value) if item.source != "申请页面字段" else []
-    _mark_conflicting_evidence(field_name, valid, evidence, status)
+    _mark_conflicting_evidence(
+        field_name, reliable,
+        [fact for item, fact in zip(valid, evidence, strict=True) if item in reliable], status,
+    )
+    _set_evidence_comparison_status(valid, evidence, status)
     differences: list[int] = []
     if page_values and image_values:
         left = normalize_value(field_name, page_values[0]) or ""
@@ -218,6 +249,7 @@ def aggregate_field(
         confidence=confidence,
         evidence=evidence,
         message=message,
+        reason_codes=reason_codes,
         differences=sorted(set(differences)),
     )
 
@@ -322,14 +354,14 @@ def aggregate_by_authority(
     observations: list[FieldObservation],
     authority: tuple[AuthorityRule, ...],
     *,
-    uncertain_requires_review: bool = False,
+    uncertain_requires_review: bool = True,
     page_evidence_required: bool = False,
 ) -> FieldComparison:
     """按业务声明的权威链裁决字段。
 
     与 `aggregate_field` 的差别：比较基准是**链首来源**，不由票数推断；
-    链首缺失或返回多个不同值时降级为人工复核，既不让位给链上的下一条
-    来源，也不退化成投票。
+    链首缺失时人工复核；链首有多个可靠的不同值时为冲突。
+    不让位给链上的下一条来源，也不退化成投票。
     """
     if not authority:
         raise ValueError(f"{field_name} 未声明权威链")
@@ -352,11 +384,7 @@ def aggregate_by_authority(
     # 1) 链首来源是唯一基准；链首缺失时不让位给下一条来源。
     head = authority[0]
     head_group = [item for item in valid if rule_of[id(item)] == head]
-    benchmark: FieldObservation | None = head_group[0] if head_group else None
     benchmark_rule: AuthorityRule = head
-    ambiguous: AuthorityRule | None = (
-        head if head_group and len({value(item) for item in head_group}) != 1 else None
-    )
 
     page_item = next((item for item in valid if item.source_type == "page"), None)
     page_value = value(page_item) if page_item is not None else None
@@ -366,43 +394,50 @@ def aggregate_by_authority(
         if rule.required and not any(rule_of[id(item)] == rule for item in valid)
     ]
 
-    # 2) 判定状态：顺序与既有语义一致（多值 → 识别不确定 → 缺基准 → 缺必需来源）。
+    # 可靠来源已能证明冲突时优先判冲突；不确定来源不能建立或推翻基准。
+    reliable = [item for item in valid if not item.uncertain and readable_value(item.value)
+                and value(item)]
+    reliable_head = [item for item in head_group if item in reliable]
+    benchmark = reliable_head[0] if reliable_head else None
+    ambiguous = head if len({value(item) for item in reliable_head}) > 1 else None
+    uncertain = len(reliable) != len(valid)
     conflicting_rules: list[AuthorityRule] = []
-    if ambiguous is not None:
+    if benchmark is not None and ambiguous is None:
+        for item in reliable:
+            rule = rule_of[id(item)]
+            if (_authority_window(value(item), rule) != _authority_window(value(benchmark), rule)
+                    and rule not in conflicting_rules):
+                conflicting_rules.append(rule)
+    reason_codes: list[ReasonCode] = []
+    if ambiguous is not None or conflicting_rules:
         status = FieldStatus.CONFLICT
-        message = f"{ambiguous.label}返回多个不同值"
-    elif uncertain_requires_review and any(item.uncertain for item in valid):
+        reason_codes = ["VALUE_MISMATCH"]
+        message = (f"{head.label}返回多个可靠的不同值" if ambiguous is not None
+                   else _authority_message(authority, head, conflicting_rules, []))
+    elif uncertain:
         status = FieldStatus.REVIEW_REQUIRED
-        message = (
-            "能力核验结果不确定，请人工确认"
-            if any(item.uncertain and item.source_type == "capability" for item in valid)
-            else "材料识别结果不确定，请核对原图"
-        )
+        reason_codes = ["RECOGNITION_UNCERTAIN"]
+        message = ("能力核验结果不确定，请人工确认"
+                   if any(item.uncertain and item.source_type == "capability" for item in valid)
+                   else "材料识别结果不确定，请核对原图")
     elif benchmark is None:
         status = FieldStatus.REVIEW_REQUIRED
         message = f"未取得{head.label}值，无法建立权威比较基准"
+        reason_codes = ["AUTHORITY_MISSING"]
     elif page_evidence_required and page_item is None:
         status = FieldStatus.REVIEW_REQUIRED
         message = "页面字段未采集或未填写，无法与材料比对，请人工核对"
+        reason_codes = ["PAGE_VALUE_MISSING"]
     elif missing_required:
         status = FieldStatus.REVIEW_REQUIRED
-        message = f"{missing_required[0].label}缺失，无法建立比较基准"
+        message = f"{missing_required[0].label}缺失，无法完成核验"
+        reason_codes = ["EVIDENCE_MISSING"]
     else:
-        benchmark_value = value(benchmark)
-        for item in valid:
-            rule = rule_of[id(item)]
-            if (
-                _authority_window(value(item), rule) != _authority_window(benchmark_value, rule)
-                and rule not in conflicting_rules
-            ):
-                conflicting_rules.append(rule)
-        status = FieldStatus.CONFLICT if conflicting_rules else FieldStatus.MATCH
-        message = _authority_message(
-            authority,
-            benchmark_rule,
-            conflicting_rules,
-            [rule_of[id(item)] for item in valid],
-        )
+        status = FieldStatus.MATCH
+        message = _authority_message(authority, head, [], [rule_of[id(item)] for item in valid])
+    if uncertain and "RECOGNITION_UNCERTAIN" not in reason_codes:
+        reason_codes.append("RECOGNITION_UNCERTAIN")
+        message += "；另有识别不确定的证据，请核对原图"
 
     # 3) 逐条证据着色与差异：结论以基准为准，标红以页面值为展示基准。
     benchmark_value = value(benchmark) if benchmark is not None else None
@@ -415,7 +450,7 @@ def aggregate_by_authority(
             page_value=page_value,
             # 基准来源在多值冲突时标红；其余来源只有在基准唯一时才可能与
             # 基准不一致。基准缺失时没有任何来源算冲突。
-            conflicting=(
+            conflicting=(item in reliable and status is FieldStatus.CONFLICT and (
                 (ambiguous is not None and rule_of[id(item)] == head)
                 or (
                     ambiguous is None
@@ -423,10 +458,11 @@ def aggregate_by_authority(
                     and _authority_window(value(item), rule_of[id(item)])
                     != _authority_window(benchmark_value, rule_of[id(item)])
                 )
-            ),
+            )),
         )
         for item in valid
     ]
+    _set_evidence_comparison_status(valid, evidence, status)
 
     differences: list[int] = []
     if page_item is not None and benchmark is not None and page_value != benchmark_value:
@@ -444,5 +480,6 @@ def aggregate_by_authority(
         confidence=sum(confidences) / len(confidences) if confidences else None,
         evidence=evidence,
         message=message,
+        reason_codes=reason_codes,
         differences=sorted(set(differences)),
     )

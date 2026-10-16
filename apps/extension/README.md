@@ -14,7 +14,7 @@
 | `apps/extension/src/platform/browser` | DOM 读取、页面识别、图片候选和浏览器 API |
 | `apps/extension/src/platform/browser/adapters` | 页面到 `PageData` 的适配器 |
 | `apps/extension/src/platform/extension` | 会话、页面动作控制和动作注册表 |
-| `apps/extension/src/features/review/ui` | React 工作台和任务渲染器 |
+| `apps/extension/src/features/review/ui` | Vue 工作台和任务渲染器 |
 | `apps/extension/src/features/review/model` | 工作流状态和请求编排 |
 | `apps/extension/src/shared/contracts` | 前端协议和页面动作类型 |
 | `public/manifest.json` | 扩展权限与入口声明 |
@@ -22,7 +22,7 @@
 
 ## 页面扩展规则
 
-新增审核页面先添加 `PageAdapter` 和 `PageActionRegistry` 条目，再接入通用采集与工作台。页面选择器、字段定位、写回白名单只能存在适配器或动作控制器中；不要把 DOM 选择器放进后端或 React 业务组件。
+新增审核页面先添加 `PageAdapter` 和 `PageActionRegistry` 条目，再接入通用采集与工作台。页面选择器、字段定位、写回白名单只能存在适配器或动作控制器中；不要把 DOM 选择器放进后端或 Vue 业务组件。
 
 ## 本地验证
 
@@ -33,7 +33,7 @@ npm run lint
 npm run build
 ```
 
-普通 `npm run build` 生成连接本地 `127.0.0.1:8010` 的开发版，扩展名称会显示为“赋界审核助手(本地)”；`npm run build:public` 生成连接腾讯云审核服务的朋友试用版，扩展名称保持为“赋界审核助手”。需要临时连接其他环境时，可在构建进程中设置 `VITE_AGENT_BASE_URL`。
+普通 `npm run build` 生成连接本地 `127.0.0.1:8010` 的开发版，扩展名称会显示为“赋界资料审核工作台(本地)”；`npm run build:public` 生成连接腾讯云审核服务的朋友试用版，扩展名称保持为“赋界资料审核工作台”。需要临时连接其他环境时，可将本包 `.env.example` 复制为 `.env`，或在构建进程中设置 `VITE_AGENT_BASE_URL`。本地无需填写模型密钥；前端不保存后端模型凭据。
 
 ## 前端运行链路
 
@@ -47,4 +47,4 @@ npm run build
 
 ## 代码评审重点
 
-检查组件是否只消费后端结果、Hook 是否避免重复请求、Adapter 是否处理异步 DOM 和页面刷新、Action 是否执行白名单与回读、Manifest 是否只申请必要权限、类型是否与后端协议一致。禁止直接改 `dist`、在 `public` 新增旧式业务脚本，或在 UI 层复制后端规则。
+检查组件是否只消费后端结果、组合式函数是否避免重复请求、Adapter 是否处理异步 DOM 和页面刷新、Action 是否执行白名单与回读、Manifest 是否只申请必要权限、类型是否与后端协议一致。禁止直接改 `dist`、在 `public` 新增旧式业务脚本，或在 UI 层复制后端规则。

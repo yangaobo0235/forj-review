@@ -20,6 +20,7 @@ from pydantic import (
 )
 
 from forj_review_assistant.contracts.checks import CheckResultValue
+from forj_review_assistant.contracts.decisions import ReasonCode
 from forj_review_assistant.contracts.evidence import (  # noqa: F401 - public export
     EvidenceFact,
     FieldObservation,
@@ -151,9 +152,11 @@ class ImageInput(BaseModel):
         """模型可读取的 HTTP(S) 图片地址。"""
         try:
             parsed = urlparse(self.src)
+            _ = parsed.port
         except ValueError:
             return None
-        if parsed.scheme in {"http", "https"} and parsed.hostname:
+        if (parsed.scheme in {"http", "https"} and parsed.hostname
+                and parsed.username is None and parsed.password is None):
             return self.src
         return None
 
@@ -197,6 +200,7 @@ class FieldComparison(BaseModel):
     confidence: float | None = Field(default=None, ge=0, le=1)
     evidence: list[EvidenceFact] = Field(default_factory=list)
     message: str = ""
+    reason_codes: list[ReasonCode] = Field(default_factory=list)
     differences: list[int] = Field(default_factory=list)
 
 
@@ -275,6 +279,7 @@ class ReviewTask(BaseModel):
     label: str
     result_status: Literal["MATCH", "CONFLICT", "INSUFFICIENT"]
     reason: str
+    reason_codes: list[ReasonCode] = Field(default_factory=list)
     values: list[CheckResultValue] = Field(default_factory=list)
     evidence: list[EvidenceFact] = Field(default_factory=list)
     details: dict[str, Any] = Field(default_factory=dict)
@@ -373,6 +378,19 @@ class ReviewRequest(BaseModel):
         ),
     )
     trace_id: str | None = Field(default=None, validation_alias=AliasChoices("trace_id", "traceId"))
+
+    def validate_images(self) -> None:
+        """同步审核与后台任务共用的输入约束，也检查构造后被修改的请求。"""
+        if len(self.images) > 16:
+            raise ValueError("单次审核最多允许 16 张图片")
+        image_ids = [str(image.image_id or image.index) for image in self.images]
+        if len(set(image_ids)) != len(image_ids):
+            raise ValueError("图片清单包含重复标识")
+        if len({image.index for image in self.images}) != len(self.images):
+            raise ValueError("图片清单包含重复序号")
+        for image in self.images:
+            if not image.collection_error and not image.recognition_source:
+                raise ValueError("图片必须提供可由模型访问的 HTTP(S) 地址")
 
 
 class CollectionDiagnostics(BaseModel):

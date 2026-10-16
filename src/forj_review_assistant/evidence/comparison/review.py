@@ -18,6 +18,7 @@ from forj_review_assistant.evidence.comparison.aggregate import (
     aggregate_by_authority,
     aggregate_field,
 )
+from forj_review_assistant.evidence.comparison.evidence_values import trusted_page_value
 
 
 def build_field_comparisons(
@@ -38,6 +39,8 @@ def build_field_comparisons(
         return [
             item
             for item in observations
+            if not (item.source_type == "page"
+                    and field_name in request.collection_diagnostics.ambiguous_fields)
             if (
                 item.field in {field_name, material_field}
                 if item.source_type == "capability"
@@ -77,11 +80,11 @@ def build_field_comparisons(
         if policy and policy.mode == "SYSTEM":
             comparison = aggregate_field(
                 field_name,
-                observations_for_field,
+                [item for item in observations_for_field if item.source_type == "page"],
                 uncertain_requires_review=False,
                 single_evidence_requires_review=False,
             )
-            has_page_value = request.page_fields.get(field_name) not in (None, "")
+            has_page_value = trusted_page_value(request, field_name) not in (None, "")
             comparisons.append(
                 comparison.model_copy(
                     update={
@@ -93,6 +96,7 @@ def build_field_comparisons(
                             if has_page_value
                             else "页面字段未填写，请人工确认"
                         ),
+                        "reason_codes": ["SYSTEM_INPUT"] if has_page_value else ["PAGE_VALUE_MISSING"],
                     }
                 )
             )
@@ -125,4 +129,7 @@ def build_field_comparisons(
             if comparison.status == FieldStatus.MATCH:
                 comparison.status = FieldStatus.REVIEW_REQUIRED
             comparison.message = f"{comparison.message}；{problem}"
+            comparison.reason_codes = list(dict.fromkeys([
+                *comparison.reason_codes, "POLICY_REVIEW",
+            ]))
     return comparisons

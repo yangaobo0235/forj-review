@@ -2,8 +2,9 @@
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
+from forj_review_assistant.contracts.decisions import ReasonCode, default_reason_codes
 from forj_review_assistant.contracts.evidence import DifferenceRange, EvidenceFact
 
 
@@ -16,6 +17,7 @@ class CheckResultValue(BaseModel):
     # 或这条值本身就是页面侧），工作台据此逐条标注，审核员不必回头读理由
     # 才知道哪一个候选对不上。
     conflicting: bool | None = None
+    comparison_status: Literal["MATCH", "CONFLICT", "INSUFFICIENT"] | None = None
     # 产生这条值的检查写下的比对说明（“页面车型马力 430 与材料推导值 473、
     # 480 不一致”）。字段装配在投影时填入，工作台把它放进对应的候选框里，
     # 一条检查下的多条候选共用一个说明。
@@ -39,7 +41,14 @@ class CheckResult(BaseModel):
     label: str
     status: Literal["MATCH", "CONFLICT", "INSUFFICIENT"]
     reason: str
+    reason_codes: list[ReasonCode] = Field(default_factory=list)
     values: list[CheckResultValue] = Field(default_factory=list)
     evidence: list[EvidenceFact] = Field(default_factory=list)
     details: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def explain_status(self):
+        if not self.reason_codes:
+            self.reason_codes = default_reason_codes(self.status)
+        return self
 

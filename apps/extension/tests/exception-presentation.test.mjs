@@ -76,16 +76,16 @@ test("keeps only transfer conflicts and insufficient fields", () => {
 
 test("sidebar wiring preserves advice and qr while rendering exception groups", () => {
   const source = readFileSync(
-    new URL("../src/features/review/ui/ReviewResults.tsx", import.meta.url),
+    new URL("../src/features/review/ui/LegacyReviewResults.vue", import.meta.url),
     "utf8",
   );
 
-  assert.match(source, /exceptionSections\(review\.sections, review\.comparisons\)/);
-  assert.match(source, /exceptionGroups\s*\.map\(\(group\) =>/);
-  assert.match(source, /comparisons=\{group\.comparisons\}/);
+  assert.match(source, /exceptionSections\(props\.review\.sections, props\.review\.comparisons\)/);
+  assert.match(source, /exceptionGroups\.value\.map\(group =>/);
+  assert.match(source, /:comparisons="group\.comparisons"/);
   assert.match(source, /字段校验未发现冲突或待复核项/);
   assert.match(source, /<ReviewAdvice/);
-  assert.match(source, /<h2>二维码核验<\/h2>/);
+  assert.match(source, /<QrResults/);
   assert.match(source, /review\.business_type\s*===\s*["']scrap_replacement["']/);
 });
 
@@ -93,5 +93,5 @@ test("field-check empty state is compact and subdued", () => {
   const css = (readFileSync(new URL("../src/app/App.css", import.meta.url), "utf8") + readFileSync(new URL("../src/features/review/ui/EvidenceReviewWorkbench.css", import.meta.url), "utf8"));
 
   assert.match(css, /\.field-check-empty\s*{[^}]*margin:\s*0/s);
-  assert.match(css, /\.field-check-empty\s*{[^}]*color:\s*#667085/s);
+  assert.match(css, /\.field-check-empty\s*{[^}]*color:\s*var\(--review-muted\)/s);
 });

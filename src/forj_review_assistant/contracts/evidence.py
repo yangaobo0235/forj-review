@@ -20,6 +20,7 @@ class EvidenceFact(BaseModel):
     source_id: str | None = None
     field: str | None = None
     uncertain: bool = False
+    comparison_status: Literal["MATCH", "CONFLICT", "INSUFFICIENT"] | None = None
     image_index: int | None = None
     detail: str | None = None
     image_id: str | None = None

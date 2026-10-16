@@ -24,11 +24,11 @@ import {
 import { ReviewBusinessScope } from "../src/platform/browser/collection/business-scope.ts";
 import { ReviewPageFieldCollector } from "../src/platform/browser/collection/page-field-collector.ts";
 import { businessLabels } from "../src/features/review/model/review-panel.ts";
-import { loadSource } from "./tsx-loader.mjs";
-import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { loadSource } from "./vue-loader.mjs";
+import { h } from "vue";
+import { renderToString } from "vue/server-renderer";
 
-const { resolveWorkbenchRenderer } = loadSource("features/review/ui/workbench-renderers.tsx");
+const { resolveWorkbenchRenderer } = loadSource("features/review/ui/workbench-renderers.ts");
 
 const manifest = JSON.parse(
   readFileSync(new URL("./fixtures/collect-manifest-transfer.json", import.meta.url), "utf8"),
@@ -54,7 +54,7 @@ const step = (step_id, sequence, category, label, reason, result_status) => ({
   details: {},
 });
 
-test("过户清单声明了一个分区和两类材料", () => {
+test("过户清单声明了一个分区和两类材料", async () => {
   assert.equal(manifest.business_type, "transfer");
   assert.deepEqual(manifest.scopes, ["transfer"]);
   assert.deepEqual(
@@ -65,7 +65,7 @@ test("过户清单声明了一个分区和两类材料", () => {
   assert.equal(manifest.materials[0].label, "机动车登记证书");
 });
 
-test("14 个核对字段的别名在前端解析唯一", () => {
+test("14 个核对字段的别名在前端解析唯一", async () => {
   assert.equal(applyCollectManifest(manifest), true);
 
   const aliases = new Set();
@@ -81,7 +81,7 @@ test("14 个核对字段的别名在前端解析唯一", () => {
   assert.equal(manifest.fields.length, 15);
 });
 
-test("车源发布时间是纯文本，但必须被声明成已知标签才能采到", () => {
+test("车源发布时间是纯文本，但必须被声明成已知标签才能采到", async () => {
   applyCollectManifest(manifest);
 
   // 采集器读「标签 + 后继文本」的那条路径以 isKnownLabel 为闸门。这条断言
@@ -101,7 +101,7 @@ test("车源发布时间是纯文本，但必须被声明成已知标签才能�
   );
 });
 
-test("过户资料归到过户分区，身份证和营业执照不上传", () => {
+test("过户资料归到过户分区，身份证和营业执照不上传", async () => {
   applyCollectManifest(manifest);
 
   assert.deepEqual(
@@ -115,7 +115,7 @@ test("过户资料归到过户分区，身份证和营业执照不上传", () =>
   }
 });
 
-test("材料类型优先按清单声明的关键词判定，不借用别的业务的类型", () => {
+test("材料类型优先按清单声明的关键词判定，不借用别的业务的类型", async () => {
   applyCollectManifest(manifest);
 
   // 页面小标题「二手车发票」在浏览器内置关键词表里只会命中宽泛的"发票"，
@@ -131,7 +131,7 @@ test("材料类型优先按清单声明的关键词判定，不借用别的业�
   assert.equal(manifestHintType("过户资料"), null);
 });
 
-test("写回支持文本、下拉和日期，指纹用强锚点", () => {
+test("写回支持文本、下拉和日期，指纹用强锚点", async () => {
   applyCollectManifest(manifest);
 
   assert.equal(manifestWritableFields()?.has("transfer.plate_no"), true);
@@ -145,7 +145,7 @@ test("写回支持文本、下拉和日期，指纹用强锚点", () => {
   assert.equal(anchors.includes("transfer.buyer_id"), false);
 });
 
-test("共用地址的两个业务特征文案不重叠", () => {
+test("共用地址的两个业务特征文案不重叠", async () => {
   const shared = pageCatalog.identities.filter((item) =>
     item.paths.includes("/consistency-qingdao"));
 
@@ -160,7 +160,7 @@ test("共用地址的两个业务特征文案不重叠", () => {
   }
 });
 
-test("过户审核使用完整证据工作台且不展示旧材料任务", () => {
+test("过户审核使用完整证据工作台且不展示旧材料任务", async () => {
   const renderer = resolveWorkbenchRenderer({
     business_type: "transfer",
     region: "default",
@@ -169,7 +169,7 @@ test("过户审核使用完整证据工作台且不展示旧材料任务", () =>
   });
 
   assert.ok(renderer, "过户审核必须有自己的渲染器注册");
-  const markup = renderToStaticMarkup(
+  const markup = await renderToString(
     renderer({
       review: {
         business_type: "transfer",
@@ -203,6 +203,6 @@ test("过户审核使用完整证据工作台且不展示旧材料任务", () =>
   assert.match(markup, /全部字段 \(1\)/);
 });
 
-test("过户审核不再是「未配置」，下拉里能手动选", () => {
+test("过户审核不再是「未配置」，下拉里能手动选", async () => {
   assert.equal(businessLabels.transfer, "过户审核");
 });

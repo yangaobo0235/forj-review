@@ -32,11 +32,13 @@ from forj_review_assistant.capabilities.specs import (
     RuleExecutionResult,
 )
 from forj_review_assistant.contracts.checks import CheckResult, CheckResultValue
+from forj_review_assistant.contracts.decisions import ReasonCode
 from forj_review_assistant.contracts.review import FieldObservation
 from forj_review_assistant.evidence.comparison.aggregate import deduplicate_sources
 from forj_review_assistant.evidence.comparison.evidence_values import (
     observation_evidence,
     readable_value,
+    trusted_page_value,
 )
 from forj_review_assistant.evidence.fields.differences import value_differences
 from forj_review_assistant.evidence.fields.normalize import normalize_value
@@ -76,17 +78,19 @@ def _material_values(
 ) -> list[FieldObservation]:
     """一位所有人的材料读值，每份材料一条。
 
-    不可读的读值（「无法识别」「看不清」）不参与比对，否则会被当成一个
-    真实的名字去和页面比，凭空造出冲突。
+    不可读的读值（「无法识别」「看不清」）保留为不确定证据供人工查看，
+    不能当成真实姓名证明冲突。
     """
     sources = [
         item
         for item in observations
         if item.field == field
         and item.source_type == "image"
+        and (field, item.document_type) in _EVIDENCE_LABELS
         and str(item.value or "").strip()
-        and readable_value(item.value)
     ]
+    sources = [item.model_copy(update={"uncertain": True})
+               if not readable_value(item.value) else item for item in sources]
     return deduplicate_sources(field, sources)
 
 
@@ -109,7 +113,8 @@ def _evidence_value(
     return CheckResultValue(
         source=label,
         value=item.value,
-        conflicting=bool(differences),
+        conflicting=None if item.uncertain else bool(differences),
+        uncertain=item.uncertain,
         differences=differences,
         source_id=item.source_id,
         image_id=item.image_id,
@@ -127,6 +132,7 @@ def _check(
     *,
     page_value_note: str | None = None,
     reason_distributed: bool = False,
+    reason_codes: list[ReasonCode] | None = None,
 ) -> CheckResult:
     details: dict[str, object] = {PAGE_VALUE_DETAIL_KEY: page_values}
     if page_value_note:
@@ -139,7 +145,11 @@ def _check(
         label=LABEL,
         status=status,
         reason=reason,
-        values=values,
+        reason_codes=reason_codes or [],
+        values=[item.model_copy(update={
+            "comparison_status": "INSUFFICIENT" if item.uncertain or status == "INSUFFICIENT"
+            else "CONFLICT" if item.differences else "MATCH",
+        }) for item in values],
         evidence=observation_evidence(materials),
         # 页面侧取值随检查一起下发；任务装配会把它们摆到「页面原始值」区块，
         # 材料侧留在「材料提取值」——审核员先看到页面比出了什么，再看材料。
@@ -151,8 +161,8 @@ def build_owner_consistency_check(context: ReviewExecutionContext) -> RuleExecut
     observations = list(context.observations)
     old_page = context.request.page_fields.get(OLD_OWNER_FIELD)
     new_page = context.request.page_fields.get(NEW_OWNER_FIELD)
-    old_norm = _normalized(OLD_OWNER_FIELD, old_page)
-    new_norm = _normalized(NEW_OWNER_FIELD, new_page)
+    old_norm = _normalized(OLD_OWNER_FIELD, trusted_page_value(context.request, OLD_OWNER_FIELD))
+    new_norm = _normalized(NEW_OWNER_FIELD, trusted_page_value(context.request, NEW_OWNER_FIELD))
 
     old_materials = _material_values(observations, OLD_OWNER_FIELD)
     new_materials = _material_values(observations, NEW_OWNER_FIELD)
@@ -179,6 +189,7 @@ def build_owner_consistency_check(context: ReviewExecutionContext) -> RuleExecut
             page_values,
             materials,
             values,
+            reason_codes=["PAGE_VALUE_MISSING"],
         ),))
     if old_norm != new_norm:
         # 冲突写在两个地方：页面区块下面一句提示，理由整段收起来。
@@ -190,22 +201,13 @@ def build_owner_consistency_check(context: ReviewExecutionContext) -> RuleExecut
             values,
             page_value_note=PAGE_MISMATCH_NOTE,
             reason_distributed=True,
+            reason_codes=["VALUE_MISMATCH"],
         ),))
-    if not old_materials or not new_materials:
-        side = "旧车" if not old_materials else "新车"
-        return RuleExecutionResult(checks=(_check(
-            "INSUFFICIENT",
-            f"页面上的新旧车所有人一致，但{side}没有可读取的所有人材料，无法佐证，请人工核对",
-            page_values,
-            materials,
-            values,
-        ),))
-
     mismatched = [
         item
         for field, items in ((OLD_OWNER_FIELD, old_materials), (NEW_OWNER_FIELD, new_materials))
         for item in items
-        if _normalized(field, item.value) != old_norm
+        if not item.uncertain and _normalized(field, item.value) != old_norm
     ]
     if mismatched:
         # 对不上的材料值已经逐字标红，理由不用再把两边念一遍。
@@ -219,6 +221,25 @@ def build_owner_consistency_check(context: ReviewExecutionContext) -> RuleExecut
             materials,
             values,
             reason_distributed=True,
+            reason_codes=["VALUE_MISMATCH", "RECOGNITION_UNCERTAIN"]
+            if any(item.uncertain for item in materials) else ["VALUE_MISMATCH"],
+        ),))
+
+    if any(item.uncertain for item in materials):
+        labels = "、".join(dict.fromkeys(
+            _EVIDENCE_LABELS[(item.field, item.document_type)]
+            for item in materials if item.uncertain
+        ))
+        return RuleExecutionResult(checks=(_check(
+            "INSUFFICIENT", f"{labels}的所有人识别不确定，不能据此确认一致或冲突，请核对原图",
+            page_values, materials, values, reason_codes=["RECOGNITION_UNCERTAIN"],
+        ),))
+    if not old_materials or not new_materials:
+        side = "旧车" if not old_materials else "新车"
+        return RuleExecutionResult(checks=(_check(
+            "INSUFFICIENT",
+            f"页面上的新旧车所有人一致，但{side}没有可读取的所有人材料，无法佐证，请人工核对",
+            page_values, materials, values,
         ),))
 
     return RuleExecutionResult(checks=(_check(

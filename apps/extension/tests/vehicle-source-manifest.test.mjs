@@ -25,11 +25,11 @@ import { ReviewBusinessScope } from "../src/platform/browser/collection/business
 import { ReviewImageCandidates } from "../src/platform/browser/collection/image-candidates.ts";
 import { ReviewPageFieldCollector } from "../src/platform/browser/collection/page-field-collector.ts";
 import { businessLabels } from "../src/features/review/model/review-panel.ts";
-import { loadSource } from "./tsx-loader.mjs";
-import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { loadSource } from "./vue-loader.mjs";
+import { h } from "vue";
+import { renderToString } from "vue/server-renderer";
 
-const { resolveWorkbenchRenderer } = loadSource("features/review/ui/workbench-renderers.tsx");
+const { resolveWorkbenchRenderer } = loadSource("features/review/ui/workbench-renderers.ts");
 
 /** 构造一个审核任务；只填本组用例关心的字段。 */
 const step = (step_id, sequence, category, label, reason, result_status) => ({
@@ -52,7 +52,7 @@ const manifest = JSON.parse(
   readFileSync(new URL("./fixtures/collect-manifest-vehicle-source.json", import.meta.url), "utf8"),
 );
 
-test("车源清单声明了唯一的车辆分区和三类材料", () => {
+test("车源清单声明了唯一的车辆分区和三类材料", async () => {
   assert.equal(manifest.business_type, "vehicle_source");
   assert.deepEqual(manifest.scopes, ["vehicle"]);
   assert.deepEqual(
@@ -61,7 +61,7 @@ test("车源清单声明了唯一的车辆分区和三类材料", () => {
   );
 });
 
-test("页面区块标题解析到车辆分区，图片才能被路由", () => {
+test("页面区块标题解析到车辆分区，图片才能被路由", async () => {
   assert.equal(applyCollectManifest(manifest), true);
 
   for (const group of manifest.page_groups) {
@@ -84,7 +84,7 @@ test("页面区块标题解析到车辆分区，图片才能被路由", () => {
   );
 });
 
-test("未声明的区块标题不会把图片错归到车辆分区", () => {
+test("未声明的区块标题不会把图片错归到车辆分区", async () => {
   applyCollectManifest(manifest);
 
   assert.equal(ReviewBusinessScope.scopeForLabel("结算信息"), null);
@@ -94,7 +94,7 @@ test("未声明的区块标题不会把图片错归到车辆分区", () => {
   );
 });
 
-test("车源不声明上传槽位，图片类型交给页面文案和模型识别", () => {
+test("车源不声明上传槽位，图片类型交给页面文案和模型识别", async () => {
   applyCollectManifest(manifest);
 
   assert.deepEqual(manifest.materials.flatMap((item) => item.slots ?? []), []);
@@ -105,7 +105,7 @@ test("车源不声明上传槽位，图片类型交给页面文案和模型识�
   assert.equal(ReviewBusinessScope.documentTypeFor("vehicle", 1, "vehicle_license"), "vehicle_license");
 });
 
-test("13 个字段别名与页面分区在前端解析一致", () => {
+test("13 个字段别名与页面分区在前端解析一致", async () => {
   applyCollectManifest(manifest);
 
   const aliases = new Set();
@@ -121,7 +121,7 @@ test("13 个字段别名与页面分区在前端解析一致", () => {
   assert.equal(manifest.fields.length, 13);
 });
 
-test("材料关键词能筛出车源审核材料并给出显示名", () => {
+test("材料关键词能筛出车源审核材料并给出显示名", async () => {
   applyCollectManifest(manifest);
 
   const profile = manifestImageProfile();
@@ -136,7 +136,7 @@ test("材料关键词能筛出车源审核材料并给出显示名", () => {
   assert.equal(manifestGroupLabelEntries().length, manifest.page_groups.length);
 });
 
-test("指纹锚点必须由业务声明，否则页面写回和原图定位全都会被拒", () => {
+test("指纹锚点必须由业务声明，否则页面写回和原图定位全都会被拒", async () => {
   applyCollectManifest(manifest);
 
   assert.deepEqual(manifestIdentityAnchors(), ["vehicle.vin", "vehicle.plate_no", "vehicle.owner"]);
@@ -149,7 +149,7 @@ test("指纹锚点必须由业务声明，否则页面写回和原图定位全�
   assert.equal(buildPageFingerprint({ "vehicle.owner": "某某物流有限公司" }, ["vehicle.owner"]), "");
 });
 
-test("写回白名单由清单下发：13 个字段及已支持的控件类型", () => {
+test("写回白名单由清单下发：13 个字段及已支持的控件类型", async () => {
   applyCollectManifest(manifest);
 
   const writable = manifestWritableFields();
@@ -162,7 +162,7 @@ test("写回白名单由清单下发：13 个字段及已支持的控件类型",
   assert.equal(manifestWritableControlKinds(), null);
 });
 
-test("只有证件照分组的图片进入上传候选", () => {
+test("只有证件照分组的图片进入上传候选", async () => {
   applyCollectManifest(manifest);
 
   // 真实页面的图片分布：证件照（4 张）＋ 车况承诺书（1 张）＋ 车况照片（2 张）。
@@ -182,7 +182,7 @@ test("只有证件照分组的图片进入上传候选", () => {
   assert.deepEqual(selected.map((item) => item.index).sort((a, b) => a - b), [1, 2, 3, 4]);
 });
 
-test("车源审核使用字段优先工作台并显示材料要求", () => {
+test("车源审核使用字段优先工作台并显示材料要求", async () => {
   assert.equal(businessLabels.vehicle_source, "车源审核");
 
   const renderer = resolveWorkbenchRenderer({
@@ -205,8 +205,8 @@ test("车源审核使用字段优先工作台并显示材料要求", () => {
   );
 });
 
-test("车源工作台保留字段冲突且不展示旧材料任务", () => {
-  const workbench = loadSource("features/review/ui/EvidenceReviewWorkbench.tsx").EvidenceReviewWorkbench;
+test("车源工作台保留字段冲突且不展示旧材料任务", async () => {
+  const workbench = loadSource("features/review/ui/EvidenceReviewWorkbench.vue").default;
   const review = {
     business_type: "vehicle_source",
     region: "default",
@@ -221,7 +221,7 @@ test("车源工作台保留字段冲突且不展示旧材料任务", () => {
       },
     ],
   };
-  const html = renderToStaticMarkup(React.createElement(workbench, {
+  const html = await renderToString(h(workbench, {
     review,
     pageData: { pageFields: {}, images: [] },
   }));
@@ -233,13 +233,13 @@ test("车源工作台保留字段冲突且不展示旧材料任务", () => {
   assert.match(html, /车型/);
 });
 
-test("车型字段行把页面侧和材料侧一一对应地摆出来", () => {
-  const workbench = loadSource("features/review/ui/EvidenceReviewWorkbench.tsx").EvidenceReviewWorkbench;
+test("车型字段行把页面侧和材料侧一一对应地摆出来", async () => {
+  const workbench = loadSource("features/review/ui/EvidenceReviewWorkbench.vue").default;
   const model = {
     ...step("FIELD-vehicle.model", 1, "FIELD", "车型", "页面车型排放标准 国六 与材料 国五 不一致", "CONFLICT"),
     details: { check_ids: ["VEHICLE-MODEL-POWER"], reason_distributed: true },
   };
-  const html = renderToStaticMarkup(React.createElement(workbench, {
+  const html = await renderToString(h(workbench, {
     review: {
       business_type: "vehicle_source",
       region: "default",
@@ -285,9 +285,9 @@ test("车型字段行把页面侧和材料侧一一对应地摆出来", () => {
   assert.doesNotMatch(html, /<mark class="mismatch">一致<\/mark>/);
 });
 
-test("没有投影的字段不会凭空多出一句比对说明", () => {
-  const workbench = loadSource("features/review/ui/EvidenceReviewWorkbench.tsx").EvidenceReviewWorkbench;
-  const html = renderToStaticMarkup(React.createElement(workbench, {
+test("没有投影的字段不会凭空多出一句比对说明", async () => {
+  const workbench = loadSource("features/review/ui/EvidenceReviewWorkbench.vue").default;
+  const html = await renderToString(h(workbench, {
     review: {
       business_type: "vehicle_source",
       region: "default",

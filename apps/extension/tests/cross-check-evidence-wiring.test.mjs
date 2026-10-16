@@ -4,13 +4,13 @@ import test from "node:test";
 
 test("cross-document checks show conclusions without image evidence", () => {
   const source = readFileSync(
-    new URL("../src/features/review/ui/ReviewAdvice.tsx", import.meta.url),
+    new URL("../src/features/review/ui/ReviewAdvice.vue", import.meta.url),
     "utf8",
   );
 
-  assert.match(source, /function ReviewAdvice/);
+  assert.match(source, /defineProps<\{ review: ReviewResponse \}>/);
   assert.doesNotMatch(source, /(?:imagesById|onFocusImage)/s);
-  assert.match(source, /跨资料校验[\s\S]*<CheckValues check=\{check\} \/>/);
+  assert.match(source, /跨资料校验[\s\S]*<CheckValues :check="check" \/>/);
   assert.doesNotMatch(source, /check\.evidence/);
 });
 

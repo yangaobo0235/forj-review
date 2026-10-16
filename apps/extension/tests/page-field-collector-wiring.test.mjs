@@ -43,7 +43,7 @@ function runContent(context) {
       }[`./${path.basename(specifier)}`];
       if (injected && context.globalThis?.[injected]) return { [injected]: context.globalThis[injected] };
       let target = path.resolve(path.dirname(absolute), specifier);
-      if (!path.extname(target)) target = [".ts", ".tsx", ".js"].map((ext) => target + ext).find(existsSync);
+      if (!path.extname(target)) target = [".ts", ".js"].map((ext) => target + ext).find(existsSync);
       return load(target);
     };
     vm.runInNewContext(output, { ...context, module, exports: module.exports, require: localRequire }, { filename: absolute });
@@ -131,7 +131,7 @@ test("content script sends field target snapshots without DOM elements", async (
       ReviewPageFieldCollector: {
         collect() { return { pageFields: fields, reviewFields, fieldTargets: [{ field: "old_vehicle.vin", element }], writableTargets: [], unmatchedLabels: [], scannedControls: 1, candidateCount: 0, ambiguousFields: [] }; },
       },
-      ReviewBusinessScope: { scopeForLabel() { return null; }, assign() { return []; } },
+      ReviewBusinessScope: { documentTypeFor: (_scope, _order, category) => category || "unknown", scopeForLabel() { return null; }, assign() { return []; } },
       ReviewImageCandidates: { select() { return { selected: [], scannedCount: 0, overflow: false }; } },
     },
   };
@@ -328,7 +328,7 @@ test("content keeps image focus bound to the latest completed collection token",
       ReviewPageFieldCollector: {
         collect() { return { pageFields: fields, fieldTargets: [], writableTargets: [], unmatchedLabels: [], scannedControls: 0, candidateCount: 0, ambiguousFields: [] }; },
       },
-      ReviewBusinessScope: { scopeForLabel() { return null; }, assign() { return []; } },
+      ReviewBusinessScope: { documentTypeFor: (_scope, _order, category) => category || "unknown", scopeForLabel() { return null; }, assign() { return []; } },
       ReviewImageCandidates: { select() { return { selected: [], scannedCount: 0, overflow: false }; } },
       ReviewImageFocus: { focus() { focusCalls += 1; return { ok: true }; } },
     },
@@ -411,7 +411,7 @@ test("content rejects a mapped image when its source changes after collection", 
       ReviewPageFieldCollector: {
         collect() { return { pageFields: fields, fieldTargets: [], writableTargets: [], unmatchedLabels: [], scannedControls: 0, candidateCount: 0, ambiguousFields: [] }; },
       },
-      ReviewBusinessScope: { scopeForLabel() { return null; }, assign() { return []; } },
+      ReviewBusinessScope: { documentTypeFor: (_scope, _order, category) => category || "unknown", scopeForLabel() { return null; }, assign() { return []; } },
       ReviewImageCandidates: { select(candidates) { return { selected: candidates, scannedCount: candidates.length, overflow: false }; } },
       ReviewImageFocus: { focus(node) { node.click(); return { ok: true }; } },
     },
@@ -484,7 +484,7 @@ test("framework re-render 换掉 <img> 节点后按图片地址重新定位", as
       ReviewPageFieldCollector: {
         collect() { return { pageFields: fields, fieldTargets: [], writableTargets: [], unmatchedLabels: [], scannedControls: 0, candidateCount: 0, ambiguousFields: [] }; },
       },
-      ReviewBusinessScope: { scopeForLabel() { return null; }, assign() { return []; } },
+      ReviewBusinessScope: { documentTypeFor: (_scope, _order, category) => category || "unknown", scopeForLabel() { return null; }, assign() { return []; } },
       ReviewImageCandidates: { select(candidates) { return { selected: candidates, scannedCount: candidates.length, overflow: false }; } },
       ReviewImageFocus: { focus(node) { node.click(); return { ok: true }; } },
     },
@@ -559,7 +559,7 @@ async function repeatedVinFillFixture(initialVin = "LFWSRXDN0T1F1") {
           return { ok: true, actions: entries.map(entry => ({ field: entry.field, value: entry.element.value })) };
         },
       },
-      ReviewBusinessScope: { scopeForLabel: () => null, assign: () => [] },
+      ReviewBusinessScope: { documentTypeFor: (_scope, _order, category) => category || "unknown", scopeForLabel: () => null, assign: () => [] },
       ReviewImageCandidates: { select: candidates => ({ selected: candidates, scannedCount: candidates.length, overflow: false }) },
       ReviewImageFocus: { focus: () => { focusCalls++; return { ok: true }; } },
     },
@@ -652,7 +652,7 @@ test("changed write targets require a surviving independent strong identity anch
         ReviewPageFieldWriter: { defaultWritableFields: new Set(["old_vehicle.vin"]),
           captureValue: () => ({ control: element, value: element.value }),
           executeValue: async () => { writes++; return { ok: true }; } },
-        ReviewBusinessScope: { scopeForLabel: () => null, assign: () => [] },
+        ReviewBusinessScope: { documentTypeFor: (_scope, _order, category) => category || "unknown", scopeForLabel: () => null, assign: () => [] },
         ReviewImageCandidates: { select: () => ({ selected: [], scannedCount: 0, overflow: false }) },
       },
     };
@@ -701,7 +701,7 @@ test("field writes use one live identity sample per guard without rebuilding the
           return { ok: true, actions: [{ field: action.field, value: action.value }] };
         },
       },
-      ReviewBusinessScope: { scopeForLabel: () => null, assign: () => [] },
+      ReviewBusinessScope: { documentTypeFor: (_scope, _order, category) => category || "unknown", scopeForLabel: () => null, assign: () => [] },
       ReviewImageCandidates: { select: () => ({ selected: [], scannedCount: 0, overflow: false }) },
     },
   };

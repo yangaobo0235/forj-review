@@ -12,7 +12,8 @@ from forj_review_assistant.businesses.configuration.inspection import (
     digest,
     effective_configuration,
 )
-from forj_review_assistant.businesses.configuration.schema import Declaration
+from forj_review_assistant.businesses.configuration.schema import Declaration, PageDefinition
+from forj_review_assistant.config.configuration_io import configuration_lock
 
 if TYPE_CHECKING:
     from forj_review_assistant.businesses.configuration.loader import ConfiguredPages
@@ -75,6 +76,17 @@ def validate_recorded_versions(directory: Path, pages: "ConfiguredPages") -> Non
 
 def record_snapshot(directory: Path, pages: "ConfiguredPages") -> dict:
     """Record a validated baseline. Activation is mutable; version content is not."""
+    with configuration_lock(directory):
+        return _record_snapshot(directory, pages)
+
+
+def _record_snapshot(directory: Path, pages: "ConfiguredPages") -> dict:
+    current = {path.name: PageDefinition.model_validate_json(path.read_text(encoding="utf-8-sig")).model_dump(mode="json", exclude_unset=True)
+               for path in directory.glob("*.json")}
+    expected = {name: definition.model_dump(mode="json", exclude_unset=True)
+                for name, definition in pages.sources}
+    if current != expected:
+        raise ValueError("配置目录已变化，请重新校验后保存快照")
     root = directory / ".history"
     root.mkdir(parents=True, exist_ok=True)
     lock = root / "write.lock"

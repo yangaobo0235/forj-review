@@ -17,7 +17,7 @@ Push-Location $projectRoot
 try {
     $arguments = @("forj_review_assistant.main:app", "--host", $BindHost, "--port", $Port)
     if (-not $NoReload) {
-        $arguments += "--reload"
+        $arguments += @("--reload", "--reload-dir", (Join-Path $projectRoot "src/forj_review_assistant"))
     }
 
     Write-Host "Starting review Agent at http://${BindHost}:${Port}" -ForegroundColor Cyan

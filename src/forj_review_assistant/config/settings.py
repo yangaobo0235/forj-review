@@ -29,12 +29,14 @@ class QwenConfig:
         return bool(self.api_key)
 
 
-# 默认从后端服务根目录读取本地环境文件，进程环境变量仍具有更高优先级。
-DEFAULT_ENV_FILE = Path.cwd() / ".env"
+# Bind local settings to this backend package, independently of the launch directory.
+DEFAULT_ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
+PATH_SETTINGS = {"REVIEW_PAGES_DIR", "REVIEW_LOG_DIR"}
 
 
-def load_dotenv(env_file: Path = DEFAULT_ENV_FILE) -> None:
-    """加载简单 dotenv 键值，同时保留进程中已经设置的同名变量。"""
+def load_dotenv(env_file: Path | None = None) -> None:
+    """Load package settings; file-relative directories and process overrides are explicit."""
+    env_file = (env_file if env_file is not None else DEFAULT_ENV_FILE).resolve()
     if not env_file.is_file():
         return
     for raw_line in env_file.read_text(encoding="utf-8-sig").splitlines():
@@ -50,10 +52,12 @@ def load_dotenv(env_file: Path = DEFAULT_ENV_FILE) -> None:
         value = value.strip()
         if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
             value = value[1:-1]
+        if key in PATH_SETTINGS and value:
+            value = str((env_file.parent / value).resolve())
         os.environ.setdefault(key, value)
 
 
-def load_qwen_config(env_file: Path = DEFAULT_ENV_FILE) -> QwenConfig:
+def load_qwen_config(env_file: Path | None = None) -> QwenConfig:
     """合并本地环境文件和进程环境，生成不可变的 Qwen 客户端配置。"""
     load_dotenv(env_file)
     return QwenConfig(
@@ -64,3 +68,9 @@ def load_qwen_config(env_file: Path = DEFAULT_ENV_FILE) -> QwenConfig:
         ).rstrip("/"),
         model=os.getenv("DASHSCOPE_MODEL", "qwen3.7-plus"),
     )
+
+
+def image_private_hosts() -> tuple[str, ...]:
+    """Only the operator can explicitly allow internal image hosts, never page input."""
+    return tuple(host.strip().lower().rstrip(".") for host in
+                 os.getenv("REVIEW_IMAGE_PRIVATE_HOSTS", "").split(",") if host.strip())

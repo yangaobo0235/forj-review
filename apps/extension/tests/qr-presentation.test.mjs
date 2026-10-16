@@ -76,20 +76,20 @@ test("qr field layout isolates itself from the global definition list grid", () 
 test("qr conflict explanation is rendered in the failure color", () => {
   const css = (readFileSync(new URL("../src/app/App.css", import.meta.url), "utf8") + readFileSync(new URL("../src/features/review/ui/EvidenceReviewWorkbench.css", import.meta.url), "utf8"));
 
-  assert.match(css, /\.status-conflict strong\s*{[^}]*color:\s*#cf1322/s);
-  assert.match(css, /\.qr-check\.status-conflict small\s*{[^}]*color:\s*#cf1322/s);
+  assert.match(css, /\.status-conflict strong\s*{[^}]*color:\s*var\(--review-danger\)/s);
+  assert.match(css, /\.qr-check\.status-conflict small\s*{[^}]*color:\s*var\(--review-danger\)/s);
   assert.match(css, /\.status-review_required strong\s*{[^}]*color:\s*#d48806/s);
 });
 
 test("qr card source does not render raw or canonical urls", () => {
-  const source = readFileSync(new URL("../src/features/review/ui/ReviewResults.tsx", import.meta.url), "utf8");
-  const card = source.slice(source.indexOf('function QrResults'), source.indexOf("interface ResultGroupProps"));
+  const source = readFileSync(new URL("../src/features/review/ui/QrResults.vue", import.meta.url), "utf8");
+  const card = source;
   assert.doesNotMatch(card, /check\.(?:url|raw_value)/);
 });
 
 test("qr card uses the presentation status for its color", () => {
-  const source = readFileSync(new URL("../src/features/review/ui/ReviewResults.tsx", import.meta.url), "utf8");
-  const card = source.slice(source.indexOf('function QrResults'), source.indexOf("interface ResultGroupProps"));
+  const source = readFileSync(new URL("../src/features/review/ui/QrResults.vue", import.meta.url), "utf8");
+  const card = source;
 
   assert.match(card, /status-\$\{presentation\.visualStatus\.toLowerCase\(\)\}/);
   assert.doesNotMatch(card, /status-\$\{check\.status\.toLowerCase\(\)\}/);

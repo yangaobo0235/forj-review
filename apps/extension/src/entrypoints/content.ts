@@ -1,17 +1,19 @@
-import { applyCollectManifest, manifestHintType, manifestIdentityAnchors, manifestRecordIdentityFields, manifestWritableControlKinds, manifestWritableFields } from "../platform/browser/catalog/collect-manifest.ts";
+import { collectImageCandidates } from "../platform/browser/collection/collect-image-candidates.ts";
+import { applyCollectManifest, manifestIdentityAnchors, manifestRecordIdentityFields, manifestWritableControlKinds, manifestWritableFields } from "../platform/browser/catalog/collect-manifest.ts";
 import type { CollectManifest } from "../platform/browser/catalog/collect-manifest.ts";
 import { appliedPageCatalog, applyPageCatalog, explainPageIdentity } from "../platform/browser/catalog/page-catalog.ts";
 import type { PageCatalog } from "../platform/browser/catalog/page-catalog.ts";
 import { ReviewBusinessDetector } from "../platform/browser/identity/business-detector.ts";
-import { ReviewBusinessScope } from "../platform/browser/collection/business-scope.ts";
 import { ReviewImageCandidates } from "../platform/browser/collection/image-candidates.ts";
 import { ReviewImageFocus } from "../platform/browser/actions/image-focus.ts";
-import { documentTypeForImageLabel, imageLabelFor, nearestAncestorText } from "../platform/browser/collection/image-label.ts";
+import { classifyImage, imageDocumentType } from "../platform/browser/collection/material-hints.ts";
 import { ReviewPageFieldCollector } from "../platform/browser/collection/page-field-collector.ts";
 import { ReviewPageFieldWriter } from "../platform/browser/actions/page-field-writer.ts";
 import { BUILTIN_IDENTITY_ANCHORS, buildPageFingerprint, createPageInstanceId, sameRecordExceptFields } from "../platform/browser/identity/page-identity.ts";
 import type { BusinessSelection, PageImage, PageWriteGroupAction } from "../shared/contracts/review.ts";
 import { logDiagnostic } from "../shared/diagnostics.ts";
+import { captureConfigurationPage, trialConfigurationPage } from "../platform/browser/collection/configuration-discovery";
+import type { ConfigurationPending } from "../shared/contracts/configuration";
 /**
  * 功能：协调页面字段、图片地址采集和原图定位消息。
  * 职责边界：复杂识别逻辑委托给独立公共脚本；DOM 元素不跨消息传输。
@@ -52,27 +54,6 @@ type ReviewMessage = {
 type CollectionSnapshot = { pageFields?: Record<string, string>; fieldTargets?: Array<{ field: string; element: Element }> };
 type ImageSelection = { image: HTMLImageElement; index: number; imageId?: string; businessScope: string; groupOrder?: number; categoryHint?: string; groupTitle?: string; labelHint?: string };
 
-const classifyImage = (hint: string) => {
-  // 先问清单：材料关键词和它对应的类型是业务声明，后端是唯一来源。
-  // 内置表只兜清单不可用的情况——过户的「二手车发票」在内置表里根本没有，
-  // 只会命中宽泛的"发票"，判成别的业务的材料类型。
-  const declared = manifestHintType(hint);
-  if (declared) return declared;
-  const text = hint.toLowerCase();
-  if (text.includes("身份证")) return "id_card";
-  if (text.includes("营业执照")) return "business_license";
-  // 铭牌必须先于登记证书判断：上传说明常把“登记证书和铭牌二选一”写在同一句里，
-  // 先命中的关键词会决定图片类型。
-  if (text.includes("铭牌")) return "vehicle_nameplate";
-  if (text.includes("行驶证")) return "vehicle_license";
-  if (text.includes("登记证书") || text.includes("机动车登记证")) return "registration_certificate";
-  if (text.includes("回收证明") || text.includes("报废证明")) return "scrap_certificate";
-  if (text.includes("发票")) return "invoice";
-  if (text.includes("报废车辆资料") || text.includes("报废车辆信息") || text.includes("报废车资料") || text.includes("旧车资料")) return "old_vehicle";
-  if (text.includes("新车资料") || text.includes("新车及发票信息") || text.includes("新车及发票资料")) return "new_vehicle";
-  return "unknown";
-};
-
 const imageAssetMetadata = (candidate: ImageSelection): PageImage => {
   const { image, index } = candidate;
   const src = image.currentSrc || image.src;
@@ -88,13 +69,7 @@ const imageAssetMetadata = (candidate: ImageSelection): PageImage => {
     // Use the image's own card label before positional slot fallback. This lets
     // multi-material sections such as transfer and vehicle-source bypass model
     // classification when their per-image labels are explicit.
-    documentTypeHint: documentTypeForImageLabel(candidate.labelHint || "")
-      || ReviewBusinessScope.documentTypeFor?.(
-        candidate.businessScope,
-        candidate.groupOrder ?? 0,
-        categoryHint,
-      )
-      || categoryHint,
+    documentTypeHint: imageDocumentType({ ...candidate, categoryHint }),
     businessScope: candidate.businessScope,
     groupTitle: candidate.groupTitle,
     groupOrder: candidate.groupOrder,
@@ -190,6 +165,12 @@ const isCollectionMessage = (message: ReviewMessage) =>
   || message?.type === MESSAGE_TYPES.collectPageManifest;
 
 chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendResponse) => {
+  if (message.type === "DISCOVER_CONFIGURATION_PAGE" || message.type === "TRIAL_CONFIGURATION_PAGE") {
+    const task = message.type === "DISCOVER_CONFIGURATION_PAGE" ? captureConfigurationPage()
+      : trialConfigurationPage(message.task as ConfigurationPending);
+    void task.then(sendResponse).catch(error => sendResponse({error: error instanceof Error ? error.message : "页面采集失败"}));
+    return true;
+  }
   if (message.type === MESSAGE_TYPES.applyPageFieldValue || message.type === MESSAGE_TYPES.applyPageFieldGroupValue) {
     const reply = sendResponse;
     const started = Date.now();
@@ -417,68 +398,7 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
     ambiguousFieldCount: fieldCollection.ambiguousFields.length
   });
 
-  const pageImages = Array.from(document.images);
-  const imageIndexes = new Map(pageImages.map((image, index) => [image, index]));
-  const scopeItems: Array<{ kind: "label"; text: string } | { kind: "image"; index: number }> = []
-  document.body.querySelectorAll("*").forEach((element) => {
-    const directText = Array.from(element.childNodes)
-      .filter((node) => node.nodeType === Node.TEXT_NODE)
-      .map((node) => node.textContent || "")
-      .join(" ")
-      .trim();
-    if (ReviewBusinessScope.scopeForLabel(directText)) {
-      scopeItems.push({ kind: "label", text: directText });
-    }
-    if (element instanceof HTMLImageElement) {
-      const index = imageIndexes.get(element);
-      if (index != null) scopeItems.push({ kind: "image", index });
-    }
-  });
-  const scopeByIndex = new Map(
-    ReviewBusinessScope.assign(scopeItems).map((item) => [item.index, item])
-  );
-
-  const imageCandidates = pageImages.map((image, index) => {
-    const rect = image.getBoundingClientRect();
-    const style = window.getComputedStyle(image);
-    const labelHint = imageLabelFor(image);
-    // 旧写法 `image.closest("section, article, li, div")?.textContent` 会停在
-    // 只包着 img 的空壳上，拿到空字符串，小标题和分组文本一起丢掉。改成向上找
-    // 最近的非空祖先文本。
-    const hint = labelHint || nearestAncestorText(image) || image.alt || "";
-    const ownHint = [image.alt, image.title, image.getAttribute("aria-label")]
-      .filter(Boolean)
-      .join(" ");
-    const parent = image.parentElement;
-    const emptySlot = /暂无图片|尚未上传|未上传图片/.test(ownHint)
-      || Boolean(
-        parent
-        && parent.querySelectorAll("img").length === 1
-        && /暂无图片|尚未上传|未上传图片/.test(parent.textContent || ""),
-      );
-    const scope = scopeByIndex.get(index) || {
-      businessScope: "unknown",
-      groupTitle: "未分类资料",
-      groupOrder: index + 1,
-      imageId: `unknown-${String(index + 1).padStart(2, "0")}`,
-    };
-    return {
-      image,
-      index,
-      ...scope,
-      src: image.currentSrc || image.src,
-      visible: rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden",
-      naturalWidth: image.naturalWidth || 0,
-      naturalHeight: image.naturalHeight || 0,
-      className: typeof image.className === "string" ? image.className : "",
-      role: image.getAttribute("role") || "",
-      ariaHidden: image.getAttribute("aria-hidden") === "true",
-      emptySlot,
-      hint,
-      categoryHint: classifyImage(hint),
-      labelHint,
-    };
-  });
+  const imageCandidates = collectImageCandidates(classifyImage);
   const selection = ReviewImageCandidates.select(imageCandidates, MAX_REVIEW_IMAGES);
   // Counts only; labels can contain document values and must not enter Console.
   log("images", {

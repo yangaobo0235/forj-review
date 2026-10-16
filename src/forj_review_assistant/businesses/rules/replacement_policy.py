@@ -70,6 +70,8 @@ def _date_check(
             check_id=check_id,
             label=label,
             status="INSUFFICIENT",
+            reason_codes=["RECOGNITION_UNCERTAIN"]
+            if any(item.get("uncertain") for item in evidence) else ["EVIDENCE_MISSING"],
             reason=f"未从指定图片材料取得唯一有效的{label}",
             values=values,
             evidence=evidence,
@@ -86,6 +88,7 @@ def _date_check(
         check_id=check_id,
         label=label,
         status="MATCH" if matches else "INSUFFICIENT",
+        reason_codes=[] if matches else ["POLICY_REVIEW"],
         reason=(
             f"{label}符合政策范围：{range_text}"
             if matches
@@ -156,6 +159,8 @@ def build_replacement_policy_checks(
             label="新车发票产地",
             status=status,
             reason=reason,
+            reason_codes=["RECOGNITION_UNCERTAIN"]
+            if any(item.get("uncertain") for item in origin_evidence) else [],
             values=[
                 CheckResultValue.model_validate({**item, "source": "新车销售发票"})
                 for item in origin_evidence

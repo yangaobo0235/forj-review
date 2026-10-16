@@ -1,5 +1,5 @@
 import { defineConfig, build, loadEnv } from 'vite'
-import react from '@vitejs/plugin-react'
+import vue from '@vitejs/plugin-vue'
 import { readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
@@ -13,7 +13,7 @@ export default defineConfig(({ mode }) => {
         process.env.VITE_AGENT_BASE_URL ?? env.VITE_AGENT_BASE_URL ?? '',
       ),
     },
-    plugins: [react(), {
+    plugins: [vue(), {
       name: 'extension-entries',
       async closeBundle() {
         const localBuild = mode !== 'public'
@@ -27,7 +27,7 @@ export default defineConfig(({ mode }) => {
 
         const manifestPath = resolve(import.meta.dirname, 'dist/manifest.json')
         const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
-        const extensionName = localBuild ? '赋界审核助手(本地)' : '赋界审核助手'
+        const extensionName = localBuild ? '赋界资料审核工作台(本地)' : '赋界资料审核工作台'
         manifest.name = extensionName
         manifest.action.default_title = `打开${extensionName}`
         await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')

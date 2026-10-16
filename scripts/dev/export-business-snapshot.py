@@ -59,7 +59,10 @@ def main() -> None:
     source_files = []
     for directory, suffixes in (
         (ROOT / "src/forj_review_assistant", {".py"}),
-        (ROOT / "apps/extension/src", {".ts", ".tsx", ".css"}),
+        (ROOT / "src/forj_configuration_agent", {".py"}),
+        (ROOT / "apps/extension/src", {".ts", ".vue", ".css"}),
+        (ROOT / "apps/configuration-web/src", {".ts", ".vue", ".css"}),
+        (ROOT / "packages/configuration-contracts", {".ts"}),
     ):
         source_files.extend(
             path for path in directory.rglob("*") if path.is_file() and path.suffix in suffixes
@@ -72,6 +75,11 @@ def main() -> None:
         "uv.lock",
         "apps/extension/package-lock.json",
         "apps/extension/vite.config.ts",
+        "apps/extension/public/manifest.json",
+        "apps/configuration-web/package.json",
+        "apps/configuration-web/package-lock.json",
+        "apps/configuration-web/vite.config.ts",
+        "scripts/dev/export-business-snapshot.py",
     ):
         path = ROOT / relative
         if path.is_file():

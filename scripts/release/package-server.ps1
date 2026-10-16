@@ -7,6 +7,8 @@ $ErrorActionPreference = "Stop"
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
 $tempRoot = Join-Path $projectRoot ".tmp"
 $outputDirectory = Join-Path $tempRoot "server-release"
+$toolsDirectory = Join-Path $tempRoot "server-deploy"
+$packageName = "forj-review-server.tar.gz"
 $imageName = "forj-review-api:main"
 
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
@@ -14,6 +16,7 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
 }
 & docker info *> $null
 if ($LASTEXITCODE -ne 0) { throw "Docker Desktop is not running. Wait for Engine running." }
+if (-not (Get-Command tar -ErrorAction SilentlyContinue)) { throw "tar was not found. Windows 10/11 includes tar.exe." }
 
 New-Item -ItemType Directory -Force -Path $tempRoot | Out-Null
 $stage = Join-Path $tempRoot ("server-stage-" + [Guid]::NewGuid().ToString("N"))
@@ -31,32 +34,40 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Cannot inspect the built image." }
     & docker save --output (Join-Path $stage "forj-review-api-main.tar") $imageName
     if ($LASTEXITCODE -ne 0) { throw "Docker export failed; previous release files are retained." }
-    Copy-Item -LiteralPath (Join-Path $projectRoot "docker-compose.server.yml") -Destination $stage
+    $toolsStage = Join-Path $stage "deploy-tools"
+    New-Item -ItemType Directory -Path $toolsStage | Out-Null
     # Bash must receive LF without BOM, even from a Windows checkout.
     $utf8 = New-Object System.Text.UTF8Encoding($false)
     foreach ($name in @("start-review.sh", "stop-review.sh", "rollback-review.sh", "review-common.sh")) {
         $source = [IO.File]::ReadAllText((Join-Path $projectRoot "deploy/$name"))
-        [IO.File]::WriteAllText((Join-Path $stage $name), $source.Replace("`r`n", "`n"), $utf8)
+        [IO.File]::WriteAllText((Join-Path $toolsStage $name), $source.Replace("`r`n", "`n"), $utf8)
     }
-    Copy-Item -LiteralPath (Join-Path $projectRoot "deploy/DEPLOY.md") -Destination $stage
+    Copy-Item -LiteralPath (Join-Path $projectRoot "docker-compose.server.yml") -Destination $toolsStage
+    Copy-Item -LiteralPath (Join-Path $projectRoot "deploy/recover-legacy-compose.py") -Destination $toolsStage
+    Copy-Item -LiteralPath (Join-Path $projectRoot "deploy/DEPLOY.md") -Destination $toolsStage
     $metadata = [ordered]@{
         release_id = $releaseId; source_revision = $revision; working_tree_dirty = $dirty
         image = $imageName; image_id = $imageId; platform = "linux/amd64"
         created_at_utc = (Get-Date).ToUniversalTime().ToString("o")
     }
     [IO.File]::WriteAllText((Join-Path $stage "release.json"), ($metadata | ConvertTo-Json) + "`n", $utf8)
-    $checksums = foreach ($file in (Get-ChildItem -LiteralPath $stage -File | Sort-Object Name)) {
-        (Get-ReleaseSha256 $file.FullName) + "  " + $file.Name
+    $checksums = foreach ($name in @("forj-review-api-main.tar", "release.json")) {
+        (Get-ReleaseSha256 (Join-Path $stage $name)) + "  " + $name
     }
     [IO.File]::WriteAllText((Join-Path $stage "SHA256SUMS"), ($checksums -join "`n") + "`n", $utf8)
+    Write-Host "Creating single backend package..." -ForegroundColor Cyan
+    & tar -czf (Join-Path $stage $packageName) -C $stage forj-review-api-main.tar release.json SHA256SUMS
+    if ($LASTEXITCODE -ne 0) { throw "Release archive creation failed; previous package retained." }
     New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
-    foreach ($file in (Get-ChildItem -LiteralPath $stage -File | Where-Object Name -ne "SHA256SUMS")) {
-        Move-Item -LiteralPath $file.FullName -Destination (Join-Path $outputDirectory $file.Name) -Force
+    New-Item -ItemType Directory -Force -Path $toolsDirectory | Out-Null
+    foreach ($file in (Get-ChildItem -LiteralPath $toolsStage -File)) {
+        Move-Item -LiteralPath $file.FullName -Destination (Join-Path $toolsDirectory $file.Name) -Force
     }
-    Move-Item -LiteralPath (Join-Path $stage "SHA256SUMS") -Destination (Join-Path $outputDirectory "SHA256SUMS") -Force
-    Write-Host "Release ready: $outputDirectory" -ForegroundColor Green
-    Write-Host "Upload ALL files in this directory to /home/ubuntu/review-agent-deploy/"
-    Write-Host "Then run: chmod +x *-review.sh && ./start-review.sh"
+    Move-Item -LiteralPath (Join-Path $stage $packageName) -Destination (Join-Path $outputDirectory $packageName) -Force
+    Write-Host "Backend package: $(Join-Path $outputDirectory $packageName)" -ForegroundColor Green
+    Write-Host "Server scripts/Compose (upload once, then only when changed): $toolsDirectory"
+    Write-Host "Routine update: stop-review.sh -> manually upload ONLY $packageName -> start-review.sh"
+    Write-Host "Upload destination: /home/ubuntu/review-agent-deploy/ (no manual extraction needed)."
 } finally {
     # Only remove this invocation's staging folder inside the workspace temp root.
     $resolvedStage = [IO.Path]::GetFullPath($stage)

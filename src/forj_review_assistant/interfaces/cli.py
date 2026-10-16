@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import json
+import os
 from pathlib import Path
 
 import uvicorn
@@ -13,6 +14,7 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8010)
     parser.add_argument("--reload", action="store_true")
+    parser.add_argument("--local-pages", action="store_true", help="本地使用：未设置 REVIEW_PAGES_DIR 时使用 review-pages")
     commands = parser.add_mutually_exclusive_group()
     commands.add_argument("--check-pages", type=Path, metavar="DIRECTORY", help="校验页面配置及运行时能力，不启动服务")
     commands.add_argument("--page-schema", action="store_true", help="输出页面配置 JSON Schema")
@@ -23,6 +25,10 @@ def main() -> None:
     parser.add_argument("--cases", type=Path, metavar="FILE", help="离线回放样例 JSON")
     parser.add_argument("--json", action="store_true", help="配置检查也输出结构化 JSON 诊断")
     args = parser.parse_args()
+    if args.local_pages:
+        from forj_review_assistant.config.settings import load_dotenv
+        load_dotenv()
+        os.environ.setdefault("REVIEW_PAGES_DIR", str(Path("review-pages").resolve()))
     if (args.replay_pages is not None) != (args.cases is not None):
         parser.error("--replay-pages 和 --cases 必须同时使用")
     if args.page_schema:
@@ -70,5 +76,6 @@ def main() -> None:
         return
     uvicorn.run(
         "forj_review_assistant.main:app", host=args.host, port=args.port, reload=args.reload,
+        reload_dirs=[str(Path(__file__).resolve().parents[1])] if args.reload else None,
         access_log=False,
     )

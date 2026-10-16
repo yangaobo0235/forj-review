@@ -3,6 +3,12 @@
 from forj_review_assistant.businesses.profiles import BusinessProfile
 from forj_review_assistant.contracts.review import FieldObservation, FieldStatus, QrCheck
 from forj_review_assistant.evidence.fields.normalize import normalize_value
+from forj_review_assistant.evidence.fields.readability import readable_value
+
+
+def _verified(check: QrCheck) -> bool:
+    return (check.status in {FieldStatus.MATCH, FieldStatus.CONFLICT}
+            and check.accessible is not False and check.domain_valid is not False)
 
 
 def append_qr_observations(
@@ -11,6 +17,8 @@ def append_qr_observations(
     pack = profile.pack_declaration
     bindings = {b.page_field: b for b in pack.qr_field_bindings} if pack else {}
     for check in qr_checks:
+        if not _verified(check):
+            continue
         for page_field, value in check.page_fields.items():
             binding = bindings.get(page_field)
             if binding is None:
@@ -28,6 +36,8 @@ def mark_qr_conflicts(
     bindings = {b.page_field: b for b in pack.qr_field_bindings} if pack else {}
     has_conflict = False
     for check in qr_checks:
+        if not _verified(check):
+            continue
         for page_field, page_value in check.page_fields.items():
             binding = bindings.get(page_field)
             if binding is None:
@@ -43,6 +53,7 @@ def mark_qr_conflicts(
                 item.value for item in observations
                 if item.image_index == check.image_index and item.source_type == "image"
                 and item.field == binding.field and item.value not in (None, "")
+                and not item.uncertain and readable_value(item.value)
             ]
             if any(comparable(value) != comparable(page_value) for value in candidates):
                 check.status = FieldStatus.CONFLICT

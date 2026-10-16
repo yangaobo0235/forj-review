@@ -1,3 +1,6 @@
+import struct
+import zlib
+
 import cv2
 import httpx
 import numpy as np
@@ -19,6 +22,37 @@ def qr_png(value: str) -> bytes:
     ok, encoded = cv2.imencode(".png", np.asarray(image))
     assert ok
     return bytes(encoded)
+
+
+@pytest.mark.asyncio
+async def test_qr_decoder_rejects_large_pixel_header_before_native_allocation(monkeypatch):
+    # 只修改 PNG 头部，不在测试中分配大图。
+    payload = bytearray(qr_png("synthetic"))
+    payload[16:24] = struct.pack(">II", 6000, 6000)
+    payload[29:33] = struct.pack(">I", zlib.crc32(payload[12:29]))
+
+    def native_decode(*args):
+        pytest.fail("尺寸校验必须先于原生图片内存分配")
+
+    monkeypatch.setattr(cv2, "imdecode", native_decode)
+    result = await QrImageDecoder(transport=httpx.MockTransport(
+        lambda request: httpx.Response(200, content=bytes(payload))
+    )).decode("https://images.example.test/oversize.png")
+    assert result.error_code == "decoder_error"
+
+
+@pytest.mark.asyncio
+async def test_qr_decoder_contains_native_decode_errors(monkeypatch):
+    payload = qr_png("synthetic")
+
+    def native_decode(*args):
+        raise cv2.error("synthetic native failure")
+
+    monkeypatch.setattr(cv2, "imdecode", native_decode)
+    result = await QrImageDecoder(transport=httpx.MockTransport(
+        lambda request: httpx.Response(200, content=payload)
+    )).decode("https://images.example.test/broken.png")
+    assert result.error_code == "decoder_error"
 
 
 @pytest.mark.asyncio

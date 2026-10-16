@@ -2,12 +2,14 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+from forj_review_assistant.businesses.configuration.inspection import profile_fingerprint
 from forj_review_assistant.businesses.configuration.schema import PageDefinition
 from forj_review_assistant.businesses.packs import build_collect_manifest
 from forj_review_assistant.businesses.page_catalog import page_catalog
 from forj_review_assistant.businesses.rules.catalog import RULE_DEFINITIONS
+from forj_review_assistant.config.configuration_io import KERNEL_VERSION
 from forj_review_assistant.contracts.review import BusinessId
 from forj_review_assistant.contracts.review_schema import review_contract_schema
 from forj_review_assistant.interfaces.http.dependencies import get_review_service
@@ -21,6 +23,16 @@ ReviewServiceDependency = Annotated[ReviewService, Depends(get_review_service)]
 def health() -> dict[str, str]:
     """供扩展和部署探针检查 Agent 是否已启动。"""
     return {"status": "ok"}
+
+
+@router.get("/api/review/configuration/loaded")
+def loaded_configuration(request: Request, service: ReviewServiceDependency) -> dict:
+    """Report the actual immutable in-memory snapshot, never reread files to claim activation."""
+    return {"kernel_version": KERNEL_VERSION,
+            "process_instance_id": request.app.state.process_instance_id,
+            "directory": request.app.state.configuration_directory,
+            "pages": [{"page_id": p.page_id, "version": p.version,
+                       "fingerprint": profile_fingerprint(p)} for p in service.registry.active_profiles]}
 
 
 @router.get("/api/review/schema")

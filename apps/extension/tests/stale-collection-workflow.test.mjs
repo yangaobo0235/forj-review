@@ -4,13 +4,19 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
-import test from "node:test";
-import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import test, { afterEach } from "node:test";
+import { effectScope, ref } from "vue";
+
 import ts from "typescript";
 
 const require = createRequire(import.meta.url);
 const cache = new Map();
+const scopes = [];
+afterEach(() => { for (const scope of scopes.splice(0)) scope.stop(); });
+function createWorkflow(useReviewWorkflow, selection = "AUTO") {
+  const scope = effectScope(); scopes.push(scope);
+  return scope.run(() => useReviewWorkflow(selection));
+}
 
 /**
  * 清空已加载的模块图。`loadModule` 会把第一次传入的全局桩缓存下来，同一个
@@ -25,12 +31,13 @@ function loadModule(file, extraGlobals = {}, moduleOverrides = {}) {
   const module = { exports: {} };
   cache.set(file, module);
   const output = ts.transpileModule(readFileSync(file, "utf8"), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   const localRequire = (specifier) => {
+    if (specifier in moduleOverrides) return moduleOverrides[specifier];
     if (!specifier.startsWith(".")) return moduleOverrides[specifier] ?? require(specifier);
     let target = path.resolve(path.dirname(file), specifier);
-    if (!path.extname(target)) target = [".ts", ".tsx"].map((extension) => target + extension).find(existsSync);
+    if (!path.extname(target)) target = [".ts"].map((extension) => target + extension).find(existsSync);
     return loadModule(target, extraGlobals, moduleOverrides);
   };
   vm.runInNewContext(output, {
@@ -50,18 +57,7 @@ function loadModule(file, extraGlobals = {}, moduleOverrides = {}) {
 
 async function runReviewWithState(snapshot, collectionIssues = []) {
   freshModules();
-  const state = [];
   const requests = [];
-  const react = {
-    useState(initial) {
-      const index = state.length;
-      state.push(initial);
-      return [initial, (next) => { state[index] = typeof next === "function" ? next(state[index]) : next; }];
-    },
-    useCallback: (callback) => callback,
-    useRef: (initial) => ({ current: initial }),
-    useEffect: () => {},
-  };
   const { useReviewWorkflow } = loadModule(
     fileURLToPath(new URL("../src/features/review/model/use-review-workflow.ts", import.meta.url)), {
       chrome: { tabs: {
@@ -73,21 +69,16 @@ async function runReviewWithState(snapshot, collectionIssues = []) {
         return { ok: true, json: async () => String(url).endsWith("/jobs/urls")
           ? { job_id: "test-job" } : String(url).endsWith("/jobs/test-job") ? snapshot : {} };
       },
-    }, { react },
+    },
   );
-  await useReviewWorkflow("AUTO").startReview();
-  return { error: state[4], notice: state[5], requests };
+  const workflow = createWorkflow(useReviewWorkflow);
+  await workflow.startReview();
+  return { error: workflow.error, notice: workflow.notice, requests };
 }
 
 function workflowHarness(createResponse) {
   freshModules();
-  const state = [], requests = [];
-  const react = {
-    useState(initial) { const index = state.length; state.push(initial); return [initial, next => {
-      state[index] = typeof next === "function" ? next(state[index]) : next;
-    }]; },
-    useCallback: callback => callback, useEffect: () => {}, useRef: initial => ({ current: initial }),
-  };
+  const requests = [];
   const { useReviewWorkflow } = loadModule(fileURLToPath(new URL("../src/features/review/model/use-review-workflow.ts", import.meta.url)), {
     chrome: { tabs: { query: async () => [{ id: 42 }], sendMessage: async () => ({
       businessType: "scrap_replacement", pageFields: {}, images: [], collectionId: "collection-1",
@@ -98,8 +89,8 @@ function workflowHarness(createResponse) {
         ? await createResponse : String(url).endsWith("/jobs/job-1") && init?.method !== "DELETE"
           ? { status: "COMPLETED", progress: { total_count: 0, completed_count: 0 } } : {} };
     },
-  }, { react });
-  return { workflow: useReviewWorkflow("AUTO"), state, requests };
+  });
+  return { workflow: createWorkflow(useReviewWorkflow), requests };
 }
 
 test("rapid repeated starts create exactly one review job", async () => {
@@ -108,21 +99,65 @@ test("rapid repeated starts create exactly one review job", async () => {
   assert.equal(requests.filter(request => request.method === "POST").length, 1);
 });
 
+test("Vue selection watcher ignores an old preflight after the business is changed", async () => {
+  freshModules();
+  let resolveOld;
+  const old = new Promise(done => { resolveOld = done; });
+  const selected = ref("AUTO");
+  const {useReviewWorkflow} = loadModule(fileURLToPath(new URL("../src/features/review/model/use-review-workflow.ts", import.meta.url)), {}, {
+    "../api/collect-page": {collectPageData: selection => selection === "AUTO" ? old : Promise.resolve({collectionId: "new", images: []})},
+  });
+  const workflow = createWorkflow(useReviewWorkflow, selected);
+  workflow.reset(); selected.value = "vehicle_source_default";
+  await new Promise(done => setTimeout(done, 0));
+  assert.equal(workflow.pageData.collectionId, "new");
+  resolveOld({collectionId: "old", images: []});
+  await new Promise(done => setTimeout(done, 0));
+  assert.equal(workflow.pageData.collectionId, "new");
+});
+
+for (const grouped of [false, true]) {
+  test(`late ${grouped ? "group" : "single"} fill receipt cannot change a newly collected page in Vue`, async () => {
+    freshModules();
+    let resolveFill;
+    const pendingFill = new Promise(done => { resolveFill = done; });
+    let current = {collectionId: "first", businessType: "vehicle_source", pageFields: {"vehicle.vin": "A"}, images: []};
+    const {useReviewWorkflow} = loadModule(fileURLToPath(new URL("../src/features/review/model/use-review-workflow.ts", import.meta.url)), {}, {
+      "../api/collect-page": {collectPageData: async () => current},
+      "../../../platform/extension/page-fill-client": {
+        applyPageFieldValue: () => pendingFill, applyPageFieldGroupValue: () => pendingFill,
+      },
+      "../api/review-client": {createUrlReviewJob: async () => ({job_id: "job"}),
+        fetchReviewJob: async () => ({status: "COMPLETED", progress: {total_count: 0}}),
+        cancelReviewJob: async () => {}, completionNotice: () => ""},
+    });
+    const workflow = createWorkflow(useReviewWorkflow);
+    await new Promise(done => setTimeout(done, 0));
+    const fill = grouped ? workflow.applyPageFieldGroupValue(["vehicle.vin"], "B") : workflow.applyPageFieldValue("vehicle.vin", "B");
+    workflow.reset();
+    current = {...current, collectionId: "second", pageFields: {"vehicle.vin": "C"}};
+    await workflow.startReview();
+    resolveFill({ok: true, message: "回读成功"}); await fill;
+    assert.equal(workflow.pageData.collectionId, "second");
+    assert.equal(workflow.pageData.pageFields["vehicle.vin"], "C");
+  });
+}
+
 test("reset discards a late created job and cancels it without restoring old state", async () => {
   let resolve;
   const pending = new Promise(done => { resolve = done; });
-  const { workflow, state, requests } = workflowHarness(pending);
+  const { workflow, requests } = workflowHarness(pending);
   const review = workflow.startReview();
   await new Promise(done => setTimeout(done, 0));
   assert.ok(requests.some(request => request.method === "POST"));
   workflow.reset();
   resolve({ job_id: "job-1" });
   await review;
-  assert.equal(state[0], false);
-  assert.equal(state[1], null);
-  assert.equal(state[2], null);
-  assert.equal(state[3], null);
-  assert.equal(state[4], "");
+  assert.equal(workflow.loading, false);
+  assert.equal(workflow.review, null);
+  assert.equal(workflow.job, null);
+  assert.equal(workflow.pageData, null);
+  assert.equal(workflow.error, "");
   assert.ok(requests.some(request => request.method === "DELETE"));
 });
 
@@ -171,11 +206,10 @@ test("URL review never reads, compresses, or uploads image bodies", async () => 
       },
     },
   );
-  let captured;
-  function Harness() { captured = useReviewWorkflow("AUTO"); return null; }
-  renderToStaticMarkup(React.createElement(Harness));
+  const captured = createWorkflow(useReviewWorkflow);
   await captured.startReview();
-  assert.deepEqual(messages, ["COLLECT_PAGE_MANIFEST"]);
+  assert.ok(messages.length >= 1);
+  assert.ok(messages.every(message => message === "COLLECT_PAGE_MANIFEST"));
   const jobRequests = requests.filter(request => request.url.includes("/jobs/"));
   assert.deepEqual(jobRequests.map(request => request.url.split("/jobs/")[1]), ["urls", "url-job"]);
   assert.equal(JSON.parse(jobRequests[0].init.body).images[0].src, page.images[0].src);
@@ -230,12 +264,7 @@ test("startReview surfaces the stale-collection reason instead of the business-d
     },
   );
 
-  let captured = null;
-  function Harness() {
-    captured = useReviewWorkflow("AUTO");
-    return null;
-  }
-  renderToStaticMarkup(React.createElement(Harness));
+  const captured = createWorkflow(useReviewWorkflow);
 
   await captured.startReview();
 
@@ -313,12 +342,7 @@ test("侧边栏自己应用采集清单，字段和材料的中文名来自后�
   // 采集还没发生：面板只能退回内置表。
   assert.equal(collectManifest.manifestFieldLabels(), null);
 
-  let captured = null;
-  function Harness() {
-    captured = useReviewWorkflow("AUTO");
-    return null;
-  }
-  renderToStaticMarkup(React.createElement(Harness));
+  const captured = createWorkflow(useReviewWorkflow);
   await captured.startReview().catch(() => {});
 
   assert.equal(collectManifest.manifestFieldLabels()["old_vehicle.vin"], "报废车辆车架号");

@@ -1,3 +1,4 @@
+import { imageDocumentType } from "../src/platform/browser/collection/material-hints.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -68,4 +69,13 @@ test("transfer 的小标题直接定类型，二手车发票不串到报废置�
   assert.equal(documentTypeForImageLabel("登记证书1、2页"), "registration_certificate");
   assert.equal(documentTypeForImageLabel("二手车发票"), "used_car_invoice");
   assert.equal(documentTypeForImageLabel("未知材料"), null);
+});
+
+
+test("trial and formal material hints prioritize card labels over positional slots", () => {
+  applyCollectManifest(transfer);
+  assert.equal(imageDocumentType({labelHint: "二手车发票", businessScope: "transfer", groupOrder: 1,
+    categoryHint: "registration_certificate"}), "used_car_invoice");
+  assert.equal(imageDocumentType({labelHint: "未知", businessScope: "transfer", categoryHint: "registration_certificate"}),
+    "registration_certificate");
 });

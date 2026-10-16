@@ -32,3 +32,19 @@ def test_page_without_qr_bindings_cannot_receive_other_business_qr_fields():
     observations = []
     append_qr_observations(observations, checks, VEHICLE_SOURCE_DEFAULT)
     assert not observations
+
+
+def test_uncertain_ocr_and_failed_web_access_cannot_create_qr_conflict():
+    pack = replace(VEHICLE_SOURCE_DEFAULT.pack_declaration,
+                   qr_field_bindings=(QrFieldBinding("number", "permit.number", "alphanumeric"),))
+    profile = replace(VEHICLE_SOURCE_DEFAULT, pack_declaration=pack)
+    check = QrCheck(image_index=0, status="MATCH", message="fixture", page_fields={"number": "AB123"})
+    observations = [FieldObservation(field="permit.number", value="AB999", source_type="image",
+                                     source_id="fixture", image_index=0, uncertain=True)]
+    assert not mark_qr_conflicts(observations, [check], profile)
+    check.status = "REVIEW_REQUIRED"
+    check.accessible = False
+    append_qr_observations(observations, [check], profile)
+    assert len(observations) == 1
+    observations[0].uncertain = False
+    assert not mark_qr_conflicts(observations, [check], profile)

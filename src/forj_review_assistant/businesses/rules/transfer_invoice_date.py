@@ -22,6 +22,7 @@ from forj_review_assistant.capabilities.specs import (
     RuleExecutionResult,
 )
 from forj_review_assistant.contracts.checks import CheckResult, CheckResultValue
+from forj_review_assistant.evidence.comparison.evidence_values import trusted_page_value
 
 CHECK_ID = "TRANSFER-INVOICE-DATE"
 LABEL = "开票日期"
@@ -55,8 +56,8 @@ def build_transfer_invoice_date_check(
 ) -> RuleExecutionResult:
     """按页面值判定开票日期是否晚于车源发布时间。"""
     page_fields = context.request.page_fields or {}
-    invoice_date = _parse_day(page_fields.get(PAGE_FIELD))
-    published_at = _parse_day(page_fields.get(SOURCE_PUBLISHED_FIELD))
+    invoice_date = _parse_day(trusted_page_value(context.request, PAGE_FIELD))
+    published_at = _parse_day(trusted_page_value(context.request, SOURCE_PUBLISHED_FIELD))
 
     values = [
         CheckResultValue(

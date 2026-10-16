@@ -250,3 +250,21 @@ def test_cli_replay_returns_nonzero_on_regression(page_directory, tmp_path, monk
         main()
     assert exc.value.code == 1
     assert not json.loads(capsys.readouterr().out)["ok"]
+
+
+@pytest.mark.asyncio
+async def test_replay_checks_why_a_configured_field_needs_review(page_directory, tmp_path):
+    data = json.loads((EXAMPLES / "回放样例/permit-cases.json").read_text(encoding="utf-8"))
+    case = data["cases"][0]
+    case["batch"]["observations"][0]["uncertain"] = True
+    case["expect"].update({"recommendation": "REVIEW_REQUIRED", "comparisons": {"permit.vin": "REVIEW_REQUIRED"},
+                           "comparison_reasons": {"permit.vin": ["RECOGNITION_UNCERTAIN"]}})
+    data["cases"] = [case]
+    path = tmp_path / "reason-cases.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    assert (await replay_cases(page_directory, path))["ok"]
+    case["expect"]["comparison_reasons"]["permit.vin"] = ["EVIDENCE_MISSING"]
+    path.write_text(json.dumps(data), encoding="utf-8")
+    result = await replay_cases(page_directory, path)
+    assert not result["ok"]
+    assert result["cases"][0]["failures"][0]["path"] == "comparison_reasons.permit.vin"

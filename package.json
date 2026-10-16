@@ -7,6 +7,10 @@
     "build:extension:public": "npm --prefix apps/extension run build:public",
     "test:extension": "npm --prefix apps/extension test",
     "lint:extension": "npm --prefix apps/extension run lint",
-    "check:architecture": "python scripts/ci/check_architecture.py && node scripts/ci/check-extension-architecture.mjs"
+    "check:architecture": "python scripts/ci/check_architecture.py && node scripts/ci/check-extension-architecture.mjs",
+    "dev:configuration": "npm --prefix apps/configuration-web run dev",
+    "build:configuration": "npm --prefix apps/configuration-web run build",
+    "test:configuration": "npm --prefix apps/configuration-web test",
+    "lint:configuration": "npm --prefix apps/configuration-web run lint"
   }
 }

@@ -1,44 +1,16 @@
 """仅把明确可读的观察作为确定性政策和主体关系证据。"""
 
-import re
-
 from forj_review_assistant.businesses.routing import route_fields
 from forj_review_assistant.contracts.recognition import AgentBatchResult
-from forj_review_assistant.contracts.review import FieldObservation
+from forj_review_assistant.contracts.review import FieldObservation, ReviewRequest
 from forj_review_assistant.evidence.comparison.aggregate import EVIDENCE_SOURCE_LABELS
-
-UNREADABLE_VALUES = frozenset(
-    {
-        "无法识别",
-        "无法确认",
-        "不详",
-        "未知",
-        "不清",
-        "空白",
-        "N/A",
-        "NA",
-        "NULL",
-        "NONE",
-        "未识别",
-        "模糊",
-        "看不清",
-    }
-)
+from forj_review_assistant.evidence.fields.readability import readable_value as readable_value
 
 
-def readable_value(value: object | None) -> bool:
-    if value is None:
-        return False
-    text = str(value).strip()
-    return bool(
-        text
-        and text.upper() not in UNREADABLE_VALUES
-        and not any(
-            word in text for word in ("无法识别", "无法确认", "未知", "不详", "看不清")
-        )
-        and not re.search(r"[?？*＊�]", text)
-        and re.search(r"[\w\u3400-\u9fff]", text)
-    )
+def trusted_page_value(request: ReviewRequest, field: str):
+    """存在多个候选控件的字段没有可信的页面值，不能用来证明冲突。"""
+    return (None if field in request.collection_diagnostics.ambiguous_fields
+            else request.page_fields.get(field))
 
 
 def batch_observations(batch: AgentBatchResult) -> list[FieldObservation]:

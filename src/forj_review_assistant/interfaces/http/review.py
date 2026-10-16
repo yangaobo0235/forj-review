@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 def validate_business_profile(request: ReviewRequest, review_service: ReviewService) -> None:
     try:
+        request.validate_images()
         review_service.resolve_profile(request)
     except BusinessContextMismatch as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -33,6 +34,8 @@ def validate_business_profile(request: ReviewRequest, review_service: ReviewServ
             status_code=422,
             detail="审核业务配置不存在或版本不兼容",
         ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/api/review/assist", response_model=ReviewResponse)

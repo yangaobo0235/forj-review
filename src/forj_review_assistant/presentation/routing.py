@@ -13,6 +13,7 @@ from forj_review_assistant.businesses.field_policies import field_policy
 from forj_review_assistant.businesses.fields import PAGE_FIELD_LABELS
 from forj_review_assistant.businesses.profiles import BusinessProfile
 from forj_review_assistant.contracts.checks import CheckResult, CheckResultValue
+from forj_review_assistant.contracts.decisions import ReasonCode, default_reason_codes
 from forj_review_assistant.contracts.recognition import MaterialCompletenessReport
 from forj_review_assistant.contracts.review import (
     EvidenceFact,
@@ -49,7 +50,7 @@ PAGE_VALUES_DETAIL_KEY = "page_values"
 # 合并多个来源的状态时的严重度顺序：冲突最重，一致最轻。
 SEVERITY = {"MATCH": 0, "INSUFFICIENT": 1, "CONFLICT": 2}
 # 规则结论投影成字段条目时的结论文字；详细过程在 reason 和页面外核验里。
-CONCLUSION_TEXT = {"MATCH": "一致", "CONFLICT": "不一致", "INSUFFICIENT": "证据不足"}
+CONCLUSION_TEXT = {"MATCH": "一致", "CONFLICT": "不一致", "INSUFFICIENT": "待复核"}
 
 
 def _evidence_source(item: EvidenceFact | dict[str, object]) -> str:
@@ -72,6 +73,7 @@ def _step(
     label: str,
     result_status: ResultStatus,
     reason: str,
+    reason_codes: Sequence[ReasonCode] = (),
     page_field: str | None = None,
     page_target_field: str | None = None,
     page_target_fields: Sequence[str] = (),
@@ -106,7 +108,13 @@ def _step(
         label=label,
         result_status=result_status,
         reason=reason,
-        values=list(values),
+        reason_codes=list(reason_codes) or default_reason_codes(result_status),
+        values=[item.model_copy(update={
+            "comparison_status": item.comparison_status or (
+                "INSUFFICIENT" if item.uncertain else result_status
+                if item.conflicting is not None or item.differences else None
+            ),
+        }) for item in values],
         evidence=[_coerce_evidence(item) for item in evidence],
         details=resolved_details,
         evidence_count=len(evidence),
@@ -143,6 +151,7 @@ def _field_step(
         CheckResultValue(
             source=item.source,
             differences=item.differences,
+            comparison_status=item.comparison_status,
             value=item.value,
             source_id=item.source_id,
             image_id=item.image_id,
@@ -189,6 +198,8 @@ def _field_step(
         label=label,
         result_status=result_status,
         reason=reason,
+        reason_codes=(["PAGE_VALUE_MISSING"] if result_status != _comparison_status(comparison)
+                      else comparison.reason_codes),
         page_target_field=comparison.field if page_interaction else None,
         writable=page_interaction,
         page_value=request.page_fields.get(comparison.field),
@@ -282,6 +293,7 @@ def _composite_field_step(
         label=check.label,
         result_status=check.status,
         reason=check.reason,
+        reason_codes=check.reason_codes,
         page_target_field=spec.primary_field if page_interaction else None,
         page_target_fields=(spec.primary_field, spec.secondary_field) if page_interaction else (),
         page_value=request.page_fields.get(spec.primary_field),
@@ -349,6 +361,8 @@ def _check_backed_field_step(
         label=label,
         result_status=status,
         reason=reason,
+        reason_codes=(["PAGE_VALUE_MISSING"] if not reason_distributed
+                      else list(dict.fromkeys(code for check in checks for code in check.reason_codes))),
         page_target_field=field,
         page_value=page_text,
         page_values=page_values,
@@ -356,7 +370,10 @@ def _check_backed_field_step(
         # 候选，整段理由读下来才知道哪一条对不上；句子跟值放在一起，审核员
         # 在一个框里就能看完。理由本身仍然完整保留，供列表和别处使用。
         values=[
-            value.model_copy(update={"check_reason": check.reason})
+            value.model_copy(update={"check_reason": check.reason,
+                                     "comparison_status": value.comparison_status or (
+                                         "INSUFFICIENT" if value.uncertain else check.status),
+                                     })
             for check in checks
             for value in check.values
             if value.source != PAGE_VALUE_SOURCE
@@ -485,7 +502,9 @@ def _field_first_steps(
                 steps.append(step)
                 emitted_composites.add(composite.check_id)
             continue
-        projected_task = project_field_task(profile, snapshot, business_checks, _step) if field else None
+        projection_snapshot = (snapshot.model_copy(update={"value": None})
+                               if field in request.collection_diagnostics.ambiguous_fields else snapshot)
+        projected_task = project_field_task(profile, projection_snapshot, business_checks, _step) if field else None
         if projected_task is not None:
             steps.append(projected_task)
             continue
@@ -534,6 +553,7 @@ def _external_step(check: CheckResult) -> ReviewTask:
         label=check.label,
         result_status=check.status,
         reason=check.reason,
+        reason_codes=check.reason_codes,
         values=check.values,
         evidence=check.evidence,
     )
@@ -561,6 +581,7 @@ def _business_step(
         label=check.label,
         result_status=check.status,
         reason=check.reason,
+        reason_codes=check.reason_codes,
         page_values=page_values,
         values=check.values,
         evidence=check.evidence,

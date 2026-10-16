@@ -53,6 +53,7 @@ def _field_finding(comparison: FieldComparison) -> CheckResult:
         if comparison.status is FieldStatus.CONFLICT
         else "INSUFFICIENT",
         reason=comparison.message,
+        reason_codes=comparison.reason_codes,
         values=values,
         evidence=[item.model_dump() for item in comparison.evidence],
     )

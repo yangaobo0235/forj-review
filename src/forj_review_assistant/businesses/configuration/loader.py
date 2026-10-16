@@ -7,6 +7,7 @@ from pathlib import Path
 from forj_review_assistant.businesses.configuration.compiler import compile_page
 from forj_review_assistant.businesses.configuration.schema import PageDefinition
 from forj_review_assistant.businesses.profiles import BusinessProfile
+from forj_review_assistant.config.configuration_io import configuration_lock
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,11 @@ def load_page_profiles(
     directory: Path,
     templates: tuple[BusinessProfile, ...] = (),
 ) -> ConfiguredPages:
+    with configuration_lock(directory):
+        return _load_page_profiles(directory, templates)
+
+
+def _load_page_profiles(directory: Path, templates: tuple[BusinessProfile, ...]) -> ConfiguredPages:
     if not directory.is_dir():
         raise ValueError(f"页面配置目录不存在：{directory}")
     available = {(profile_id(p), p.version): p for p in templates}

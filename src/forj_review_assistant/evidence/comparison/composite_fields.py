@@ -11,6 +11,7 @@ from forj_review_assistant.businesses.context import ContextMapping, ContextSequ
 from forj_review_assistant.businesses.packs import BUSINESS_PACKS
 from forj_review_assistant.contracts.checks import CheckResult, CheckResultValue
 from forj_review_assistant.contracts.review import FieldComparison, ReviewRequest
+from forj_review_assistant.evidence.comparison.evidence_values import trusted_page_value
 from forj_review_assistant.evidence.fields.normalize import normalize_value
 
 
@@ -81,8 +82,8 @@ def build_page_composite_check(
     ):
         return None
 
-    primary_normalized = normalize_value(spec.material_field, primary)
-    secondary_normalized = normalize_value(spec.material_field, secondary)
+    primary_normalized = normalize_value(spec.material_field, trusted_page_value(request, spec.primary_field))
+    secondary_normalized = normalize_value(spec.material_field, trusted_page_value(request, spec.secondary_field))
     values = [
         CheckResultValue(source=spec.primary_field, value=primary),
         CheckResultValue(source=spec.secondary_field, value=secondary),
@@ -94,6 +95,8 @@ def build_page_composite_check(
             CheckResultValue(
                 source=item.source,
                 differences=item.differences,
+                comparison_status=item.comparison_status,
+                uncertain=item.uncertain,
                 value=item.value,
                 source_id=item.source_id,
                 image_id=item.image_id,
@@ -136,6 +139,8 @@ def build_page_composite_check(
         label=spec.label,
         status=status,
         reason=reason,
+        reason_codes=(comparison.reason_codes if comparison is not None
+                      and primary_normalized == secondary_normalized else []),
         values=values,
         evidence=comparison.evidence if comparison is not None else [],
         details={
