@@ -84,6 +84,16 @@ def _patch(**changes):
     return compile_page(PageDefinition.model_validate(data), VEHICLE_SOURCE_DEFAULT)
 
 
+def test_review_tab_metadata_is_inherited_overridden_or_explicitly_removed(declaration):
+    from forj_review_assistant.businesses.page_catalog import page_catalog
+
+    assert _patch().pack_declaration.region("default").review_tab == "车源审核"
+    assert _patch(review_tab="车辆校验").pack_declaration.region("default").review_tab == "车辆校验"
+    assert _patch(review_tab=None).pack_declaration.region("default").review_tab == ""
+    profile = _compile({**declaration, "review_tab": "许可证审核"})
+    assert page_catalog((profile,))["identities"][0]["review_tab"] == "许可证审核"
+
+
 def test_one_field_generates_collection_extraction_and_mapping(declaration):
     profile = _compile(declaration)
     manifest = build_collect_manifest(profile.pack_declaration)

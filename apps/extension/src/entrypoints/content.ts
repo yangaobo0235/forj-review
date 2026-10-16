@@ -1,9 +1,10 @@
 import { collectImageCandidates } from "../platform/browser/collection/collect-image-candidates.ts";
 import { applyCollectManifest, manifestIdentityAnchors, manifestRecordIdentityFields, manifestWritableControlKinds, manifestWritableFields } from "../platform/browser/catalog/collect-manifest.ts";
 import type { CollectManifest } from "../platform/browser/catalog/collect-manifest.ts";
-import { appliedPageCatalog, applyPageCatalog, explainPageIdentity } from "../platform/browser/catalog/page-catalog.ts";
+import { appliedPageCatalog, applyPageCatalog, explainPageIdentity, reviewTabLabels } from "../platform/browser/catalog/page-catalog.ts";
 import type { PageCatalog } from "../platform/browser/catalog/page-catalog.ts";
 import { ReviewBusinessDetector } from "../platform/browser/identity/business-detector.ts";
+import { guardActiveReviewTab, readActiveReviewTab } from "../platform/browser/identity/active-review-tab.ts";
 import { ReviewImageCandidates } from "../platform/browser/collection/image-candidates.ts";
 import { ReviewImageFocus } from "../platform/browser/actions/image-focus.ts";
 import { classifyImage, imageDocumentType } from "../platform/browser/collection/material-hints.ts";
@@ -34,6 +35,9 @@ const pageInstanceId = createPageInstanceId();
 let activeCollectionId = "";
 let latestCollectionId = "";
 let collectionSequence = 0;
+let reviewTabGuard: ReturnType<typeof guardActiveReviewTab> | null = null;
+let activeReviewPanel: HTMLElement | null = null;
+const sameReviewStep = () => reviewTabGuard?.isCurrent() ?? true;
 const nextCollectionId = () => `${pageInstanceId}:${++collectionSequence}`;
 // 指纹锚点来自本次业务的采集清单；没有清单时退回内置表。
 const pageFingerprint = (fields: Record<string, unknown>) =>
@@ -98,11 +102,11 @@ const controlFields = (collection: CollectionSnapshot) => {
 };
 
 const readIdentityFields = () => controlFields(ReviewPageFieldCollector.collectIdentity(
-  document, manifestIdentityAnchors() ?? BUILTIN_IDENTITY_ANCHORS,
+  activeReviewPanel ?? document, manifestIdentityAnchors() ?? BUILTIN_IDENTITY_ANCHORS,
 ));
 
 const sameCollectedRecord = (message: ReviewMessage, fields?: Record<string, unknown>) => {
-  if (message.expectedPageUrl !== window.location.href || message.expectedPageInstanceId !== pageInstanceId || !message.expectedPageFingerprint) return false;
+  if (!sameReviewStep() || message.expectedPageUrl !== window.location.href || message.expectedPageInstanceId !== pageInstanceId || !message.expectedPageFingerprint) return false;
   const currentFields = { ...(fields ?? readIdentityFields()) };
   for (const [field, write] of verifiedFieldWrites) {
     if (currentFields[field] === write.value) currentFields[field] = write.original;
@@ -122,7 +126,7 @@ const sameReviewIdentity = (message: ReviewMessage, fields?: Record<string, unkn
 // The target field may have been normalized by a framework after collection;
 // identity remains valid when every anchor except that field is unchanged.
 const sameReviewIdentityExceptFields = (message: ReviewMessage, fields: string[]) => {
-  if (message.expectedPageUrl !== window.location.href || message.expectedPageInstanceId !== pageInstanceId || message.expectedCollectionId !== activeCollectionId) return false;
+  if (!sameReviewStep() || message.expectedPageUrl !== window.location.href || message.expectedPageInstanceId !== pageInstanceId || message.expectedCollectionId !== activeCollectionId) return false;
   const current = readIdentityFields();
   if (sameReviewIdentity(message, current)) return true;
   return sameRecordExceptFields(message.expectedPageFingerprint || "", pageFingerprint(current), fields,
@@ -240,6 +244,7 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
       const previousWrite = verifiedFieldWrites.get(action.field!);
       expectedFields[action.field!] = previousWrite ? previousWrite.original : action.expectedValue;
       return message.expectedPageUrl === window.location.href
+        && sameReviewStep()
         && message.expectedPageInstanceId === pageInstanceId
         && message.expectedCollectionId === activeCollectionId
         && message.expectedPageFingerprint === pageFingerprint(expectedFields);
@@ -349,14 +354,26 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
   // 就不知道该取哪份清单。清单不可用时识别退回内置表，对共享地址只报
   // 「认不出来」，不猜。
   applyPageCatalog(message.pageCatalog as PageCatalog | null | undefined);
+  const tabLabels = reviewTabLabels(appliedPageCatalog(), window.location.href);
+  const reviewTab = readActiveReviewTab(document, tabLabels);
   const businessResolution = ReviewBusinessDetector.resolve(
     window.location.href,
     allText,
     message.businessSelection as BusinessSelection | null | undefined,
+    reviewTab,
   );
   const business = businessResolution.business;
+  // 替换采集时断开旧监听；报废置换没有页签声明，继续使用原有路径及身份守卫。
+  if (reviewTabGuard) activeCollectionId = "";
+  reviewTabGuard?.disconnect();
+  activeReviewPanel = business && reviewTab.panelReady ? reviewTab.panel : null;
+  const collectionStepGuard = activeReviewPanel ? guardActiveReviewTab(document, tabLabels, reviewTab, () => {
+    if (activeCollectionId === collectionId) activeCollectionId = "";
+    if (latestCollectionId === collectionId) latestCollectionId = "";
+  }) : null;
+  reviewTabGuard = collectionStepGuard;
   // Record identity resolution counts, without page paths or page text.
-  const diagnostics = explainPageIdentity(appliedPageCatalog(), window.location.href, allText);
+  const diagnostics = explainPageIdentity(appliedPageCatalog(), window.location.href, allText, reviewTab);
   log("business", {
     business: business?.businessType ?? null,
     region: business?.region ?? null,
@@ -374,7 +391,7 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
         (!item.region || item.region === business?.region) && (!item.profile_version || item.profile_version === business?.profileVersion)),
   );
   const fieldCollection = ReviewPageFieldCollector.collect(
-    document,
+    activeReviewPanel ?? document,
     business?.businessType ?? null,
   );
   const pageFields = controlFields(fieldCollection);
@@ -410,6 +427,7 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
   const images = selection.selected;
   Promise.resolve(images.map(imageAssetMetadata))
     .then((imageAssets) => {
+      collectionStepGuard?.isCurrent();
       if (latestCollectionId !== collectionId) {
         // 被取代的采集也要带回业务识别结果和真实原因，面板不得退化为“无法识别业务”。
         sendResponse({

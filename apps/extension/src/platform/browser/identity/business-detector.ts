@@ -1,10 +1,11 @@
 import { buildPageAdapterRegistry } from "../adapters/index.ts";
-import { appliedPageCatalog, explainPageIdentity, matchPageIdentity } from "../catalog/page-catalog.ts";
+import { appliedPageCatalog, explainPageIdentity, matchPageIdentity, reviewTabLabels } from "../catalog/page-catalog.ts";
+import type { ReviewTabState } from "../catalog/page-catalog.ts";
 import type { BusinessSelection } from "../../../shared/contracts/review";
 
 /**
  * 功能：识别当前页面属于哪个审核业务，并处理人工选择与自动识别的冲突。
- * 职责边界：识别依据的页面地址与特征文案由后端下发（`browser/page-catalog.ts`）；
+ * 职责边界：页面地址、审核页签及普通页面特征由后端目录下发；
  * 本模块只负责取用清单、判定冲突，不自行维护地址表。
  */
 
@@ -14,22 +15,26 @@ const registry = buildPageAdapterRegistry();
  * 按页面识别清单判定业务；清单不可用时退回页面适配器内置表。
  *
  * 清单可用但给不出唯一答案时**不退回内置表**：内置表只有地址，对共享地址
- * （一致性审核与过户审核同址）必然给出一个错误答案，退回等于把「不猜」作废。
+ * 无法确认当前审核步骤，不能用它绕过页签校验。
  */
-function detect(url: string, pageText = ""): BusinessSelection | null {
+function detect(url: string, pageText = "", reviewTab?: ReviewTabState | null): BusinessSelection | null {
   const catalog = appliedPageCatalog();
-  if (catalog) return matchPageIdentity(catalog, url, pageText);
+  if (catalog) return matchPageIdentity(catalog, url, pageText, reviewTab);
   return registry.selection(url, pageText);
 }
 
 /**
  * 识别不出来时给审核员看的话。
  *
- * 共用地址上"认不出来"要说明**是缺哪个词**：只说"无法识别"的话，审核员只能
- * 猜，而排查的人拿不到任何线索——识别错和识别不出来都不报错，是这套机制里
- * 最难发现的一类失效。
+ * 页签模式说明当前步骤或面板问题；普通配置保留缺失特征词诊断。
  */
-function detectionHint(url: string, pageText: string): string {
+function detectionHint(url: string, pageText: string, reviewTab?: ReviewTabState | null): string {
+  const labels = reviewTabLabels(appliedPageCatalog(), url);
+  if (labels.length) {
+    if (!reviewTab?.label) return "未找到唯一激活的审核页签，请打开审核表单后重新采集";
+    if (!labels.includes(reviewTab.label)) return `当前处于「${reviewTab.label}」，请切换到审核页签后重新采集`;
+    return "审核页签对应的内容面板尚未显示或关联无效，请等待加载完成后重新采集";
+  }
   const diagnostics = explainPageIdentity(appliedPageCatalog(), url, pageText);
   if (!diagnostics.shared) return "无法识别当前审核业务，请人工选择";
   const missing = Object.entries(diagnostics.missingAnchors)
@@ -41,23 +46,26 @@ function detectionHint(url: string, pageText: string): string {
 /**
  * 解析本次审核的业务。
  *
- * 自动识别唯一且与人工选择矛盾时返回错误而不是以人工为准——否则会出现用
- * 长春的规则审青岛的单子。但**自动识别认不出来时人工说了算**：一致性审核与
- * 过户审核共用地址，自动识别本来就给不出答案，此时若还按「页面说了算」拒绝
- * 人工，审核员就永远选不进去。判断依据是「页面说自己是什么」，不是「页面
- * 认不出来所以页面有话说」。
+ * 人工选择不能覆盖已确认的页面身份，也不能绕过页签模式的步骤校验。
+ * 未声明审核页签的普通配置保留原有识别失败后人工选择的行为。
  */
 function resolve(
   url: string,
   pageText = "",
   manualSelection: BusinessSelection | null = null,
+  reviewTab?: ReviewTabState | null,
 ): { business: BusinessSelection | null; error: string | null } {
-  const automatic = detect(url, pageText);
+  const automatic = detect(url, pageText, reviewTab);
+
+  // 列表、详情或切换中的面板不能通过人工选择变成可审核步骤。
+  if (!automatic && reviewTabLabels(appliedPageCatalog(), url).length) {
+    return { business: null, error: detectionHint(url, pageText, reviewTab) };
+  }
 
   if (!manualSelection) {
     return {
       business: automatic,
-      error: automatic ? null : detectionHint(url, pageText),
+      error: automatic ? null : detectionHint(url, pageText, reviewTab),
     };
   }
 

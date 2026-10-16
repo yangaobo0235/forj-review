@@ -29,13 +29,16 @@ test("后端下发的清单字段与浏览器读取的一致", () => {
     .filter((item) => item.paths.includes("/consistency-qingdao"));
   assert.deepEqual(
     shared.map((item) => item.business_type).sort(),
-    ["consistency", "transfer"],
+    ["consistency", "transfer", "vehicle_source"],
   );
 });
 
 test("结构不对的清单当没下发，不半信半疑地用", () => {
   applyPageCatalog(catalog);
   applyPageCatalog({ version: "1.0", identities: [{ business_type: "transfer" }] });
+  assert.equal(appliedPageCatalog(), null);
+
+  applyPageCatalog({ version: "1.0", identities: [{ business_type: "transfer", region: "default", paths: ["/review"], anchors: [], review_tab: 1 }] });
   assert.equal(appliedPageCatalog(), null);
 
   applyPageCatalog(catalog);
@@ -86,4 +89,10 @@ test("匹配不修改清单本身", () => {
   const before = JSON.stringify(catalog);
   matchPageIdentity(catalog, "https://admin.forjtruck.com/consistency-qingdao", "新车信息 车辆所有人类型 新车挂靠");
   assert.equal(JSON.stringify(catalog), before);
+});
+
+test("tab declarations take precedence even with a single path candidate", () => {
+  const single = {version: "1.0", identities: [catalog.identities.find(item => item.business_type === "vehicle_source")]};
+  assert.equal(matchPageIdentity(single, "https://admin.forjtruck.com/vehicle-source"), null);
+  assert.equal(matchPageIdentity(single, "https://admin.forjtruck.com/vehicle-source", "", {label: "车源审核", panelReady: true}).businessType, "vehicle_source");
 });

@@ -31,9 +31,7 @@ def validate_request_route(request: ReviewRequest, profiles=None) -> None:
         ):
             raise BusinessContextMismatch("页面路由与请求的 page_id 不一致")
         return
-    # 地址可以被多个业务共用（一致性审核与过户审核同址），因此这里只能校验
-    # 「请求的业务/地区在该地址的候选集合里」，不能要求唯一匹配。地区仍然
-    # 是确定的：同址的两个业务属于同一个地区，拿长春的业务去审青岛的单子
-    # 照样被挡住。
+    # 一致性入口由车源、过户、一致性共用；这里只核对路由允许的候选。
+    # 当前激活页签和关联面板由浏览器检查，报废置换仍按各自地区路径校验。
     expected = "、".join(sorted(f"{business}/{region}" for business, region in allowed))
     raise BusinessContextMismatch(f"页面路由只接受 {expected}，与请求业务或地区不一致")

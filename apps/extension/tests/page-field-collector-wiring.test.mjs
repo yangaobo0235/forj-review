@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import { reviewTabs } from "./helpers/review-tabs.mjs";
 const require = createRequire(import.meta.url);
 
 const manifest = JSON.parse(
@@ -69,7 +70,7 @@ test("does not load the retired host-page review marker", () => {
 test("content script delegates page field collection without requiring a detected business", () => {
   assert.match(
     contentSource,
-    /ReviewPageFieldCollector\.collect\(\s*document,\s*business\?\.businessType \?\? null,?\s*\)/,
+    /ReviewPageFieldCollector\.collect\(\s*activeReviewPanel \?\? document,\s*business\?\.businessType \?\? null,?\s*\)/,
   );
   assert.doesNotMatch(contentSource, /business\.businessType/);
 });
@@ -80,6 +81,68 @@ test("content script names its collection and focus message contract", () => {
   assert.match(contentSource, /isCollectionMessage/);
   assert.match(contentSource, /collectPageData:\s*"COLLECT_PAGE_DATA"/);
   assert.match(contentSource, /focusReviewImage:\s*"FOCUS_REVIEW_IMAGE"/);
+});
+
+test("same-URL tab changes expire pending collections, fills, image focus and invoice verification", async () => {
+  for (const mode of ["observed", "live", "pending"]) {
+    const observed = mode !== "live";
+    const fixture = reviewTabs();
+    if (!observed) fixture.document.defaultView.MutationObserver = undefined;
+    let handler, collectedRoot, writes = 0, identityReads = 0;
+    const element = { value: "VIN-A", isConnected: true };
+    const fields = { "vehicle.vin": "VIN-A", "vehicle.plate_no": "PLATE-A" };
+    const catalog = JSON.parse(readFileSync(new URL("./fixtures/page-catalog.json", import.meta.url), "utf8"));
+    const manifest = {business_type: "vehicle_source", region: "default", scopes: [], fields: [], materials: [], page_groups: [],
+      identity_anchors: ["vehicle.vin", "vehicle.plate_no"], record_identity_fields: ["vehicle.vin"], writable_fields: ["vehicle.vin", "vehicle.plate_no"]};
+    const message = body => new Promise(resolve => handler(body, null, resolve));
+    runContent({
+      URL,
+      document: fixture.document,
+      window: { location: { href: "https://admin.forjtruck.com/consistency-qingdao?showPageModel=1" } },
+      chrome: { runtime: { onMessage: { addListener(fn) { handler = fn; } } } },
+      console: { info() {} },
+      globalThis: {
+        crypto: { randomUUID: () => "synthetic-instance" },
+        ReviewPageFieldCollector: {
+          collect: root => {
+            collectedRoot = root;
+            return {pageFields: fields, fieldTargets: [{field:"vehicle.vin", element}], writableTargets: [], unmatchedLabels: [],
+              scannedControls: 1, candidateCount: 1, ambiguousFields: []};
+          },
+          collectIdentity: root => { identityReads++; assert.equal(root, fixture.panels[0]); return {pageFields: fields, fieldTargets: []}; },
+        },
+        ReviewPageFieldWriter: { captureValue: () => ({control:element, value:element.value}),
+          executeValue: async () => { writes++; return {ok:true}; },
+          executeValueGroup: async () => { writes++; return {ok:true}; },
+          triggerInvoiceVerification: () => { writes++; return {ok:true}; } },
+        ReviewBusinessScope: { documentTypeFor: (_scope, _order, category) => category || "unknown", scopeForLabel: () => null, assign: () => [] },
+        ReviewImageCandidates: { select: () => ({selected: [], scannedCount: 0, overflow: false}) },
+      },
+    });
+    const collecting = message({type:"COLLECT_PAGE_MANIFEST", pageCatalog:catalog, collectManifests:[manifest]});
+    if (mode === "pending") {
+      fixture.select(1);
+      fixture.flush([]);
+      fixture.select(0);
+    }
+    const collected = await collecting;
+    if (mode === "pending") assert.equal(collected.staleCollection, true, "a late response cannot restore an expired step");
+    assert.equal(collected.businessType, "vehicle_source", collected.businessDetectionError);
+    assert.equal(collectedRoot === fixture.panels[0], true, "formal collection must exclude inactive panels");
+    assert.ok(collected.pageFingerprint);
+    const target = {expectedPageUrl:collected.pageUrl, expectedPageInstanceId:collected.pageInstanceId,
+      expectedCollectionId:collected.collectionId, expectedPageFingerprint:collected.pageFingerprint};
+    fixture.select(1);
+    if (observed) { fixture.flush([]); fixture.select(0); }
+    for (const request of [
+      {type:"APPLY_PAGE_FIELD_VALUE", action:{field:"vehicle.vin",value:"NEW",expectedValue:"VIN-A"}},
+      {type:"APPLY_PAGE_FIELD_GROUP_VALUE", action:{fields:["vehicle.vin","vehicle.plate_no"], value:"NEW"}},
+      {type:"VERIFY_INVOICE", action:{field:"vehicle.vin",expectedValue:"VIN-A"}},
+      {type:"FOCUS_REVIEW_IMAGE", imageId:"synthetic-image"},
+    ]) assert.equal((await message({...target,...request})).ok, false);
+    assert.equal(writes, 0);
+    assert.equal(identityReads, 0, "a changed step is rejected before reading fields or writing");
+  }
 });
 
 test("content script reports candidate and ambiguity diagnostics", () => {

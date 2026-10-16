@@ -145,19 +145,15 @@ test("写回支持文本、下拉和日期，指纹用强锚点", async () => {
   assert.equal(anchors.includes("transfer.buyer_id"), false);
 });
 
-test("共用地址的两个业务特征文案不重叠", async () => {
+test("共用地址的三个审核按明确页签名称区分", async () => {
   const shared = pageCatalog.identities.filter((item) =>
     item.paths.includes("/consistency-qingdao"));
 
-  assert.deepEqual(shared.map((item) => item.business_type).sort(), ["consistency", "transfer"]);
-  const transfer = shared.find((item) => item.business_type === "transfer");
-  const consistency = shared.find((item) => item.business_type === "consistency");
-  assert.deepEqual(transfer.anchors, ["审核过户凭证", "过户发票买家名称", "转入地车管所"]);
-  // 「过户」两个字只在一致性审核页上出现（那里有个页签叫「过户详情」），
-  // 拿它当过户审核的特征正好搞反。
-  for (const anchor of transfer.anchors) {
-    assert.equal(consistency.anchors.includes(anchor), false, anchor);
-  }
+  assert.deepEqual(shared.map((item) => item.business_type).sort(), ["consistency", "transfer", "vehicle_source"]);
+  assert.deepEqual(Object.fromEntries(shared.map(item => [item.business_type, item.review_tab])), {
+    vehicle_source: "车源审核", transfer: "过户审核", consistency: "一致性审核",
+  });
+  assert.equal(shared.some(item => ["车源详情", "过户详情"].includes(item.review_tab)), false);
 });
 
 test("过户审核使用完整证据工作台且不展示旧材料任务", async () => {

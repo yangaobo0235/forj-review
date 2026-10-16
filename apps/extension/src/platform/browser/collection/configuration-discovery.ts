@@ -1,7 +1,8 @@
 import { ReviewPageFieldCollector } from "./page-field-collector.ts";
 import { formControlKind } from "../form-controls.ts";
 import { applyCollectManifest, currentCollectManifest } from "../catalog/collect-manifest.ts";
-import { matchPageIdentity } from "../catalog/page-catalog.ts";
+import { matchPageIdentity, reviewTabLabels } from "../catalog/page-catalog.ts";
+import { readActiveReviewTab } from "../identity/active-review-tab.ts";
 import { collectImageCandidates } from "./collect-image-candidates.ts";
 import { ReviewImageCandidates } from "./image-candidates.ts";
 import { classifyImage, imageDocumentType } from "./material-hints.ts";
@@ -74,7 +75,8 @@ export async function trialConfigurationPage(task: ConfigurationPending) {
   const previous = currentCollectManifest();
   try {
     if (!task.manifest || !applyCollectManifest(task.manifest)) throw new Error("候选采集清单无效");
-    const collected = ReviewPageFieldCollector.collect(document, null);
+    const reviewTab = readActiveReviewTab(document, reviewTabLabels(task.page_catalog ?? null, location.href));
+    const collected = ReviewPageFieldCollector.collect(reviewTab.panel ?? document, null);
     const fields = Object.fromEntries(task.manifest.fields.map(field => [field.key,
       collected.ambiguousFields.includes(field.key) ? 2 : Object.hasOwn(collected.pageFields, field.key) ? 1 : 0]));
     const controlKinds = Object.fromEntries(collected.fieldTargets.map(target => [target.field, formControlKind(target.element)]));
@@ -85,7 +87,7 @@ export async function trialConfigurationPage(task: ConfigurationPending) {
       const types = new Set(matched.map(image => imageDocumentType(image)));
       if (types.size === 1 && !types.has("unknown")) samples[sample.sample_id] = [...types][0];
     }
-    const identity = matchPageIdentity(task.page_catalog ?? null, location.href, document.body.innerText || "");
+    const identity = matchPageIdentity(task.page_catalog ?? null, location.href, document.body.innerText || "", reviewTab);
     return {snapshot_id: task.snapshot_id, page_instance_id: current.page_instance_id, page_url: current.page_url,
       structure_digest: current.structure_digest, candidate_digest: task.candidate_digest,
       fields, control_kinds: controlKinds, samples, matched_page_id: identity?.pageId ?? "",

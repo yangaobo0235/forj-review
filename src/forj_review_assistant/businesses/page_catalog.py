@@ -1,12 +1,10 @@
 """页面识别声明：管理端审核页 → 业务与地区。
 
-审核页地址不再唯一对应一个业务。青岛一致性审核和青岛过户审核都挂在
-`/consistency-qingdao` 下，靠列表页的状态筛选进到各自的页面，URL 完全一样；
-长春同理。因此本模块给出的是**候选集合**，不是唯一答案，识别由浏览器执行——
-拿页面上的特征文案在候选里筛，筛不出唯一一条就交给审核员选，绝不猜。
+报废置换沿用路径识别。车源、过户、一致性审核共用一致性入口，浏览器按
+声明的 review_tab 核对当前激活页签和对应面板，不能用整页文字推断步骤。
 
 这里的声明是浏览器识别表的唯一来源（另有扩展包里的 `admin_paths` 与
-`page_anchors` 会一并汇总进来）。浏览器不再自己维护路径表：路径表写死在
+`page_anchors`、`review_tab` 会一并汇总进来）。浏览器不再自己维护路径表：路径表写死在
 浏览器里的后果是，新增一个业务要改前端代码，而且改漏不会报错，只会静默
 认成别的业务。
 """
@@ -22,22 +20,15 @@ from forj_review_assistant.contracts.review import (
     RegionId,
 )
 
-# 一致性审核页独有的详情区文字。
-#
-# **不能用「过户」两个字**：一致性审核页上有个页签就叫「过户详情」，而过户
-# 审核页上反而没有——方向正好相反。也不能用开票日期、发票代码、发票号码、
-# 开票金额、识别车架号、经销商这些：两个页面的发票字段区几乎一模一样，两边
-# 都有。只能取区块标题和独有字段标签。
+# 保留历史特征元数据；声明 review_tab 后浏览器不再使用整页文字判定步骤。
 CONSISTENCY_ANCHORS = ("新车信息", "车辆所有人类型", "新车挂靠")
 
-# 过户审核的特征不在这里：它已经有扩展包，地址和特征都由 `TRANSFER_PACK` 的
-# `RegionDeclaration` 声明，再从活动 Profile 汇总进来。同一个地址挂
-# 多个业务时，两边的特征必须互不重叠，由 `tests/test_page_catalog.py` 锁住。
+# 车源和过户已有扩展包，地址与审核页签从活动 Profile 的地区声明汇总。
 
 
 @dataclass(frozen=True)
 class PageIdentity:
-    """一个审核页面：地址 + 页面特征 + 它属于哪个业务和地区。"""
+    """一个审核页面：地址、可选审核页签及它所属的业务和地区。"""
 
     business_type: BusinessId
     region: RegionId
@@ -46,9 +37,10 @@ class PageIdentity:
     profile_version: str = "1.0"
     title: str = ""
     page_id: str = ""
+    review_tab: str = ""
 
 
-# 一致性审核与过户审核的页面地址。青岛和长春两套页面**用的是同一套规则**，
+# 车源、过户、一致性共用的入口地址。青岛和长春两套页面使用同一套规则，
 # 业务本身不分地区，所以两个地址挂在同一条声明上、取默认地区——和车源审核
 # 同一个口径。地区维度只在报废置换里有意义（两地政策不同）。
 CONSISTENCY_TRANSFER_PATHS = ("/consistency-qingdao", "/consistency-changchun")
@@ -61,6 +53,7 @@ _DECLARED_IDENTITIES: tuple[PageIdentity, ...] = (
         Region.DEFAULT,
         paths=CONSISTENCY_TRANSFER_PATHS,
         anchors=CONSISTENCY_ANCHORS,
+        review_tab="一致性审核",
     ),
 )
 
@@ -85,6 +78,7 @@ def active_identities(profiles=None):
                     profile.version,
                     pack.title,
                     page_id,
+                    declaration.review_tab,
                 )
             )
         else:
@@ -102,9 +96,8 @@ def path_matches(path: str, prefix: str) -> bool:
 def identities_for_path(path: str, profiles=None) -> tuple[PageIdentity, ...]:
     """该地址可能属于哪些业务。地址唯一时不返回多条，地址共享时返回全部候选。
 
-    审核请求的页面地址校验用它：地址共享意味着「地址」不能再作为业务判定的
-    依据，但**地区**仍然可以——共享的两条声明地区相同，所以拿长春的业务去审
-    青岛的单子照样被挡住。
+    审核请求校验业务、地区及 page_id 属于路径候选。共享一致性入口的三个业务
+    都使用 default 地区，当前步骤由浏览器确认；报废置换仍校验对应地区。
     """
     return tuple(
         item
@@ -132,6 +125,7 @@ def page_catalog(profiles=None) -> dict[str, object]:
                 ),
                 **({"title": item.title} if item.title else {}),
                 **({"page_id": item.page_id} if item.page_id else {}),
+                **({"review_tab": item.review_tab} if item.review_tab else {}),
                 "paths": list(item.paths),
                 "anchors": list(item.anchors),
             }

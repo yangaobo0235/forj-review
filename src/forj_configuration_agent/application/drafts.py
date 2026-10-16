@@ -4,7 +4,7 @@ from copy import deepcopy
 
 from forj_configuration_agent.contracts.models import AgentError, DraftOperation, SessionRecord
 
-METADATA = {"page_id", "business_type", "region", "version", "title", "paths", "anchors", "extends",
+METADATA = {"page_id", "business_type", "region", "version", "title", "paths", "anchors", "review_tab", "extends",
             "scopes", "sections", "page_groups"}
 WRITE_POLICY = {"writable_control_kinds", "record_identity_fields", "identity_anchors", "page_actions"}
 

@@ -225,8 +225,8 @@ class RegionDeclaration:
     replacement_policy: ReplacementPolicy | None = None
     # 该地区审核页面的 URL 路径。
     admin_paths: tuple[str, ...] = ()
-    # 页面特征文案：该审核页上**全部**出现的区块标题或字段标签，用于地址
-    # 认不出来时（改版、或一个地址挂多个业务）判定这是哪个页面。
+    # 未声明 review_tab 的普通页面可按全部特征词区分共享路径或兜底未知路径。
+    # 页签审核不使用整页关键词兜底。
     #
     # 只能取详情区的文字。侧边栏菜单、页签标题、底部版权在同一个后台的每张
     # 页面上都有；`document.body.innerText` 把列表页和侧边栏一起收进来，用
@@ -234,6 +234,8 @@ class RegionDeclaration:
     # 某次改版从页面上消失，届时不是识别失败，而是**静默认成另一个业务**，
     # 然后拿错的规则去审单子。
     page_anchors: tuple[str, ...] = ()
+    # 激活审核页签的名称；声明后由浏览器核对选中状态和关联内容面板。
+    review_tab: str = ""
 
     def policy_capability_id(self) -> str | None:
         return f"{self.region}_replacement_policy" if self.replacement_policy else None

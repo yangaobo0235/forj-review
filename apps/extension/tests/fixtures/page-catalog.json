@@ -20,8 +20,11 @@
     {
       "business_type": "vehicle_source",
       "region": "default",
+      "review_tab": "车源审核",
       "paths": [
-        "/vehicle-source"
+        "/vehicle-source",
+        "/consistency-qingdao",
+        "/consistency-changchun"
       ],
       "anchors": [
         "车源审核",
@@ -31,6 +34,7 @@
     {
       "business_type": "transfer",
       "region": "default",
+      "review_tab": "过户审核",
       "paths": [
         "/consistency-qingdao",
         "/consistency-changchun"
@@ -44,6 +48,7 @@
     {
       "business_type": "consistency",
       "region": "default",
+      "review_tab": "一致性审核",
       "paths": [
         "/consistency-qingdao",
         "/consistency-changchun"

@@ -137,6 +137,7 @@ class PageDefinition(Declaration):
     title: Text
     paths: tuple[Text, ...]
     anchors: tuple[Text, ...] = ()
+    review_tab: Text | None = None
     extends: ProfileReference | None = None
     scopes: tuple[Identifier, ...] = ()
     sections: tuple[Section, ...] = ()

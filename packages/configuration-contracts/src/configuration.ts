@@ -22,7 +22,7 @@ export interface ConfigurationPending {
   options?: string[];
   manifest?: CollectManifest;
   page_catalog?: {version: string; identities: Array<{business_type: string; region: string;
-    profile_version: string; page_id?: string; title: string; paths: string[]; anchors: string[]}>};
+    profile_version: string; page_id?: string; title: string; paths: string[]; anchors: string[]; review_tab?: string}>};
   page_id?: string;
   snapshot_id?: string;
   page_instance_id?: string;

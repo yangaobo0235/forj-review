@@ -1,9 +1,4 @@
-"""页面识别声明：地址 → 业务、地区、页面特征。
-
-背景：青岛一致性审核和青岛过户审核都挂在 `/consistency-qingdao` 下，长春同理。
-地址不再唯一对应业务，识别要靠页面上的特征文案，所以这组用例锁定的就是
-「共享地址的每一条声明都必须能靠特征被区分出来」。
-"""
+"""报废置换保留路径识别；其余三个业务声明各自的激活审核页签。"""
 
 from collections import defaultdict
 
@@ -16,13 +11,14 @@ from forj_review_assistant.businesses.page_catalog import (
 from forj_review_assistant.contracts.review import BusinessType, Region
 
 
-def test_shared_path_lists_both_businesses() -> None:
-    """两个业务共用这两个地址，而且都不分地区——青岛和长春同一套规则。"""
+def test_shared_path_lists_three_businesses() -> None:
+    """车源校验也在一致性入口内执行，三个业务均使用 default 规则。"""
     for path in ("/consistency-qingdao", "/consistency-changchun"):
         found = {(item.business_type, item.region) for item in identities_for_path(path)}
         assert found == {
             (BusinessType.CONSISTENCY, Region.DEFAULT),
             (BusinessType.TRANSFER, Region.DEFAULT),
+            (BusinessType.VEHICLE_SOURCE, Region.DEFAULT),
         }, path
 
 
@@ -38,8 +34,7 @@ def test_unique_paths_look_the_same_as_before() -> None:
         assert found == [expected], path
 
 
-def test_every_shared_path_business_declares_anchors() -> None:
-    """共享地址的业务必须声明特征，否则两条声明永远分不开。"""
+def test_shared_path_businesses_declare_distinct_review_tabs() -> None:
     by_path: dict[str, list] = defaultdict(list)
     for item in active_identities():
         for path in item.paths:
@@ -48,8 +43,8 @@ def test_every_shared_path_business_declares_anchors() -> None:
     for path, items in by_path.items():
         if len(items) < 2:
             continue
-        for item in items:
-            assert item.anchors, f"{path} 上的 {item.business_type.value} 没有声明页面特征"
+        assert all(item.review_tab for item in items), path
+        assert len({item.review_tab for item in items}) == len(items), path
 
 
 def test_anchors_of_businesses_sharing_a_path_do_not_overlap() -> None:
@@ -99,11 +94,15 @@ def test_catalog_shape_matches_what_the_browser_reads() -> None:
     assert len(identities) == len(active_identities())
     for item in identities:
         assert {"business_type", "region", "paths", "anchors"} <= set(item) <= {
-            "business_type", "region", "paths", "anchors", "title", "profile_version", "page_id"}
+            "business_type", "region", "paths", "anchors", "title", "profile_version", "page_id", "review_tab"}
         if "title" in item:
             assert isinstance(item["title"], str) and item["title"]
         assert isinstance(item["paths"], list) and item["paths"]
         assert isinstance(item["anchors"], list)
+        if item["business_type"] == "scrap_replacement":
+            assert "review_tab" not in item
+        else:
+            assert item["review_tab"] in {"车源审核", "过户审核", "一致性审核"}
 
 
 def test_pack_declared_anchors_reach_the_catalog() -> None:

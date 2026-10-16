@@ -318,9 +318,9 @@ def test_transfer_compatibility_does_not_allow_other_route_contexts(
     "path",
     ["consistency-qingdao", "consistency-changchun"],
 )
-def test_transfer_shares_its_route_with_consistency(path):
-    """两个业务共用两个地址，且都不分地区；一致性的规则仍未配置。"""
-    for business_type, configured in (("consistency", False), ("transfer", True)):
+def test_three_review_steps_share_consistency_routes(path):
+    """车源、过户、一致性共用入口；一致性的规则仍未配置。"""
+    for business_type, configured in (("consistency", False), ("transfer", True), ("vehicle_source", True)):
         request = ReviewRequest(
             page_url=f"https://admin.forjtruck.com/{path}/review/1",
             business_type=business_type,

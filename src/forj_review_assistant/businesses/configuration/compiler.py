@@ -324,6 +324,7 @@ def compile_page(
         specs.pop(policy_rule_id, None)
         capability_bindings.pop(policy_rule_id, None)
 
+    template_region = base.region(template.region) if template else None
     pack = replace(
         base,
         business_type=str(definition.business_type),
@@ -347,6 +348,9 @@ def compile_page(
                 version=definition.version,
                 admin_paths=definition.paths,
                 page_anchors=definition.anchors,
+                review_tab=(definition.review_tab or "")
+                if "review_tab" in definition.model_fields_set
+                else template_region.review_tab if template_region else "",
                 replacement_policy=replace(template.replacement_policy, version=definition.version)
                 if template and template.replacement_policy
                 else None,

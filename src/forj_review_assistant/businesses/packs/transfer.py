@@ -419,6 +419,7 @@ TRANSFER_PACK = BusinessExtensionPack(
             Region.DEFAULT,
             admin_paths=TRANSFER_PATHS,
             page_anchors=TRANSFER_ANCHORS,
+            review_tab="过户审核",
         ),
     ),
     capability_specs=(

@@ -1,6 +1,6 @@
 """车源审核的业务声明。
 
-页面路径是 `/vehicle-source/approval`，只核对车型基础信息（基础信息、行驶证
+页面位于 `/vehicle-source` 或两个一致性入口中的车源审核页签，只核对车型基础信息（基础信息、行驶证
 信息、车身与车籍信息、规格参数、补充信息）里的 13 个字段，材料只需要行驶证，
 登记证书第 1、2 页与车辆铭牌二选一。
 
@@ -473,14 +473,14 @@ VEHICLE_SOURCE_PACK = BusinessExtensionPack(
     ),
     routes=_material_routes(),
     regions=(
-        # 车源审核不分地区：页面地址是 /vehicle-source，业务配置取默认地区。
+        # 车源审核不分地区，也会作为一致性入口中过户流程的第一步。
         # 没有地区政策，因此不声明 replacement_policy。
         RegionDeclaration(
             Region.DEFAULT,
-            admin_paths=("/vehicle-source",),
-            # 地址认不出来时的兜底（页面改版换路径）。取审核页自身的标题和
-            # 区块名，不要用某个字段名——字段会改版。
+            admin_paths=("/vehicle-source", "/consistency-qingdao", "/consistency-changchun"),
+            # 保留历史特征元数据；review_tab 模式不使用关键词兜底。
             page_anchors=("车源审核", "行驶证信息"),
+            review_tab="车源审核",
         ),
     ),
     capability_specs=(
