@@ -1,21 +1,36 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { guardActiveReviewTab, readActiveReviewTab } from "../src/platform/browser/identity/active-review-tab.ts";
+import { guardActiveReviewTab, readActiveReviewTab, reviewTabCollectionRoot } from "../src/platform/browser/identity/active-review-tab.ts";
 import { reviewTabs } from "./helpers/review-tabs.mjs";
 
-const labels = ["车源审核", "过户审核", "一致性审核"];
+const labels = ["初审", "复审", "一致性审核"];
+
+test("empty MyForm tab panels collect sibling fields from their owning form", () => {
+  const f = reviewTabs();
+  const state = readActiveReviewTab(f.document, labels);
+  assert.equal(reviewTabCollectionRoot(state), f.form);
+  f.tabs[0].setAttribute("aria-controls", "missing");
+  assert.equal(reviewTabCollectionRoot(readActiveReviewTab(f.document, labels)), null);
+});
+
+test("a panel with visible fields keeps collection inside that panel", () => {
+  const f = reviewTabs();
+  const input = f.add(f.panels[0], "input");
+  f.panels[0].querySelectorAll = () => [input];
+  assert.equal(reviewTabCollectionRoot(readActiveReviewTab(f.document, labels)), f.panels[0]);
+});
 
 test("selected review tabs exclude navigation and hidden forms, and resolve their visible panel", () => {
   const fixture = reviewTabs();
   const hiddenForm = fixture.add(fixture.document.body, "form", {"aria-hidden": "true"});
   const hiddenList = fixture.add(hiddenForm, "div", {role: "tablist"});
-  fixture.add(hiddenList, "div", {role: "tab", "aria-selected": "true"}, "车源审核");
+  fixture.add(hiddenList, "div", {role: "tab", "aria-selected": "true"}, "初审");
   const initial = readActiveReviewTab(fixture.document, labels);
-  assert.equal(initial.label, "车源审核");
+  assert.equal(initial.label, "初审");
   assert.equal(initial.panelReady, true);
   assert.equal(initial.panel, fixture.panels[0]);
   fixture.select(1);
-  assert.equal(readActiveReviewTab(fixture.document, labels).label, "过户审核");
+  assert.equal(readActiveReviewTab(fixture.document, labels).label, "复审");
   assert.equal(readActiveReviewTab(fixture.document, labels).panel, fixture.panels[1]);
   fixture.tabs[0].textContent = "一致性审核";
   fixture.tabs[1].textContent = "过户详情";

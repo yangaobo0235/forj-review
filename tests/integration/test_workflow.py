@@ -3,8 +3,8 @@ from dataclasses import replace
 import pytest
 
 from forj_review_assistant.businesses.profiles import (
+    CONSISTENCY_DEFAULT,
     SCRAP_REPLACEMENT_QINGDAO,
-    VEHICLE_SOURCE_DEFAULT,
 )
 from forj_review_assistant.businesses.rules.invoice_verification import (
     run_verify_invoice,
@@ -21,10 +21,14 @@ from forj_review_assistant.contracts.review import (
     ReviewRequest,
 )
 from forj_review_assistant.runtime.review_service import ReviewService
+from forj_review_assistant.runtime.workflow.capability_execution import (
+    execute_stage,
+    plan_remaining_capabilities,
+)
 from forj_review_assistant.runtime.workflow.graph import (
     WORKFLOW_NODE_ORDER,
-    ReviewState,
 )
+from forj_review_assistant.runtime.workflow.state import ReviewState
 
 
 @pytest.mark.asyncio
@@ -32,7 +36,7 @@ from forj_review_assistant.runtime.workflow.graph import (
 @pytest.mark.parametrize("separate_stages", [False, True])
 async def test_capability_consumers_require_actual_successful_output(output, separate_stages):
     workflow = ReviewService().workflow
-    profile = replace(VEHICLE_SOURCE_DEFAULT, material_policy=None,
+    profile = replace(CONSISTENCY_DEFAULT, rules_configured=True, material_policy=None,
                       capability_specs=(CapabilitySpec("a_consumer", input_facts=("verified",)),
                                         CapabilitySpec("z_producer", stage="PRE_COMPARE", output_facts=("verified",))),
                       binding_declarations=())
@@ -55,12 +59,12 @@ async def test_capability_consumers_require_actual_successful_output(output, sep
     workflow.capabilities.handlers.update(z_producer=producer, a_consumer=consumer)
     state = {"request": ReviewRequest(page_url="https://example.test/review"),
              "profile": profile, "batch": AgentBatchResult()}
-    state.update(workflow._plan_capabilities(state))
+    state.update(plan_remaining_capabilities(state))
     if separate_stages:
-        state.update(await workflow._execute_stage(state, {"PRE_COMPARE"}))
-        result = await workflow._execute_stage(state, {"POST_COMPARE"})
+        state.update(await execute_stage(workflow.capabilities, state, {"PRE_COMPARE"}))
+        result = await execute_stage(workflow.capabilities, state, {"POST_COMPARE"})
     else:
-        result = await workflow._execute_stage(state, {"PRE_COMPARE", "POST_COMPARE"})
+        result = await execute_stage(workflow.capabilities, state, {"PRE_COMPARE", "POST_COMPARE"})
     status = next(r.status for r in result["capability_results"] if r.capability_id == "a_consumer")
     assert status == ("SUCCEEDED" if output == "valid" else "BLOCKED")
     assert calls == (["z_producer", "a_consumer"] if output == "valid" else ["z_producer"])

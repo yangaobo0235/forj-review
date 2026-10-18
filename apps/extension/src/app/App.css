@@ -35,6 +35,8 @@
 .context-business { margin: 6px 0 0; color: var(--review-secondary); font-size: var(--review-font-meta); overflow-wrap: anywhere; }
 .context-business > span { color: var(--review-muted); }
 .review-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; margin-top: 12px; }
+.review-toolbar-actions { display: flex; align-items: center; gap: 8px; }
+.refresh-page-button { min-height: var(--review-control-height); padding: 7px 10px; border: 1px solid #d9d9d9; border-radius: 4px; background: var(--review-surface); color: var(--review-text); white-space: nowrap; }
 .start-review-button { min-height: var(--review-control-height); padding: 7px 12px; border: 1px solid var(--review-primary); border-radius: 4px; color: #fff; background: var(--review-primary); font-size: var(--review-font-body); font-weight: 500; white-space: nowrap; }
 .start-review-button:hover:not(:disabled) { background: var(--review-primary-hover); border-color: var(--review-primary-hover); }
 .review-empty { padding: 38px 8px 30px; text-align: center; }

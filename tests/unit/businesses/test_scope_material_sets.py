@@ -58,12 +58,9 @@ def test_alias_is_the_scope_name_itself() -> None:
 
 
 def test_scope_without_materials_yields_an_empty_set() -> None:
-    """车源、过户的旧车分区没有材料，空集——不能凭空多出一个角色别名候选。"""
-    for business_type in (BusinessType.VEHICLE_SOURCE, BusinessType.TRANSFER):
-        pack = pack_for_business(business_type)
-        assert pack is not None
-        assert material_types_for_scope(pack, OLD_SECTION) == frozenset()
-        assert scope_hint_types(pack, OLD_SECTION) == frozenset()
+    pack = BusinessExtensionPack(business_type="sample", scopes=("sample",))
+    assert material_types_for_scope(pack, OLD_SECTION) == frozenset()
+    assert scope_hint_types(pack, OLD_SECTION) == frozenset()
 
 
 def test_every_declared_scope_yields_a_non_empty_set() -> None:

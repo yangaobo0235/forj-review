@@ -26,7 +26,7 @@ BUSINESS_PACKS: dict[BusinessType, BusinessExtensionPack] = {
     BusinessType.TRANSFER: TRANSFER_PACK,
 }
 
-# 业务分区 → 声明。各业务的分区互不相同（旧车/新车 vs 车源车辆），
+# 业务分区 → 声明。各业务的分区互不相同，
 # 因此按分区就能唯一确定声明，字段路由不必依赖调用方传业务类型。
 PACK_BY_SCOPE: dict[str, BusinessExtensionPack] = {
     scope: pack for pack in BUSINESS_PACKS.values() for scope in pack.scopes
@@ -46,8 +46,7 @@ def pack_for_scope(business_scope: str) -> BusinessExtensionPack | None:
     """按图片业务分区反查声明；未知分区返回 None。
 
     分区在业务之间不重叠（由启动期校验保证），所以这里不需要业务类型参数。
-    字段路由只有分区可用时靠它选中正确的声明，否则会拿报废置换的路由表去
-    处理车源材料，把全部字段静默丢弃。
+    字段路由只有分区可用时靠它选中正确声明，未知分区不得借用其他业务的路由。
     """
     from forj_review_assistant.businesses.context import current_pack
     pack = current_pack()
@@ -89,7 +88,6 @@ __all__ = [
     "BUSINESS_PACKS",
     "PACK_BY_SCOPE",
     "SCRAP_REPLACEMENT_PACK",
-    "VEHICLE_SOURCE_PACK",
     "AuthorityRule",
     "BusinessExtensionPack",
     "EvidenceMode",

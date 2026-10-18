@@ -8,6 +8,9 @@ from forj_review_assistant.businesses.material_policies import (
     MaterialRequirement,
     SourceSelector,
 )
+from forj_review_assistant.businesses.material_presence import (
+    evaluate_presence as evaluate_presence,
+)
 from forj_review_assistant.businesses.profiles import BusinessProfile
 from forj_review_assistant.businesses.routing import route_fields
 from forj_review_assistant.contracts.recognition import (
@@ -84,8 +87,7 @@ def _satisfied_by_alternative(
 ) -> dict[str, str]:
     """替代材料组 → 已满足该组要求的材料名。
 
-    车源审核的“登记证书第 1、2 页”和“车辆铭牌”互为替代：两件材料只需要
-    上传一件。组内任一材料满足要求时，其余成员不再报缺失，检查项说明由
+    组内任一材料满足要求时，其余成员不再报缺失，检查项说明由
     哪份材料替代提供。这里只报告“已满足”，不把缺失改成通过。
     """
     groups: dict[str, str] = {}
@@ -167,6 +169,7 @@ def evaluate_collected(request: ReviewRequest, profile: BusinessProfile) -> Mate
         enforced=policy.mode == "enforce",
         issues=_dedupe(issues),
         checklist=checklist,
+        presence=evaluate_presence(request, policy),
     )
 
 
@@ -262,6 +265,7 @@ def evaluate_extracted(request: ReviewRequest, profile: BusinessProfile, batch: 
     issues: list[MaterialCompletenessIssue] = []
     checklist: list[MaterialChecklistItem] = []
     documents = [document for document in batch.recognized_documents if document.business_scope]
+    classifications = {item.target_id: item for item in batch.document_classifications}
     recognized: list[tuple[MaterialRequirement, list[object], list[str], list[str]]] = []
     for requirement in policy.materials:
         matching = [document for document in documents if document.document_type == requirement.document_type and document.business_scope == requirement.business_scope]
@@ -278,8 +282,19 @@ def evaluate_extracted(request: ReviewRequest, profile: BusinessProfile, batch: 
     for requirement, matching, present_pages, missing_pages in recognized:
         candidate_images = [
             image for image in request.images
-            if image.category_hint == requirement.document_type
-            and image.business_scope == requirement.business_scope
+            if image.business_scope == requirement.business_scope and (
+                image.category_hint == requirement.document_type
+                or image.document_type_hint == requirement.document_type
+                or (
+                    (fact := classifications.get(str(image.image_id or image.index))) is not None
+                    and fact.document_type == requirement.document_type
+                )
+                or (
+                    str(image.image_id or image.index) not in classifications
+                    and image.category_hint in {"unknown", image.business_scope}
+                    and image.document_type_hint == "unknown"
+                )
+            )
         ]
         image_ids = [str(image.image_id or image.index) for image in candidate_images]
         failed_ids = set(batch.failed_image_ids) | set(batch.timed_out_image_ids)
@@ -461,4 +476,5 @@ def evaluate_extracted(request: ReviewRequest, profile: BusinessProfile, batch: 
         enforced=policy.mode == "enforce",
         issues=_dedupe(issues),
         checklist=checklist,
+        presence=evaluate_presence(request, policy, batch),
     )

@@ -9,9 +9,12 @@ interface CalendarAccess {
 }
 
 export function calendarDate(value: string): string | null {
-  const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const text = value.normalize("NFKC").replace(/\s+/g, "");
+  const match = text.match(/^(\d{4})(?:([-/.])(\d{1,2})\2(\d{1,2})|年(\d{1,2})月(\d{1,2})日)$/);
   if (!match) return null;
-  const [, year, month, day] = match;
+  const year = match[1];
+  const month = match[3] || match[5];
+  const day = match[4] || match[6];
   const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
   if (date.getUTCFullYear() !== Number(year) || date.getUTCMonth() !== Number(month) - 1 || date.getUTCDate() !== Number(day)) return null;
   return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;

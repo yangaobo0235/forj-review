@@ -1,18 +1,18 @@
 from dataclasses import replace
 
 from forj_review_assistant.businesses.packs.model import FieldDeclaration, QrFieldBinding
-from forj_review_assistant.businesses.profiles import VEHICLE_SOURCE_DEFAULT
+from forj_review_assistant.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
 from forj_review_assistant.contracts.review import FieldObservation, QrCheck
 from forj_review_assistant.evidence.qr import append_qr_observations, mark_qr_conflicts
 
 
 def test_qr_evidence_uses_declared_fields_and_ignores_unknown_website_properties():
     pack = replace(
-        VEHICLE_SOURCE_DEFAULT.pack_declaration,
+        SCRAP_REPLACEMENT_QINGDAO.pack_declaration,
         fields=(FieldDeclaration("permit.number", "许可证号"),),
         qr_field_bindings=(QrFieldBinding("number", "permit.number", "alphanumeric"),),
     )
-    profile = replace(VEHICLE_SOURCE_DEFAULT, pack_declaration=pack)
+    profile = replace(SCRAP_REPLACEMENT_QINGDAO, pack_declaration=pack)
     checks = [QrCheck(image_index=0, status="MATCH", message="fixture", page_fields={
         "number": "AB123", "unexpected": "must-not-be-a-certificate-number",
     })]
@@ -30,14 +30,15 @@ def test_qr_evidence_uses_declared_fields_and_ignores_unknown_website_properties
 def test_page_without_qr_bindings_cannot_receive_other_business_qr_fields():
     checks = [QrCheck(image_index=0, status="MATCH", message="fixture", page_fields={"vin": "VIN"})]
     observations = []
-    append_qr_observations(observations, checks, VEHICLE_SOURCE_DEFAULT)
+    append_qr_observations(observations, checks, replace(SCRAP_REPLACEMENT_QINGDAO,
+        pack_declaration=replace(SCRAP_REPLACEMENT_QINGDAO.pack_declaration, qr_field_bindings=())))
     assert not observations
 
 
 def test_uncertain_ocr_and_failed_web_access_cannot_create_qr_conflict():
-    pack = replace(VEHICLE_SOURCE_DEFAULT.pack_declaration,
+    pack = replace(SCRAP_REPLACEMENT_QINGDAO.pack_declaration,
                    qr_field_bindings=(QrFieldBinding("number", "permit.number", "alphanumeric"),))
-    profile = replace(VEHICLE_SOURCE_DEFAULT, pack_declaration=pack)
+    profile = replace(SCRAP_REPLACEMENT_QINGDAO, pack_declaration=pack)
     check = QrCheck(image_index=0, status="MATCH", message="fixture", page_fields={"number": "AB123"})
     observations = [FieldObservation(field="permit.number", value="AB999", source_type="image",
                                      source_id="fixture", image_index=0, uncertain=True)]

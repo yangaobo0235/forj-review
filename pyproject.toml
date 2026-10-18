@@ -16,6 +16,7 @@ dependencies = [
     "langgraph-checkpoint-sqlite>=3,<4",
     "filelock>=3.20,<4",
     "pillow>=12,<13",
+    "pymysql>=1.1,<2",
 ]
 
 [dependency-groups]

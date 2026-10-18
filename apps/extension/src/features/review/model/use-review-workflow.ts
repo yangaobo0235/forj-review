@@ -1,4 +1,6 @@
 import { collectPageData } from "../api/collect-page";
+import { fillVehicleModel } from "../../../platform/extension/vehicle-model-client";
+import type { ModelFillResult } from "../../../shared/contracts/vehicle-model";
 import { logDiagnostic } from "../../../shared/diagnostics";
 import { executePageActions } from "../../../platform/extension/execute-page-actions";
 /**
@@ -24,10 +26,12 @@ export interface ReviewWorkflow {
     notice: string;
     stageMessage: string;
     reset: () => void;
+    refreshPage: () => Promise<void>;
     startReview: () => Promise<void>;
     applyPageFieldValue: (field: string, value: string, expectedValue?: string | null) => Promise<PageFillResult>;
     applyPageFieldGroupValue: (fields: string[], value: string, expectedValues?: Record<string, string | null | undefined>) => Promise<PageFillResult>;
     focusOriginalImage: (imageId: string) => Promise<ImageFocusResult>;
+    applyVehicleModel: (searchId: string, modelId: string) => Promise<ModelFillResult>;
 }
 /** 管理一次审核从页面采集到最终或部分结果的完整客户端生命周期。 */
 export function useReviewWorkflow(businessSelection: MaybeRefOrGetter<BusinessChoice>): ReviewWorkflow {
@@ -48,28 +52,27 @@ export function useReviewWorkflow(businessSelection: MaybeRefOrGetter<BusinessCh
         if (run.jobId)
             void cancelReviewJob(run.jobId);
     };
-    watch(() => toValue(businessSelection), (selection, _previous, onCleanup) => {
+    const refreshPage = async () => {
         stopActiveRun();
-        let cancelled = false;
         const version = ++preflightVersion;
-        void collectPageData(selection)
-            .then((data) => {
-            if (cancelled || version !== preflightVersion)
-                return;
+        state.pageData = null;
+        state.review = null;
+        state.job = null;
+        state.error = "";
+        state.notice = "";
+        try {
+            const data = await collectPageData(toValue(businessSelection));
+            if (version !== preflightVersion) return;
             state.pageData = data;
-            if (data.businessDetectionError) {
-                state.error = data.businessDetectionError;
-            }
-        })
-            .catch((reason: unknown) => {
-            if (!cancelled && version === preflightVersion) {
+            state.error = data.reviewServiceError || data.businessDetectionError || "";
+        } catch (reason: unknown) {
+            if (version === preflightVersion)
                 state.error = reason instanceof Error ? reason.message : "页面采集失败";
-            }
-        });
-        onCleanup(() => {
-            cancelled = true;
-            stopActiveRun();
-        });
+        }
+    };
+    watch(() => toValue(businessSelection), (_selection, _previous, onCleanup) => {
+        void refreshPage();
+        onCleanup(() => { ++preflightVersion; stopActiveRun(); });
     }, { immediate: true, flush: "sync" });
     const reset = () => {
         ++preflightVersion;
@@ -110,6 +113,7 @@ export function useReviewWorkflow(businessSelection: MaybeRefOrGetter<BusinessCh
                 throw new Error(data.businessDetectionError || "无法识别当前审核业务，请人工选择");
             }
             state.pageData = data;
+            if (data.reviewServiceError) throw new Error(data.reviewServiceError);
             // 采集阶段的问题必须写在面板上。`collectionIssues` 目前承载的是
             // 「候选资料超过 16 张，请确认是否漏审」——图片溢出意味着可能漏审，
             // 而它以前只进 Console，审核员看不到。结构化诊断仍留给开发者。
@@ -248,8 +252,18 @@ export function useReviewWorkflow(businessSelection: MaybeRefOrGetter<BusinessCh
             state.notice = response?.error || "原图已变化，请重新采集";
         return response ?? { ok: false, error: "原图已变化，请重新采集" };
     };
+    const applyVehicleModel = async (searchId: string, modelId: string): Promise<ModelFillResult> => {
+        const page = state.pageData;
+        if (!page) return {ok: false, message: "没有找到原审核页面"};
+        const result = await fillVehicleModel(page, searchId, modelId);
+        if (state.pageData?.collectionId === page.collectionId && result.actions?.length) {
+            state.pageData = {...state.pageData, pageFields: {...state.pageData.pageFields,
+                ...Object.fromEntries(result.actions.map(item => [item.field, item.value]))}};
+        }
+        return result;
+    };
     return Object.assign(state, {
-      reset, startReview, applyPageFieldValue: applyFieldValue,
-      applyPageFieldGroupValue: applyFieldGroupValue, focusOriginalImage,
+      reset, refreshPage, startReview, applyPageFieldValue: applyFieldValue,
+      applyPageFieldGroupValue: applyFieldGroupValue, focusOriginalImage, applyVehicleModel,
     });
 }

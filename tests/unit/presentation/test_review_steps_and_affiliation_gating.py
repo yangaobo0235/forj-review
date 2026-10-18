@@ -9,7 +9,7 @@ from forj_review_assistant.contracts.review import (
     FieldStatus,
     ReviewRequest,
 )
-from forj_review_assistant.runtime.workflow.graph import ReviewWorkflow
+from forj_review_assistant.runtime.workflow.capability_execution import execution_context
 
 
 def EvidenceFact(field: str, value: str, source_id: str, document_type: str) -> FieldObservation:
@@ -62,7 +62,7 @@ def test_affiliation_actions_follow_confirmed_subject_types_even_if_auxiliary_cu
     }
 
     result = run_affiliation_subject(
-        ReviewWorkflow.__new__(ReviewWorkflow)._execution_context(state)
+        execution_context(state)
     )
 
     assert result.checks[0].check_id == "AFFILIATION-SUBJECT-001"
@@ -111,7 +111,7 @@ def test_affiliation_actions_ignore_ocr_vin_and_accept_company_labels(ocr_vin) -
     }
 
     result = run_affiliation_subject(
-        ReviewWorkflow.__new__(ReviewWorkflow)._execution_context(state)
+        execution_context(state)
     )
 
     assert [item.status for item in result.checks] == ["MATCH", "MATCH"]

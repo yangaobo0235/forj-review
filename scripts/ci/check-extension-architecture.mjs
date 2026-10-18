@@ -82,12 +82,16 @@ for (const file of walk(src)) {
       else if (relative.startsWith("shared/") && !dependency.startsWith("shared/")) reason = "shared code imports a feature or platform";
       else if (relative.startsWith("platform/") && !/^(platform|shared)\//.test(dependency)) reason = "platform imports application UI or feature";
       else if (relative.startsWith("features/") && /^(app|entrypoints)\//.test(dependency)) reason = "feature imports an entrypoint";
+      else if (relative === "platform/browser/actions/page-field-writer.ts"
+        && dependency.includes("vehicle-model")) reason = "generic field writer imports vehicle model logic";
       if (reason) {
         const { line } = source.getLineAndCharacterOfPosition(node.getStart());
         findings.push(`${relative}:${line + 1}: ${reason}: ${specifier}`);
       }
     }
     if (relative.startsWith("platform/") && /^(vue|@vue\/|react)/.test(specifier ?? "")) findings.push(`${relative}: platform imports a UI framework`);
+    if (relative === "platform/browser/actions/page-field-writer.ts" && ts.isStringLiteral(node)
+      && node.text === "vehicle.model") findings.push(`${relative}: generic field writer embeds a vehicle model field`);
     ts.forEachChild(node, visit);
   };
   visit(source);

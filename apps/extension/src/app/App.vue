@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, onScopeDispose } from "vue";
+import { computed, ref, onScopeDispose } from "vue";
 import { fetchPageCatalog, type PageCatalog } from "../platform/browser/catalog/page-catalog";
 import { agentBaseUrl } from "../features/review/api/review-client";
 import forjLogo from "../assets/forj-logo.png";
 import Icon from "../shared/ui/Icon.vue";
 import ReviewProgress from "../features/review/ui/ReviewProgress.vue";
+import MaterialPresence from "../features/review/ui/MaterialPresence.vue";
 import ReviewResults from "../features/review/ui/ReviewResults.vue";
 import type { ExceptionFilter } from "../features/review/presentation/exception";
 import { useReviewWorkflow } from "../features/review/model/use-review-workflow";
@@ -17,6 +18,8 @@ const businessSelection = ref<BusinessChoice>("AUTO");
 const exceptionFilter = ref<ExceptionFilter>("ALL");
 const pageCatalog = ref<PageCatalog | null>(null);
 const workflow = useReviewWorkflow(businessSelection);
+const materialPresence = computed(() => workflow.job?.material_completeness?.presence
+  ?? workflow.review?.material_completeness?.presence);
 let live = true;
 onScopeDispose(() => { live = false; });
 void fetchPageCatalog(agentBaseUrl).then(catalog => { if (live) pageCatalog.value = catalog; });
@@ -31,6 +34,11 @@ function currentBusinessLabel(page: PageData): string {
 function changeBusinessSelection(event: Event) {
   workflow.reset();
   businessSelection.value = (event.target as HTMLSelectElement).value as BusinessChoice;
+}
+async function refreshPage() {
+  const catalog = await fetchPageCatalog(agentBaseUrl);
+  if (live) pageCatalog.value = catalog;
+  await workflow.refreshPage();
 }
 </script>
 
@@ -51,10 +59,13 @@ function changeBusinessSelection(event: Event) {
               <option v-for="(label, value) in catalogBusinessChoices(pageCatalog)" :key="value" :value="value">{{ label }}</option>
             </select>
           </section>
-          <button class="start-review-button" :aria-label="workflow.loading ? '正在审核' : '开始审核检查'" :disabled="workflow.loading || !workflow.pageData?.businessType" @click="workflow.startReview">
+          <div class="review-toolbar-actions">
+          <button class="refresh-page-button" :disabled="workflow.loading" @click="refreshPage">重新读取页面</button>
+          <button class="start-review-button" :aria-label="workflow.loading ? '正在审核' : '开始审核检查'" :disabled="workflow.loading || !workflow.pageData?.businessType || Boolean(workflow.pageData?.reviewServiceError)" @click="workflow.startReview">
             <Icon :name="workflow.loading ? 'clock' : 'fileCheck'" :size="16"/>
             {{ workflow.loading ? "正在审核…" : "开始审核" }}
           </button>
+          </div>
         </div>
       </section>
       <section v-if="!workflow.loading && !workflow.review && !workflow.error" class="review-empty" aria-label="审核说明">
@@ -66,10 +77,11 @@ function changeBusinessSelection(event: Event) {
       <div v-if="workflow.error" class="error-message" role="alert">{{ workflow.error }}</div>
       <div v-if="workflow.notice" class="notice-message" role="status">{{ workflow.notice }}</div>
       <ReviewProgress v-if="workflow.job" :job="workflow.job" :page-data="workflow.pageData" :on-focus-image="workflow.focusOriginalImage"/>
+      <MaterialPresence v-if="materialPresence" :key="workflow.job?.job_id" :report="materialPresence" :on-focus-image="workflow.focusOriginalImage"/>
       <ReviewResults v-if="workflow.review" :review="workflow.review" :job="workflow.job" :page-data="workflow.pageData"
         :exception-filter="exceptionFilter" :on-exception-filter-change="value => exceptionFilter = value"
         :on-focus-image="workflow.focusOriginalImage" :on-apply-page-field-value="workflow.applyPageFieldValue"
-        :on-apply-page-field-group-value="workflow.applyPageFieldGroupValue" :on-rerun="workflow.startReview"/>
+        :on-apply-page-field-group-value="workflow.applyPageFieldGroupValue" :on-apply-vehicle-model="workflow.applyVehicleModel" :on-rerun="workflow.startReview"/>
     </div>
     <footer class="panel-footer"><Icon name="shield" :size="13"/><span>辅助人工复核，不会自动提交审核决定</span></footer>
   </main>

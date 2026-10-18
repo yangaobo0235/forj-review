@@ -8,6 +8,7 @@ from datetime import date
 
 from forj_review_assistant.businesses.material_policies import (
     MaterialPolicy,
+    MaterialPresenceGroup,
     MaterialRequirement,
 )
 from forj_review_assistant.businesses.packs.model import (
@@ -69,7 +70,7 @@ CHANGCHUN_REPLACEMENT_POLICY = ReplacementPolicy(
 )
 
 # 必须采集的材料及页码要求。
-SCRAP_REPLACEMENT_MATERIAL_POLICY = MaterialPolicy(
+_VEHICLE_MATERIAL_POLICY = MaterialPolicy(
     mode="enforce",
     materials=(
         MaterialRequirement("vehicle_license", OLD_SECTION, display_name="旧车行驶证"),
@@ -78,6 +79,7 @@ SCRAP_REPLACEMENT_MATERIAL_POLICY = MaterialPolicy(
             OLD_SECTION,
             required_pages=(1, 2),
             display_name="旧车登记证第 1、2 页",
+            presence_name="旧车登记证",
         ),
         MaterialRequirement("scrap_certificate", OLD_SECTION, display_name="报废证明"),
         MaterialRequirement("vehicle_license", NEW_SECTION, display_name="新车行驶证"),
@@ -86,8 +88,25 @@ SCRAP_REPLACEMENT_MATERIAL_POLICY = MaterialPolicy(
             NEW_SECTION,
             required_pages=(1, 2),
             display_name="新车登记证第 1、2 页",
+            presence_name="新车登记证",
         ),
         MaterialRequirement("invoice", NEW_SECTION, display_name="新车发票"),
+    ),
+)
+
+SCRAP_REPLACEMENT_MATERIAL_POLICY = MaterialPolicy(
+    mode=_VEHICLE_MATERIAL_POLICY.mode,
+    materials=_VEHICLE_MATERIAL_POLICY.materials,
+    presence_groups=(
+        MaterialPresenceGroup("old_vehicle", "报废车辆资料", (_VEHICLE_MATERIAL_POLICY.materials[:3],)),
+        MaterialPresenceGroup("new_vehicle", "新车资料", (_VEHICLE_MATERIAL_POLICY.materials[3:],)),
+        MaterialPresenceGroup("subject", "主体资料（营业执照或身份证正反面）", (
+            (MaterialRequirement("business_license", "business_license", display_name="营业执照"),),
+            (
+                MaterialRequirement("identity_card", "identity", display_name="身份证正面", identity_side="FRONT"),
+                MaterialRequirement("identity_card", "identity", display_name="身份证反面", identity_side="BACK"),
+            ),
+        )),
     ),
 )
 
@@ -311,8 +330,7 @@ SCRAP_REPLACEMENT_PACK = BusinessExtensionPack(
         # （`replacement_policy`）读发票材料上的产地做产地判定。
         # `reviewable=False` + 无别名 + `mode=None`：不采集、不比对、不判必审，
         # 但字段键必须存在——否则发票那条路由的目标会指向一个未声明的键，
-        # 产地判定会因为「没有证据」而静默失效。口径同过户审核的
-        # `application.source_published_at`。
+        # 产地判定会因为「没有证据」而静默失效；该字段采集但不核对。
         FieldDeclaration(
             key="new_vehicle.origin",
             label="新车发票产地",
@@ -425,7 +443,6 @@ SCRAP_REPLACEMENT_PACK = BusinessExtensionPack(
                 "交车日期必须读取‘交车日期’后的真实日期；回收证明编号必须读取证明上的完整编号。"
             ),
             hints=("报废证明", "回收证明", "报废车辆资料", "旧车资料"),
-            slots=(("old_vehicle", 3),),
             scoped_vehicle_fields=("vin", "plate_no", "owner", "type", "registration_date", "fuel_type"),
             # 回收证明只属于旧车资料区域。
             allowed_scopes=(OLD_SECTION,),
@@ -472,7 +489,6 @@ SCRAP_REPLACEMENT_PACK = BusinessExtensionPack(
                 ),
             ),
             hints=("行驶证", "旧车资料", "新车资料", "报废车辆资料"),
-            slots=(("old_vehicle", 1), ("new_vehicle", 1)),
             scoped_vehicle_fields=("vin", "plate_no", "owner", "type", "registration_date", "fuel_type"),
         ),
         MaterialDeclaration(
@@ -521,7 +537,6 @@ SCRAP_REPLACEMENT_PACK = BusinessExtensionPack(
                 ),
             ),
             hints=("登记证书", "机动车登记证", "旧车资料", "新车资料"),
-            slots=(("old_vehicle", 2), ("new_vehicle", 2)),
         ),
         MaterialDeclaration(
             document_type="invoice",
@@ -574,7 +589,6 @@ SCRAP_REPLACEMENT_PACK = BusinessExtensionPack(
                 ),
             ),
             hints=("发票", "新车资料"),
-            slots=(("new_vehicle", 3),),
             scoped_vehicle_fields=("vin", "plate_no", "owner", "type", "registration_date", "fuel_type"),
             # 新车发票只属于新车资料区域。
             allowed_scopes=(NEW_SECTION,),

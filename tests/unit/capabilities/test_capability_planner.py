@@ -5,7 +5,6 @@ import pytest
 from forj_review_assistant.businesses.profiles import (
     CONSISTENCY_DEFAULT,
     SCRAP_REPLACEMENT_QINGDAO,
-    VEHICLE_SOURCE_DEFAULT,
 )
 from forj_review_assistant.capabilities.specs import CapabilityBinding, CapabilitySpec
 from forj_review_assistant.runtime.workflow.planner import plan_capabilities
@@ -24,11 +23,6 @@ def test_configured_profile_plans_declared_capabilities_only():
     }
 
 
-def test_vehicle_source_profile_plans_its_own_capabilities():
-    ids = {item.capability_id for item in plan_capabilities(VEHICLE_SOURCE_DEFAULT)}
-
-    assert ids == {"material_completeness", "vehicle_model_consistency"}
-    assert not any(item.endswith("_replacement_policy") for item in ids)
 
 
 def test_unconfigured_profile_is_explicitly_marked():
@@ -37,7 +31,7 @@ def test_unconfigured_profile_is_explicitly_marked():
 
 
 def dependency_profile(*specs, bindings=()):
-    return replace(VEHICLE_SOURCE_DEFAULT, material_policy=None, external_checks=(), rule_groups=(),
+    return replace(CONSISTENCY_DEFAULT, rules_configured=True, material_policy=None, external_checks=(), rule_groups=(),
                    capability_specs=specs, binding_declarations=bindings)
 
 

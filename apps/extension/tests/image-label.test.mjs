@@ -6,11 +6,8 @@ import test from "node:test";
 import { applyCollectManifest } from "../src/platform/browser/catalog/collect-manifest.ts";
 import { documentTypeForImageLabel, imageLabelFor, nearestAncestorText } from "../src/platform/browser/collection/image-label.ts";
 
-const vehicleSource = JSON.parse(
-  readFileSync(new URL("./fixtures/collect-manifest-vehicle-source.json", import.meta.url), "utf8"),
-);
-const transfer = JSON.parse(
-  readFileSync(new URL("./fixtures/collect-manifest-transfer.json", import.meta.url), "utf8"),
+const manifest = JSON.parse(
+  readFileSync(new URL("./fixtures/collect-manifest-synthetic.json", import.meta.url), "utf8"),
 );
 
 /**
@@ -55,8 +52,8 @@ test("单图容器但文字过长时不冒充小标题", () => {
   assert.equal(imageLabelFor(image), "");
 });
 
-test("vehicle-source 的小标题直接定类型，不依赖上传顺序", () => {
-  applyCollectManifest(vehicleSource);
+test("单图卡片的小标题直接定类型，不依赖上传顺序", () => {
+  applyCollectManifest(manifest);
   assert.equal(documentTypeForImageLabel("行驶证反面"), "vehicle_license");
   assert.equal(documentTypeForImageLabel("行驶证正面"), "vehicle_license");
   assert.equal(documentTypeForImageLabel("登记证书1、2页"), "registration_certificate");
@@ -64,18 +61,18 @@ test("vehicle-source 的小标题直接定类型，不依赖上传顺序", () =>
   assert.equal(documentTypeForImageLabel("未知材料"), null);
 });
 
-test("transfer 的小标题直接定类型，二手车发票不串到报废置换", () => {
-  applyCollectManifest(transfer);
+test("动态材料的小标题直接定类型", () => {
+  applyCollectManifest(manifest);
   assert.equal(documentTypeForImageLabel("登记证书1、2页"), "registration_certificate");
-  assert.equal(documentTypeForImageLabel("二手车发票"), "used_car_invoice");
+  assert.equal(documentTypeForImageLabel("许可证"), "permit");
   assert.equal(documentTypeForImageLabel("未知材料"), null);
 });
 
 
 test("trial and formal material hints prioritize card labels over positional slots", () => {
-  applyCollectManifest(transfer);
-  assert.equal(imageDocumentType({labelHint: "二手车发票", businessScope: "transfer", groupOrder: 1,
-    categoryHint: "registration_certificate"}), "used_car_invoice");
-  assert.equal(imageDocumentType({labelHint: "未知", businessScope: "transfer", categoryHint: "registration_certificate"}),
+  applyCollectManifest(manifest);
+  assert.equal(imageDocumentType({labelHint: "许可证", businessScope: "sample", groupOrder: 1,
+    categoryHint: "registration_certificate"}), "permit");
+  assert.equal(imageDocumentType({labelHint: "未知", businessScope: "sample", categoryHint: "registration_certificate"}),
     "registration_certificate");
 });

@@ -70,6 +70,29 @@ def test_response_and_batch_preserve_completeness_and_retry_records() -> None:
     assert batch.retry_summary.qwen_retries == 1
 
 
+def test_upload_presence_is_additive_and_survives_job_serialization():
+    from forj_review_assistant.contracts.recognition import QwenClassification
+    from forj_review_assistant.contracts.review import ReviewJobSnapshot
+
+    legacy = MaterialCompletenessReport(phase="EXTRACTED", status="INCOMPLETE")
+    assert legacy.presence is None
+    assert AgentBatchResult().document_classifications == []
+    assert QwenClassification(document_type="identity_card", confidence=0.9).identity_sides == []
+    assert ImageInput(index=0, src="https://example.test/0.jpg").identity_sides_hint == []
+    assert ImageInput(index=0, src="https://example.test/0.jpg", identitySidesHint=["BACK"]).identity_sides_hint == ["BACK"]
+    snapshot = ReviewJobSnapshot.model_validate({
+        "job_id": "synthetic", "status": "PARTIAL", "created_at": "synthetic",
+        "progress": {"total_count": 0},
+        "material_completeness": {
+            "phase": "EXTRACTED", "status": "INCOMPLETE",
+            "presence": {"status": "COMPLETE", "groups": []},
+        },
+    })
+    restored = ReviewJobSnapshot.model_validate_json(snapshot.model_dump_json())
+    assert restored.material_completeness.presence.status == "COMPLETE"
+    assert restored.material_completeness.status == "INCOMPLETE"
+
+
 def test_review_request_accepts_page_fields_and_images() -> None:
     request = ReviewRequest(
         page_url="https://example.test/review/1",

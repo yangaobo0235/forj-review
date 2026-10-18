@@ -12,6 +12,7 @@ import ts from "typescript";
 const require = createRequire(import.meta.url);
 const cache = new Map();
 const scopes = [];
+const catalog = JSON.parse(readFileSync(new URL("./fixtures/page-catalog.json", import.meta.url), "utf8"));
 afterEach(() => { for (const scope of scopes.splice(0)) scope.stop(); });
 function createWorkflow(useReviewWorkflow, selection = "AUTO") {
   const scope = effectScope(); scopes.push(scope);
@@ -67,7 +68,7 @@ async function runReviewWithState(snapshot, collectionIssues = []) {
       fetch: async (url, init) => {
         requests.push({ url: String(url), method: init?.method });
         return { ok: true, json: async () => String(url).endsWith("/jobs/urls")
-          ? { job_id: "test-job" } : String(url).endsWith("/jobs/test-job") ? snapshot : {} };
+          ? { job_id: "test-job" } : String(url).endsWith("/jobs/test-job") ? snapshot : String(url).endsWith("/page-catalog") ? catalog : {} };
       },
     },
   );
@@ -87,7 +88,7 @@ function workflowHarness(createResponse) {
       requests.push({ url: String(url), method: init?.method });
       return { ok: true, status: 200, json: async () => String(url).endsWith("/jobs/urls")
         ? await createResponse : String(url).endsWith("/jobs/job-1") && init?.method !== "DELETE"
-          ? { status: "COMPLETED", progress: { total_count: 0, completed_count: 0 } } : {} };
+          ? { status: "COMPLETED", progress: { total_count: 0, completed_count: 0 } } : String(url).endsWith("/page-catalog") ? catalog : {} };
     },
   });
   return { workflow: createWorkflow(useReviewWorkflow), requests };
@@ -97,6 +98,39 @@ test("rapid repeated starts create exactly one review job", async () => {
   const { workflow, requests } = workflowHarness(Promise.resolve({ job_id: "job-1" }));
   await Promise.all([workflow.startReview(), workflow.startReview()]);
   assert.equal(requests.filter(request => request.method === "POST").length, 1);
+});
+
+test("offline service preserves recognized source and refresh recovers without changing business choice", async () => {
+  freshModules();
+  let online = false, posts = 0;
+  const manifest = JSON.parse(readFileSync(new URL("./fixtures/collect-manifest-vehicle-source.json", import.meta.url), "utf8"));
+  const {useReviewWorkflow} = loadModule(fileURLToPath(new URL("../src/features/review/model/use-review-workflow.ts", import.meta.url)), {
+    chrome: {tabs: {query: async () => [{id: 42}], sendMessage: async () => ({businessType: "vehicle_source",
+      region: "default", pageId: "vehicle_source:default", images: [], pageFields: {}, collectionId: "source"})}},
+    fetch: async (url, init) => {
+      if (!online) throw new Error("offline");
+      if (init?.method === "POST") posts++;
+      const value = String(url).endsWith("/page-catalog") ? catalog
+        : String(url).includes("/collect-manifest") ? manifest
+        : String(url).endsWith("/jobs/urls") ? {job_id: "job"}
+        : {status: "COMPLETED", progress: {total_count: 0, completed_count: 0}};
+      return {ok: true, json: async () => value};
+    },
+  });
+  const workflow = createWorkflow(useReviewWorkflow);
+  await workflow.refreshPage();
+  assert.equal(workflow.pageData.businessType, "vehicle_source");
+  assert.match(workflow.error, /审核服务未连接/);
+  await workflow.startReview();
+  assert.equal(posts, 0);
+  assert.equal(workflow.pageData.businessType, "vehicle_source");
+  online = true;
+  await workflow.refreshPage();
+  assert.equal(workflow.error, "");
+  assert.equal(workflow.pageData.businessType, "vehicle_source");
+  await workflow.startReview();
+  assert.equal(posts, 1);
+  assert.equal(workflow.error, "");
 });
 
 test("Vue selection watcher ignores an old preflight after the business is changed", async () => {
@@ -201,7 +235,7 @@ test("URL review never reads, compresses, or uploads image bodies", async () => 
         requests.push({ url: String(url), init });
         const result = String(url).endsWith("/jobs/urls") ? { job_id: "url-job" }
           : String(url).endsWith("/jobs/url-job")
-            ? { status: "COMPLETED", progress: { completed_count: 1, total_count: 1 } } : {};
+            ? { status: "COMPLETED", progress: { completed_count: 1, total_count: 1 } } : String(url).endsWith("/page-catalog") ? catalog : {};
         return { ok: true, json: async () => result };
       },
     },
@@ -315,7 +349,7 @@ test("侧边栏自己应用采集清单，字段和材料的中文名来自后�
     ok: true,
     status: 200,
     json: async () =>
-      String(url).includes("/api/review/collect-manifest") ? manifest : {},
+      String(url).includes("/api/review/collect-manifest") ? manifest : String(url).endsWith("/page-catalog") ? catalog : {},
   });
 
   const { useReviewWorkflow } = loadModule(

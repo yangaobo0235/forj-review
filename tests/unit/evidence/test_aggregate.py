@@ -625,27 +625,27 @@ def test_one_material_read_from_several_images_stays_a_single_evidence_source() 
     """
     observations = [
         FieldObservation(
-            field="vehicle.type", source_type="image", source_id="license-front",
+            field="old_vehicle.type", source_type="image", source_id="license-front",
             image_index=1, image_id="license-front", value="重型半挂牵引车",
-            document_type="vehicle_license", business_scope="vehicle",
+            document_type="vehicle_license", business_scope="old_vehicle",
         ),
         FieldObservation(
-            field="vehicle.type", source_type="image", source_id="license-back",
+            field="old_vehicle.type", source_type="image", source_id="license-back",
             image_index=2, image_id="license-back", value="重型半挂牵引车",
-            document_type="vehicle_license", business_scope="vehicle",
+            document_type="vehicle_license", business_scope="old_vehicle",
         ),
         FieldObservation(
-            field="vehicle.type", source_type="image", source_id="registration",
+            field="old_vehicle.type", source_type="image", source_id="registration",
             image_index=3, image_id="registration", value="重型半挂牵引车",
-            document_type="registration_certificate", business_scope="vehicle",
+            document_type="registration_certificate", business_scope="old_vehicle",
         ),
         FieldObservation(
-            field="vehicle.type", source_type="page", source_id="review_page",
+            field="old_vehicle.type", source_type="page", source_id="review_page",
             value="牵引车",
         ),
     ]
 
-    comparison = aggregate_field("vehicle.type", observations)
+    comparison = aggregate_field("old_vehicle.type", observations)
 
     # 两类材料 + 页面 = 三条证据；行驶证的两张图合并成一条。
     assert [(item.document_type, item.value) for item in comparison.evidence] == [
@@ -662,12 +662,12 @@ def test_material_merge_preserves_conflicting_reads_even_when_one_matches_the_pa
         FieldObservation(
             field="vehicle.brand_model", source_type="image", source_id="license-a",
             image_index=1, image_id="license-a", value="解放牌CA4250P66K25T1A1E",
-            document_type="vehicle_license", business_scope="vehicle",
+            document_type="vehicle_license", business_scope="old_vehicle",
         ),
         FieldObservation(
             field="vehicle.brand_model", source_type="image", source_id="license-b",
             image_index=2, image_id="license-b", value="解放牌CA4250P66M25T1A1E6",
-            document_type="vehicle_license", business_scope="vehicle",
+            document_type="vehicle_license", business_scope="old_vehicle",
         ),
         FieldObservation(
             field="vehicle.brand_model", source_type="page", source_id="review_page",

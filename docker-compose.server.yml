@@ -28,10 +28,13 @@ services:
       REVIEW_LOG_LEVEL: "${REVIEW_LOG_LEVEL:-INFO}"
       REVIEW_LOG_MAX_MB: "${REVIEW_LOG_MAX_MB:-10}"
       REVIEW_LOG_BACKUP_COUNT: "${REVIEW_LOG_BACKUP_COUNT:-30}"
+      # 车型只读离线目录；容器不需要源数据库地址或账号。
+      REVIEW_MODEL_CATALOG_PATH: "/catalog/vehicle-model-catalog.sqlite"
     volumes:
       # 与发布包同目录，排查时 cd 一次就能同时看到 tar 和日志。
       # 写权限由 deploy/start-review.sh 准备——容器用户和 ubuntu 不是同一个 uid。
       - ${REVIEW_UPLOAD_DIR:-/home/ubuntu/review-agent-deploy}/logs:/logs:rw
+      - ${REVIEW_MODEL_CATALOG_DIR:-/home/ubuntu/review-agent-deploy/vehicle-model-catalog}:/catalog:ro
     logging:
       driver: json-file
       options:

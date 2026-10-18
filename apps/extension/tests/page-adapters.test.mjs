@@ -15,7 +15,6 @@ test("地址唯一的页面解析到自己的适配器", () => {
   const cases = [
     ["https://admin.forjtruck.com/scrap-replace-qingdao", "scrap-replacement"],
     ["https://admin.forjtruck.com/scrap-replace-changchun?showPageModel=1", "scrap-replacement"],
-    ["https://admin.forjtruck.com/vehicle-source", "vehicle-source"],
   ];
 
   for (const [url, expected] of cases) {
@@ -24,8 +23,8 @@ test("地址唯一的页面解析到自己的适配器", () => {
 });
 
 test("共用地址的页面在适配器层不判定", () => {
-  // 一致性审核与过户审核共用 /consistency-qingdao、/consistency-changchun，
-  // 只看地址必然认错。判定交给后端下发的页面识别清单（见
+  // 一致性审核必须校验激活步骤和面板，不能只按地址判定。
+  // 判定交给后端下发的页面识别清单（见
   // `business-detector.test.mjs`）；适配器在这里必须说「不知道」，不能给答案。
   assert.equal(registry.resolve("https://admin.forjtruck.com/consistency-qingdao"), null);
   assert.equal(registry.resolve("https://admin.forjtruck.com/consistency-changchun"), null);
@@ -45,8 +44,10 @@ test("页面识别按完整路径段匹配，相似前缀不算命中", () => {
 test("注册表给出的业务选择与识别入口一致", () => {
   const url = "https://admin.forjtruck.com/scrap-replace-changchun?showPageModel=1";
 
-  assert.deepEqual(registry.selection(url), ReviewBusinessDetector.detect(url, ""));
-  assert.deepEqual(ReviewBusinessDetector.detect(url, ""), {
+  const {pageId, ...detected} = ReviewBusinessDetector.detect(url, "");
+  assert.equal(pageId, "scrap_replacement:changchun");
+  assert.deepEqual(registry.selection(url), detected);
+  assert.deepEqual(detected, {
     businessType: "scrap_replacement",
     region: "changchun",
     profileVersion: "1.0",

@@ -1,0 +1,40 @@
+{
+  "business_type": "sample",
+  "scopes": [
+    "sample"
+  ],
+  "fields": [],
+  "page_groups": [],
+  "materials": [
+    {
+      "document_type": "vehicle_license",
+      "label": "自定义行驶证",
+      "hints": [
+        "行驶证"
+      ],
+      "allowed_scopes": [
+        "sample"
+      ]
+    },
+    {
+      "document_type": "registration_certificate",
+      "label": "登记证书",
+      "hints": [
+        "登记证书"
+      ],
+      "allowed_scopes": [
+        "sample"
+      ]
+    },
+    {
+      "document_type": "permit",
+      "label": "许可证",
+      "hints": [
+        "许可证"
+      ],
+      "allowed_scopes": [
+        "sample"
+      ]
+    }
+  ]
+}

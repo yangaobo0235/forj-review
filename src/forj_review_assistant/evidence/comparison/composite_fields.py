@@ -32,7 +32,7 @@ def _declared_composites(packs=None) -> tuple[CompositeFieldSpec, ...]:
     和材料策略、字段证据策略同样的做法：**字段键是业务知识，声明在
     `forj_review_assistant.businesses.packs`**，这里只把它转成运行时结构。写死在这张表里的
     后果是，每来一个带发票代码/号码的业务就要回来改一次引擎，而两个业务的
-    字段键本来就不一样（报废置换是 `invoice.*`，过户是 `transfer.*`）。
+    各业务的组合字段键可以不同，由声明确定。
     """
     return tuple(
         CompositeFieldSpec(

@@ -1,6 +1,6 @@
 """Registered backend task projections selected by field declarations."""
 
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from functools import partial
 from types import MappingProxyType
 from typing import Literal
@@ -13,15 +13,16 @@ from forj_review_assistant.contracts.review import (
     ReviewFieldSnapshot,
     ReviewTask,
 )
+from forj_review_assistant.presentation.task_factory import make_task
 
 
 def _owner_type_system_step(
-    snapshot: ReviewFieldSnapshot, checks: Sequence[CheckResult], make_step: Callable[..., ReviewTask],
+    snapshot: ReviewFieldSnapshot, checks: Sequence[CheckResult],
 ) -> ReviewTask:
     """Treat the backend-provided owner type as input, not OCR evidence."""
 
     valid = normalize_page_owner_type(snapshot.value) is not None
-    return make_step(
+    return make_task(
         step_id=f"FIELD-{snapshot.field}",
         category="FIELD",
         display_target=ReviewDisplayTarget.ASSISTANT,
@@ -42,7 +43,6 @@ def _owner_type_system_step(
 def _affiliation_control_step(
     snapshot: ReviewFieldSnapshot,
     checks: Sequence[CheckResult],
-    make_step: Callable[..., ReviewTask],
     *,
     type_source: str,
 ) -> ReviewTask:
@@ -81,7 +81,7 @@ def _affiliation_control_step(
         status = "CONFLICT"
         reason = "页面挂靠类型与主体关系核验结果不一致"
 
-    return make_step(
+    return make_task(
         step_id=f"FIELD-{snapshot.field}",
         category="FIELD",
         display_target=ReviewDisplayTarget.ASSISTANT,
@@ -108,7 +108,6 @@ def project_field_task(
     profile: BusinessProfile,
     snapshot: ReviewFieldSnapshot,
     checks: Sequence[CheckResult],
-    make_step: Callable[..., ReviewTask],
 ) -> ReviewTask | None:
     pack = profile.pack_declaration
     field = next((f for f in pack.fields if f.key == snapshot.field), None) if pack else None
@@ -117,4 +116,4 @@ def project_field_task(
         return None
     if projector_id not in FIELD_TASK_PROJECTORS:
         raise ValueError(f"未注册的字段任务投影：{projector_id}")
-    return FIELD_TASK_PROJECTORS[projector_id](snapshot, checks, make_step)
+    return FIELD_TASK_PROJECTORS[projector_id](snapshot, checks)

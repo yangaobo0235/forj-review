@@ -12,6 +12,7 @@ from typing import Any
 
 from forj_review_assistant.businesses.context import with_business_context
 from forj_review_assistant.businesses.context_validation import validate_request_route
+from forj_review_assistant.businesses.material_presence import evaluate_presence
 from forj_review_assistant.businesses.profiles import BusinessProfile
 from forj_review_assistant.businesses.registry import (
     BusinessRegistry,
@@ -145,6 +146,8 @@ class ReviewService:
         initial_report: MaterialCompletenessReport | None = None,
     ) -> AgentBatchResult:
         resolved_profile = profile or self.resolve_profile(request)
+        if not resolved_profile.rules_configured:
+            return AgentBatchResult(total_count=len(request.images))
         if (
             not request.images
             and resolved_profile.material_policy is None
@@ -152,13 +155,22 @@ class ReviewService:
         ):
             return AgentBatchResult()
         if self.agent:
+            async def report_progress(batch: AgentBatchResult) -> None:
+                if batch.material_completeness is not None:
+                    batch.material_completeness.presence = evaluate_presence(
+                        request, resolved_profile.material_policy, batch,
+                    )
+                if batch_callback is not None:
+                    progress_result = batch_callback(batch)
+                    if inspect.isawaitable(progress_result):
+                        await progress_result
+
             return await self.agent.extract_async(
                 request.images,
-                batch_callback,
+                report_progress,
                 retry_policy=resolved_profile.retry_policy,
                 initial_report=initial_report,
-                # 材料类型候选限制在本业务声明的集合内：过户页面上的「二手车
-                # 发票」不得命中报废置换的机动车销售发票政策。
+                # 材料类型候选限制在本业务声明的集合内。
                 allowed_document_types=declared_material_types(
                     resolved_profile.business_type
                 ),
@@ -198,6 +210,8 @@ class ReviewService:
         defer_advice: bool = False,
     ) -> ReviewResponse:
         resolved_profile = profile or self.resolve_profile(request)
+        if not resolved_profile.rules_configured:
+            return self._build_unconfigured_response(request, resolved_profile)
         observations, _ = collect_observations(request, resolved_profile, batch)
         issues = collection_issues(request, resolved_profile)
 

@@ -56,22 +56,6 @@ def test_registry_resolves_changchun_profiles_without_fallback() -> None:
     assert consistency.rules_configured is False
 
 
-def test_registry_resolves_vehicle_source_from_its_own_declaration() -> None:
-    profile = build_business_registry().resolve(
-        BusinessType.VEHICLE_SOURCE,
-        Region.DEFAULT,
-        "1.0",
-    )
-
-    assert profile.rules_configured is True
-    assert "vehicle.vin" in profile.required_fields
-    assert not any(field.startswith("old_vehicle") for field in profile.required_fields)
-    assert {spec.capability_id for spec in profile.capabilities} == {
-        "material_completeness",
-        "vehicle_model_consistency",
-    }
-    # 车源审核不分地区，没有地区政策能力。
-    assert profile.replacement_policy is None
 
 
 def test_registry_keeps_unconfigured_businesses_out_of_scrap_rules() -> None:

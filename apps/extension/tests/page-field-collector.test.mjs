@@ -573,7 +573,7 @@ test("ignores a role=combobox affiliation control from a custom form shell", () 
     },
   };
 
-  const result = collector.collect(root, "scrap_replacement");
+  const result = collector.collect(root);
 
   assert.deepEqual(Array.from(result.writableTargets), []);
   assert.deepEqual(Array.from(result.reviewFields), []);
@@ -650,7 +650,7 @@ test("does not collect transfer date outside supported business sections", () =>
     },
   };
 
-  assert.equal(collector.collect(root, "transfer").pageFields["transfer.invoice_date"], undefined);
+  assert.equal(collector.collect(root).pageFields["transfer.invoice_date"], undefined);
 });
 
 test("collects an invoice date label with required marker and colon", () => {
@@ -664,7 +664,7 @@ test("collects an invoice date label with required marker and colon", () => {
 test("falls back to a date-like invoice candidate when section matching is ambiguous", () => {
   const result = loadCollector().collectCandidates([
     { label: "开票日期", value: "2026-01-28", section: "unknown", source: "control", proximity: 10 },
-  ], 1, "scrap_replacement");
+  ], {scannedControls: 1});
 
   assert.equal(result.pageFields["invoice.invoice_date"], "2026-01-28");
 });
@@ -715,9 +715,7 @@ test("builds the review catalog from editable controls instead of fixed page tex
   readonlyField.readOnly = true;
 
   const result = loadCollector().collect(
-    fixture(submittedAt, vehicleType, addedField, affiliation, readonlyField),
-    "scrap_replacement",
-  );
+    fixture(submittedAt, vehicleType, addedField, affiliation, readonlyField));
 
   assert.deepEqual(Array.from(result.reviewFields, (item) => ({ ...item })), [
     {
@@ -749,9 +747,7 @@ test("excludes duplicated affiliation labels and system result controls", () => 
   const reviewResult = control({ label: "审核结果 通过", value: "true" });
 
   const result = loadCollector().collect(
-    fixture(oldAffiliation, newAffiliation, reviewResult),
-    "scrap_replacement",
-  );
+    fixture(oldAffiliation, newAffiliation, reviewResult));
 
   assert.deepEqual(Array.from(result.reviewFields), []);
 });
@@ -778,7 +774,7 @@ test("scopes collection to the open approval modal when list filters reuse ids",
     },
   };
 
-  const result = collector.collect(root, "scrap_replacement");
+  const result = collector.collect(root);
   assert.equal(result.reviewFields[0].label, "报废车辆类型");
   assert.equal(result.reviewFields[1].label, "报废交车日期");
   assert.equal(result.reviewFields.some((item) => item.label === "经销商"), false);
@@ -800,7 +796,7 @@ test("configured occurrence counts certificate controls inside the approval deta
     section: "old_vehicle", occurrence: 1, reviewable: true,
   }] });
   try {
-    const result = loadCollector().collect(root, "scrap_replacement");
+    const result = loadCollector().collect(root);
     assert.equal(result.pageFields["scrap_certificate.certificate_no"], "HS-SYNTHETIC-001");
     assert.equal(result.reviewFields.length, 1);
     assert.equal(result.reviewFields[0].field, "scrap_certificate.certificate_no");
@@ -816,7 +812,7 @@ test("explicit occurrence selects the second visible control in the current deta
     key: "custom.certificate_no", aliases: ["自定义编号"], section: "old_vehicle", occurrence: 2, reviewable: true,
   }] });
   try {
-    const result = loadCollector().collect(fixture(...inputs), "scrap_replacement");
+    const result = loadCollector().collect(fixture(...inputs));
     assert.equal(result.pageFields["custom.certificate_no"], "CERT-2");
     assert.equal(result.reviewFields[0].field, null);
     assert.equal(result.reviewFields[1].field, "custom.certificate_no");
@@ -831,7 +827,7 @@ test("keeps read-only known fields in the review catalog without making them wri
   const date = control({ label: "报废交车日期", value: "2026-02-05", section: "old_vehicle" });
   date.readOnly = true;
   const root = fixture(date);
-  const result = collector.collect(root, "scrap_replacement");
+  const result = collector.collect(root);
   assert.equal(result.reviewFields[0].label, "报废交车日期");
   assert.equal(result.reviewFields[0].editable, false);
 });
@@ -847,7 +843,7 @@ test("readonly Ant calendar inputs are editable dates but disabled picker wrappe
     };
     date.parentElement = picker;
     date.closest = selector => selector === ".ant-picker" ? picker : null;
-    const result = loadCollector().collect(fixture(date), "scrap_replacement");
+    const result = loadCollector().collect(fixture(date));
     assert.equal(result.reviewFields[0].controlType, "date");
     assert.equal(result.reviewFields[0].editable, !disabled);
   }
@@ -875,7 +871,7 @@ test("treats a standalone invoice currency symbol as an empty amount", () => {
 test("only one accepted DOM candidate becomes a review target", () => {
   const collector = loadCollector();
   const target = control({ label: "新车车架号", value: "VIN-1" });
-  const result = collector.collect(fixture(target), "scrap_replacement");
+  const result = collector.collect(fixture(target));
   assert.equal(result.fieldTargets[0].field, "new_vehicle.vin");
   assert.equal(result.fieldTargets[0].element, target);
 });
@@ -883,7 +879,7 @@ test("only one accepted DOM candidate becomes a review target", () => {
 test("keeps an empty known control as a writeback target", () => {
   const collector = loadCollector();
   const target = control({ label: "报废发动机型号", value: "", section: "old_vehicle" });
-  const result = collector.collect(fixture(target), "scrap_replacement");
+  const result = collector.collect(fixture(target));
 
   assert.equal(result.pageFields["old_vehicle.engine_model"], "");
   assert.equal(result.fieldTargets[0].field, "old_vehicle.engine_model");
@@ -894,7 +890,7 @@ test("ignores invoice verification buttons when collecting invoice number", () =
   const invoiceNumber = control({ label: "发票号码", value: "26232000000731322946", section: "new_vehicle" });
   const verifyButton = control({ label: "发票号码 一键验真", value: "一键验真", section: "new_vehicle", type: "button" });
 
-  const result = loadCollector().collect(fixture(invoiceNumber, verifyButton), "scrap_replacement");
+  const result = loadCollector().collect(fixture(invoiceNumber, verifyButton));
 
   assert.equal(result.pageFields["invoice.invoice_no"], "26232000000731322946");
   assert.equal(result.reviewFields.some((item) => item.value === "一键验真"), false);
@@ -905,7 +901,7 @@ test("equally ranked duplicate DOM candidates do not expose a target", () => {
   const result = collector.collect(fixture(
     control({ label: "新车车架号", value: "VIN-1" }),
     control({ label: "新车车架号", value: "VIN-1" }),
-  ), "scrap_replacement");
+  ));
   assert.equal(result.fieldTargets.some(item => item.field === "new_vehicle.vin"), false);
   assert.ok(result.ambiguousFields.includes("new_vehicle.vin"));
 });
@@ -915,7 +911,7 @@ test("equally ranked duplicate DOM candidates do not expose a page field value",
   const result = collector.collect(fixture(
     control({ label: "新车车架号", value: "VIN-1" }),
     control({ label: "新车车架号", value: "VIN-1" }),
-  ), "scrap_replacement");
+  ));
   assert.equal(result.pageFields["new_vehicle.vin"], undefined);
   assert.ok(result.unmatchedLabels.includes("新车车架号"));
 });
@@ -925,7 +921,7 @@ test("conflicting DOM candidates do not expose a target", () => {
   const result = collector.collect(fixture(
     control({ label: "新车车架号", value: "VIN-1" }),
     control({ label: "新车车架号", value: "VIN-2" }),
-  ), "scrap_replacement");
+  ));
   assert.equal(result.fieldTargets.some(item => item.field === "new_vehicle.vin"), false);
   assert.ok(result.ambiguousFields.includes("new_vehicle.vin"));
   assert.equal(result.pageFields["new_vehicle.vin"], undefined);

@@ -7,7 +7,6 @@ from forj_review_assistant.businesses.profiles import (
     BUSINESS_PROFILES,
     SCRAP_REPLACEMENT_CHANGCHUN,
     SCRAP_REPLACEMENT_QINGDAO,
-    TRANSFER_DEFAULT,
 )
 from forj_review_assistant.contracts.evidence import DifferenceRange, EvidenceFact
 from forj_review_assistant.contracts.recognition import (
@@ -289,30 +288,6 @@ def test_date_rules_land_under_their_field(check_id: str, field: str) -> None:
     assert check_id in backed.details["check_ids"]
 
 
-def test_transfer_invoice_date_lands_under_its_own_field() -> None:
-    """过户审核的开票日期规则走同一条路，字段键不同也照样能并。
-
-    这正是合并关系必须按业务声明取的原因：报废置换的日期政策绑在
-    `invoice.invoice_date` 上，过户绑在 `transfer.invoice_date` 上。
-    """
-    steps = build_review_tasks(
-        request=ReviewRequest(
-            page_url="https://admin.forjtruck.com/consistency-qingdao?showPageModel=1",
-            business_type="transfer",
-            region="default",
-            page_fields={"transfer.invoice_date": "2026-09-17"},
-        ),
-        profile=TRANSFER_DEFAULT,
-        comparisons=[],
-        external_checks=[],
-        business_checks=[date_rule("TRANSFER-INVOICE-DATE")],
-        completeness=None,
-        limitations=[],
-    )
-
-    assert not any(item.step_id == "BUSINESS-TRANSFER-INVOICE-DATE" for item in steps)
-    backed = next(item for item in steps if item.page_target_field == "transfer.invoice_date")
-    assert "TRANSFER-INVOICE-DATE" in backed.details["check_ids"]
 
 
 @pytest.mark.parametrize(
@@ -453,12 +428,13 @@ def test_non_target_profile_keeps_steps_as_assistant_contracts() -> None:
     steps = build_review_tasks(
         request=ReviewRequest(
             page_url="https://example.test/transfer/1",
-            business_type="transfer",
+            business_type="permit",
             region="default",
-            page_fields={"transfer.vin": "VIN-1"},
+            page_fields={"permit.vin": "VIN-1"},
         ),
-        profile=TRANSFER_DEFAULT,
-        comparisons=[matching_comparison("transfer.vin")],
+        profile=replace(SCRAP_REPLACEMENT_QINGDAO, required_fields=("permit.vin",),
+                        field_check_bindings=(), pack_declaration=None),
+        comparisons=[matching_comparison("permit.vin")],
         external_checks=[],
         business_checks=[],
         completeness=None,
@@ -466,7 +442,7 @@ def test_non_target_profile_keeps_steps_as_assistant_contracts() -> None:
     )
 
     assert [(item.step_id, item.display_target, item.page_field) for item in steps] == [
-        ("FIELD-transfer.vin", ReviewDisplayTarget.ASSISTANT, None)
+        ("FIELD-permit.vin", ReviewDisplayTarget.ASSISTANT, None)
     ]
 
 

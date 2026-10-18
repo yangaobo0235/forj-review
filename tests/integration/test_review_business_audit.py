@@ -8,13 +8,15 @@ from datetime import date, datetime, timedelta, timezone
 import httpx
 import pytest
 
+from forj_review_assistant.businesses.configuration.compiler import compile_page
+from forj_review_assistant.businesses.configuration.schema import PageDefinition
+from forj_review_assistant.businesses.context import business_context
 from forj_review_assistant.businesses.field_policies import (
     AuthorityRule,
     date_window_problem,
 )
 from forj_review_assistant.businesses.profiles import (
     SCRAP_REPLACEMENT_QINGDAO,
-    VEHICLE_SOURCE_DEFAULT,
 )
 from forj_review_assistant.businesses.rules.scrap_certificate_qr import qr_candidates
 from forj_review_assistant.contracts.recognition import AgentBatchResult, CheckResult
@@ -41,33 +43,47 @@ from forj_review_assistant.runtime.review_service import ReviewService
 from forj_review_assistant.runtime.scheduling.fair_scheduler import FairAsyncScheduler
 
 
+@pytest.fixture
+def date_policy():
+    profile = compile_page(PageDefinition.model_validate({
+        "page_id": "sample-date", "business_type": "sample", "title": "日期校验",
+        "paths": ["/sample-date"], "scopes": ["sample"],
+        "materials": [{"document_type": "permit", "label": "许可证"}],
+        "fields": [{"key": "permit.issue_date", "label": "发证日期", "aliases": ["发证日期"],
+                    "normalizer": "date", "max_age_days": 90,
+                    "evidence": [{"material": "permit", "field": "printed.date"}]}],
+    }))
+    with business_context(profile):
+        yield profile
+
+
 def evidence(value, *, source="image", uncertain=False, confidence=0.95):
-    return FieldObservation(field="vehicle.issue_date", source_type=source, source_id=source,
-                            document_type="vehicle_license" if source == "image" else None,
+    return FieldObservation(field="permit.issue_date", source_type=source, source_id=source,
+                            document_type="permit" if source == "image" else None,
                             value=value, uncertain=uncertain, confidence=confidence)
 
 
 @pytest.mark.parametrize("days_ago, expected", [(0, FieldStatus.MATCH), (90, FieldStatus.MATCH),
                                              (91, FieldStatus.REVIEW_REQUIRED), (-1, FieldStatus.REVIEW_REQUIRED)])
-def test_date_policy_affects_raw_comparison_and_final_recommendation(days_ago, expected):
+def test_date_policy_affects_raw_comparison_and_final_recommendation(days_ago, expected, date_policy):
     issued = (datetime.now(timezone(timedelta(hours=8))).date() - timedelta(days=days_ago)).isoformat()
-    profile = replace(VEHICLE_SOURCE_DEFAULT, required_fields=("vehicle.issue_date",), material_policy=None)
-    request = ReviewRequest(page_url="https://example.test/review", business_type="vehicle_source",
-                            page_fields={"vehicle.issue_date": issued})
+    profile = replace(date_policy, material_policy=None)
+    request = ReviewRequest(page_url="https://example.test/review", business_type="sample",
+                            page_fields={"permit.issue_date": issued})
     response = build_review_response(request, AgentBatchResult(), profile,
                                      [evidence(issued), evidence(issued, source="page")], [])
     assert response.comparisons[0].status is expected
     assert response.recommendation == ("PASS" if expected is FieldStatus.MATCH else "REVIEW_REQUIRED")
 
 
-def test_date_window_uses_declared_policy_and_rejects_unparseable_dates():
-    assert date_window_problem("发证日期", "vehicle.issue_date", "2026-07-15", today=date(2026, 10, 13)) is None
-    assert "90 天" in date_window_problem("发证日期", "vehicle.issue_date", "2026-07-14", today=date(2026, 10, 13))
-    assert "日期格式" in date_window_problem("发证日期", "vehicle.issue_date", "2026-02-30")
+def test_date_window_uses_declared_policy_and_rejects_unparseable_dates(date_policy):
+    assert date_window_problem("发证日期", "permit.issue_date", "2026-07-15", today=date(2026, 10, 13)) is None
+    assert "90 天" in date_window_problem("发证日期", "permit.issue_date", "2026-07-14", today=date(2026, 10, 13))
+    assert "日期格式" in date_window_problem("发证日期", "permit.issue_date", "2026-02-30")
 
 
 def test_equal_value_deduplication_retains_uncertainty():
-    comparison = aggregate_field("vehicle.issue_date", [evidence("2026-10-01"),
+    comparison = aggregate_field("permit.issue_date", [evidence("2026-10-01"),
                                 evidence("2026-10-01", uncertain=True, confidence=0.4),
                                 evidence("2026-10-01", source="page")], uncertain_requires_review=True)
     assert comparison.status is FieldStatus.REVIEW_REQUIRED
@@ -76,7 +92,7 @@ def test_equal_value_deduplication_retains_uncertainty():
 
 
 def test_material_agreement_requires_page_evidence_when_reviewing_page_fields():
-    comparison = aggregate_field("vehicle.issue_date", [evidence("2026-10-01")],
+    comparison = aggregate_field("permit.issue_date", [evidence("2026-10-01")],
                                  single_evidence_requires_review=False, page_evidence_required=True)
     assert comparison.status is FieldStatus.REVIEW_REQUIRED
     assert "页面字段" in comparison.message
@@ -84,8 +100,8 @@ def test_material_agreement_requires_page_evidence_when_reviewing_page_fields():
 
 def test_authority_materials_cannot_pass_a_missing_page_field():
     observation = evidence("2026-10-01")
-    authority = (AuthorityRule(source="image", label="行驶证", document_types=("vehicle_license",)),)
-    comparison = aggregate_by_authority("vehicle.issue_date", [observation], authority,
+    authority = (AuthorityRule(source="image", label="行驶证", document_types=("permit",)),)
+    comparison = aggregate_by_authority("permit.issue_date", [observation], authority,
                                          page_evidence_required=True)
     assert comparison.status is FieldStatus.REVIEW_REQUIRED
     assert "页面字段" in comparison.message

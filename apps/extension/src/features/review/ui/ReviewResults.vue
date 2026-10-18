@@ -5,7 +5,7 @@ import type { ReviewResultsProps } from "./review-result-props";
 import LegacyReviewResults from "./LegacyReviewResults.vue";
 const props = defineProps<ReviewResultsProps>();
 const renderer = computed(() => resolveWorkbenchRenderer(props.review));
-const workbenchProps = computed(() => ({ review: props.review, pageData: props.pageData, onFocusImage: props.onFocusImage, onApplyPageFieldValue: props.onApplyPageFieldValue, onApplyPageFieldGroupValue: props.onApplyPageFieldGroupValue, onRerun: props.onRerun }));
+const workbenchProps = computed(() => ({ review: props.review, pageData: props.pageData, onFocusImage: props.onFocusImage, onApplyPageFieldValue: props.onApplyPageFieldValue, onApplyPageFieldGroupValue: props.onApplyPageFieldGroupValue, onApplyVehicleModel: props.onApplyVehicleModel, onRerun: props.onRerun }));
 </script>
 
 <template>

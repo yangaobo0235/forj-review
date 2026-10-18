@@ -3,6 +3,7 @@ import { manifestImageProfile } from "../catalog/collect-manifest.ts";
 export interface ImageCandidate {
   index: number; src: string; visible: boolean; ariaHidden?: boolean; businessScope: string; role?: string | null; emptySlot?: boolean;
   className?: string; naturalWidth?: number; naturalHeight?: number; categoryHint: string; hint?: string; groupTitle?: string;
+  ignoredMaterial?: boolean;
 }
 
 /**
@@ -25,7 +26,7 @@ export interface ImageCandidate {
   const scopesFor = () => imageProfile()?.scopes || businessScopes;
 
   const eligible = (candidate: ImageCandidate) => {
-    if (!candidate.src || !candidate.visible || candidate.ariaHidden) return false;
+    if (!candidate.src || !candidate.visible || candidate.ariaHidden || candidate.ignoredMaterial) return false;
     if (candidate.businessScope === "other") return false;
     if (candidate.role === "presentation" || candidate.emptySlot) return false;
     if (decorativePattern.test(candidate.className || "")) return false;

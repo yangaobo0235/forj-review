@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, shallowReactive, watch } from "vue";
 import ReviewStepDetail from "./ReviewStepDetail.vue";
+import VehicleModelPicker from "./VehicleModelPicker.vue";
+import { useVehicleModelReview } from "../model/use-vehicle-model-review";
 import { workbenchViews, fieldFromStep, isExternalTask, statusText, stepTitle, type View, type Decision } from "../model/workbench";
 import { isBlockingPageFillFailure, type PageFillResult } from "../../../shared/contracts/page-fill";
 import { isFieldFirstTaskVisible } from "../model/review-tasks";
@@ -16,6 +18,15 @@ const props = withDefaults(defineProps<WorkbenchProps>(), {
 });
 const state = shallowReactive({view: "PENDING" as View, selectedId: null as string | null,
   decisions: {} as Record<string, Decision>, message: "", filledCount: 0, busy: false, blockingIssue: ""});
+const model = useVehicleModelReview({
+  review: () => props.review, pageData: () => props.pageData,
+  disabled: () => props.readOnly || state.busy || Boolean(state.blockingIssue),
+  onFill: () => props.onApplyVehicleModel, onBusy: value => { state.busy = value; },
+  onResult: result => {
+    if (result.ok) { state.filledCount++; state.message = result.message; }
+    else handleWriteFailure(result);
+  },
+});
 // 展示策略由后端投影；隐藏任务不进入任何视图、计数或默认选择。
 const displaySteps = computed(() => [...(props.review.review_tasks ?? [])]
   .sort((a, b) => a.sequence - b.sequence).filter(isFieldFirstTaskVisible));
@@ -23,6 +34,7 @@ const pending = computed(() => displaySteps.value.filter(step => step.requires_r
 const visible = computed(() => state.view === "PENDING" ? pending.value : state.view === "EXTERNAL"
   ? displaySteps.value.filter(isExternalTask) : displaySteps.value.filter(step => step.category === "FIELD"));
 const current = computed(() => visible.value.find(step => step.step_id === state.selectedId) ?? visible.value[0] ?? null);
+const modelStep = computed(() => props.review.business_type === "vehicle_source" && current.value && fieldFromStep(current.value) === "vehicle.model");
 const indexElement = ref<HTMLElement | null>(null);
 // Only scroll the field list when its selection changes; preserve the page reading position.
 watch([() => state.view, () => current.value?.step_id], () => {
@@ -79,12 +91,14 @@ async function fill(step: ReviewTask, value: string) {
   <section class="review-workbench" aria-label="字段证据审核工作台">
     <header class="workbench-summary"><div><strong>字段证据审核</strong><small>自动通过 {{ automaticCount }} · 已人工处理 {{ Object.keys(state.decisions).length }}</small></div><b v-if="state.blockingIssue || allDone">{{ state.blockingIssue ? "页面已失效" : "展示项目已处理" }}</b></header>
     <div v-if="state.blockingIssue" class="workbench-blocked" role="alert"><strong>页面操作已停止</strong><span>{{ state.blockingIssue }}</span><button v-if="onRerun" type="button" @click="onRerun">重新采集并复核</button></div>
-    <nav class="workbench-tabs" aria-label="审核视图"><button v-for="[key, label] in tabs" :key="key" type="button" :aria-pressed="state.view === key" :class="{active: state.view === key}" @click="selectView(key)">{{ label }}</button></nav>
+    <nav class="workbench-tabs" aria-label="审核视图"><button v-for="[key, label] in tabs" :key="key" type="button" :aria-pressed="state.view === key" :class="{active: state.view === key}" :disabled="state.busy" @click="selectView(key)">{{ label }}</button></nav>
     <div class="workbench-content">
-      <nav ref="indexElement" class="workbench-index" aria-label="核验项目"><button v-for="item in visible" :key="item.step_id" type="button" :title="stepTitle(item)" :aria-pressed="current?.step_id === item.step_id" :class="{selected: current?.step_id === item.step_id}" @click="selectStep(item.step_id)"><span>{{ stepTitle(item) }}</span><b :class="`status-${item.result_status.toLowerCase()}`">{{ state.decisions[item.step_id] ? "已处理" : statusText[item.result_status] }}</b></button></nav>
+      <nav ref="indexElement" class="workbench-index" aria-label="核验项目"><button v-for="item in visible" :key="item.step_id" type="button" :title="stepTitle(item)" :aria-pressed="current?.step_id === item.step_id" :class="{selected: current?.step_id === item.step_id}" :disabled="state.busy" @click="selectStep(item.step_id)"><span>{{ stepTitle(item) }}</span><b :class="`status-${item.result_status.toLowerCase()}`">{{ state.decisions[item.step_id] ? "已处理" : item.details?.not_applicable && item.result_status === 'MATCH' ? '不适用' : statusText[item.result_status] }}</b></button></nav>
       <div class="workbench-detail">
-        <ReviewStepDetail v-if="current" :step="current" :page-data="pageData" :qr-checks="review.qr_checks" :disabled="readOnly || state.busy || Boolean(state.blockingIssue)" :on-focus-image="focus" :on-fill="fill" :on-choose="choose"/>
-        <div v-else class="workbench-empty"><strong>{{ allDone ? "当前展示项目已处理" : "当前没有待处理项目" }}</strong><p>可切换到全部字段查看完整核验记录。</p></div>
+        <ReviewStepDetail v-if="current" :step="current" :page-data="pageData" :qr-checks="review.qr_checks" :custom-field-review="Boolean(modelStep)" :disabled="readOnly || state.busy || Boolean(state.blockingIssue)" :on-focus-image="focus" :on-fill="fill" :on-choose="choose">
+          <template v-if="modelStep" #field-review><VehicleModelPicker :model="model" :step="current" :on-focus-image="focus" :page-data="pageData" :disabled="readOnly || state.busy || Boolean(state.blockingIssue)"/></template>
+        </ReviewStepDetail>
+        <div v-else-if="!current" class="workbench-empty"><strong>{{ allDone ? "当前展示项目已处理" : "当前没有待处理项目" }}</strong><p>可切换到全部字段查看完整核验记录。</p></div>
         <p v-if="state.message" class="workbench-message" role="status">{{ state.message }}</p>
       </div>
     </div>

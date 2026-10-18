@@ -14,7 +14,7 @@ function invoiceTarget(buttonCount = 1) {
     getAttribute: () => null, click: () => clicked++ }));
   const item = { querySelectorAll: () => buttons };
   const target = { tagName: "INPUT", value: "INV-001", isConnected: true,
-    getAttribute: () => null, closest: () => item };
+    getAttribute: () => null, closest: selector => selector.includes(".ant-form-item") ? item : null };
   const root = { querySelectorAll: () => [], contains: node => node === item };
   return { root, target, clicked: () => clicked };
 }
@@ -45,6 +45,30 @@ function valueInput(initial = "", tagName = "INPUT", type = null) {
     dispatchEvent() {},
   };
 }
+
+test("generic dependent writes use the caller's fields and final focus target", async () => {
+  const controls = {"permit.number": valueInput("OLD"), "permit.date": valueInput("2026-01-01")};
+  const focused = [], highlighted = [];
+  for (const [field, input] of Object.entries(controls)) {
+    input.focus = () => focused.push(field);
+    input.animate = () => highlighted.push(field);
+  }
+  const values = [
+    {field: "permit.number", label: "许可证号", value: "NEW"},
+    {field: "permit.date", label: "发证日期", value: "2026-10-17"},
+  ];
+  const result = await ReviewPageFieldWriter.executeSequence(
+    {defaultView: {Event: class Event {}}}, values, field => controls[field], () => true,
+    {fields: new Set(Object.keys(controls)), label: "许可证信息", focusField: "permit.date",
+      settleAfter: {"permit.number": 1}},
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.message, "许可证信息已整块回填并逐项回读");
+  assert.equal(controls["permit.number"].value, "NEW");
+  assert.equal(controls["permit.date"].value, "2026-10-17");
+  assert.equal(focused.at(-1), "permit.date");
+  assert.deepEqual(highlighted.slice(-2), ["permit.number", "permit.date"]);
+});
 
 test("manual values are read back before centering, focusing and highlighting the target", async () => {
   const input = valueInput("HS-OLD");
@@ -405,6 +429,26 @@ test("calendar selection navigates years and months before selecting the exact d
   assert.equal(fixture.navigations(), 4);
 });
 
+test("vehicle license dates share calendar handling and reveal the visible picker without reopening it", async () => {
+  for (const field of ["vehicle.registration_date", "vehicle.issue_date"]) {
+    const fixture = calendarFixture();
+    const presentation = [];
+    fixture.picker.scrollIntoView = options => presentation.push(options.block);
+    fixture.picker.animate = () => presentation.push("highlight");
+    let focusCount = 0;
+    fixture.control.focus = () => { focusCount++; assert.equal(fixture.value(), "2026-10-12"); };
+    const result = await ReviewPageFieldWriter.executeValue(fixture.root, fixture.control,
+      {field, value: "2024-08-15", expectedValue: "2026-10-12"}, () => true,
+      {fields: new Set([field]), controlKinds: new Set(["date"])});
+    assert.equal(result.ok, true, result.message);
+    assert.equal(fixture.value(), "2024-08-15");
+    assert.equal(fixture.clicks(), 1);
+    assert.equal(focusCount, 1);
+    assert.deepEqual(presentation, ["center", "highlight"]);
+    assert.deepEqual(fixture.root.querySelectorAll(), []);
+  }
+});
+
 test("consecutive date writes wait for the reused calendar's closing animation", async () => {
   const fixture = calendarFixture({ closingDelay: 180 });
   for (const [expectedValue, value] of [["2026-10-12", "2026-10-13"], ["2026-10-13", "2024-08-15"]]) {
@@ -430,8 +474,31 @@ test("date validation, disabled cells, stale identity and blocked navigation nev
     assert.equal(fixture.clicks(), 0);
   }
   assert.equal(calendarDate("2024-02-29"), "2024-02-29");
-  assert.equal(calendarDate("2024/2/29"), null);
+  assert.equal(calendarDate("2024/2/29"), "2024-02-29");
   assert.equal(calendarDate("2025-02-29"), null);
+});
+
+test("OCR日期原文在共用回填入口归一化，报废和过户均能写入并读回", async () => {
+  for (const field of ["old_vehicle.recycle_date", "invoice.invoice_date", "transfer_invoice.invoice_date", "transfer_new_invoice.invoice_date"]) {
+    for (const value of ["2026年09月03日", "2026/9/3", "2026.09.03", "２０２６年 ９月 ３日"]) {
+      const fixture = calendarFixture();
+      const result = await ReviewPageFieldWriter.executeValue(fixture.root, fixture.control,
+        {field, value, expectedValue: "2026年10月12日"}, () => true,
+        {fields: new Set([field]), controlKinds: new Set(["date"])});
+      assert.equal(result.ok, true, `${field} ${value}: ${result.message}`);
+      assert.equal(fixture.value(), "2026-09-03");
+      assert.equal(result.actions[0].value, "2026-09-03");
+    }
+  }
+  for (const value of ["2026年02月30日", "2026/13/03", "09/03/2026", "2026-09/03", "2026-09-03至2026-09-08"]) {
+    const fixture = calendarFixture();
+    const result = await ReviewPageFieldWriter.executeValue(fixture.root, fixture.control,
+      {field: "transfer_new_invoice.invoice_date", value}, () => true,
+      {fields: new Set(["transfer_new_invoice.invoice_date"])});
+    assert.equal(result.ok, false, value);
+    assert.equal(fixture.clicks(), 0, value);
+    assert.equal(fixture.value(), "2026-10-12");
+  }
 });
 
 test("date picker is still subject to the backend control type allowlist", async () => {

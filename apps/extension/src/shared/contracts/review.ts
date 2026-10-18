@@ -28,6 +28,7 @@ export interface PageImage {
   group: ImageGroup | string;
   categoryHint?: string;
   documentTypeHint?: string;
+  identitySidesHint?: Array<"FRONT" | "BACK">;
   businessScope?: string;
   groupTitle?: string;
   groupOrder?: number;
@@ -83,6 +84,8 @@ export interface PageData {
   workflowStage?: BusinessType;
   selectionMode?: SelectionMode;
   businessDetectionError?: string;
+  /** 保留已识别的页面身份，独立提示服务或采集配置不可用。 */
+  reviewServiceError?: string;
   /** 该次采集已被更新的采集取代；面板应提示重新采集而不是继续提交。 */
   staleCollection?: boolean;
   collectionDiagnostics?: {
@@ -144,6 +147,18 @@ export interface MaterialCompletenessReport {
   enforced: boolean;
   issues: MaterialCompletenessIssue[];
   checklist?: MaterialChecklistItem[];
+  presence?: MaterialPresenceReport | null;
+}
+
+export interface MaterialPresenceReport {
+  status: "COMPLETE" | "INCOMPLETE" | "UNCERTAIN";
+  groups: Array<{
+    key: string;
+    display_name: string;
+    status: "PRESENT" | "MISSING" | "UNCERTAIN";
+    alternatives: MaterialChecklistItem[][];
+  }>;
+  notices: string[];
 }
 
 export interface RetryAttempt {
@@ -210,6 +225,10 @@ export interface SubjectEvidenceRequirement {
 }
 
 export interface ReviewTaskDetails {
+  /** 材料明确没有此栏位；仅在唯一空控件已采集且核验通过时展示为不适用。 */
+  not_applicable?: boolean;
+  permitted_fill_values?: string[];
+  model_search?: {announcement_model: string; engine_model: string; issues: string[]};
   differences?: number[];
   subject_requirements?: SubjectEvidenceRequirement[];
   auxiliary_checks?: AuxiliaryCheckSummary[];
@@ -386,6 +405,7 @@ export interface PageFillAction {
 
 /** 审核员从助手中选择候选值后发起的单字段页面回填。 */
 export interface PageWriteAction {
+  optionValue?: string;
   field: string;
   value: string;
   expectedValue?: string | null;

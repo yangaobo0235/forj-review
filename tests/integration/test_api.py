@@ -46,7 +46,7 @@ def test_review_service_does_not_expose_configuration_tooling(client) -> None:
     catalog = client.get("/api/review/page-catalog")
     assert catalog.status_code == 200
     assert {item["business_type"] for item in catalog.json()["identities"]} == {
-        "scrap_replacement", "vehicle_source", "transfer", "consistency",
+        "scrap_replacement", "consistency", "vehicle_source", "transfer",
     }
 
 
@@ -292,35 +292,6 @@ def test_collect_manifest_is_not_available_for_undeclared_businesses(client) -> 
     assert response.status_code == 404
 
 
-def test_collect_manifest_is_available_for_vehicle_source(client) -> None:
-    response = client.get("/api/review/collect-manifest", params={"business_type": "vehicle_source"})
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["business_type"] == "vehicle_source"
-    assert body["scopes"] == ["vehicle"]
-    assert {item["key"] for item in body["fields"]} == {
-        "vehicle.type",
-        "vehicle.plate_no",
-        "vehicle.vin",
-        "vehicle.engine_no",
-        "vehicle.license_vehicle_type",
-        "vehicle.brand_model",
-        "vehicle.usage_nature",
-        "vehicle.registration_date",
-        "vehicle.issue_date",
-        "vehicle.owner",
-        "vehicle.model",
-        "vehicle.fuel_type",
-        "vehicle.engine_model",
-    }
-    materials = {item["document_type"]: item for item in body["materials"]}
-    assert set(materials) == {
-        "vehicle_license",
-        "registration_certificate",
-        "vehicle_nameplate",
-    }
-    assert "行驶证" in materials["vehicle_license"]["hints"]
 
 
 def test_configure_log_file_is_noop_without_env(client, monkeypatch) -> None:

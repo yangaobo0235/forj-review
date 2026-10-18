@@ -1,4 +1,5 @@
 import type { BrowserBridgeRequest, ConfigurationSnapshot } from "@forj/configuration-contracts";
+import { createRandomId } from "../../shared/random-id.ts";
 
 const backend = "http://127.0.0.1:8011";
 const workbench = "http://127.0.0.1:5174";
@@ -19,7 +20,7 @@ export async function captureAndOpenWorkbench() {
   try {
     response = await fetch(backend + "/api/configuration-agent/captures", {
       method: "POST", headers: {"content-type": "application/json"},
-      body: JSON.stringify({client_request_id: crypto.randomUUID(), extension_id: chrome.runtime.id, snapshot}),
+      body: JSON.stringify({client_request_id: createRandomId(), extension_id: chrome.runtime.id, snapshot}),
       signal: AbortSignal.timeout(15000),
     });
   } catch {throw new Error("无法连接配置服务，请先启动本机 8011 配置后端");}

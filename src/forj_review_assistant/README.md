@@ -25,6 +25,8 @@
 
 普通页面配置入口为 `businesses/configuration/`：Schema 校验、编译与目录快照加载。通过 `REVIEW_PAGES_DIR` 启用 JSON 声明，继承现有 Profile 后可以只写字段差异。业务处理器在 `businesses/rules/catalog.py` 登记，主图不直接导入各业务处理器。前端只接收采集元数据和后端审核结果。
 
+按功能的代码入口、扩展方式和必须保持的行为见[功能职责与重构验收](../../docs/参考/功能职责与重构验收.md)。配置编译按字段、材料、能力与引用校验分阶段进行；工作流状态和能力执行独立于图装配；任务构造、字段投影与跨类别路由各自负责一层。上传完整性位于 `businesses/material_presence.py`，不依赖字段识别成功。
+
 ## 异步审核接口
 
 扩展一次调用 POST /api/review/jobs/urls，按 GET /api/review/jobs/{job_id} 轮询。普通材料字段仍由模型直接读取 URL；二维码官网核验在模型没有可靠 `qr_codes` 时，对受控候选图片 URL 读取一次原图到内存，ZXing 优先、OpenCV 兜底，然后执行官网域名、HTTPS、访问及字段核验。二维码读取不会写盘、上传或重复调用模型；每次尝试都会记录来源和失败阶段，无法可靠识别或官网不可用时明确转人工复核。

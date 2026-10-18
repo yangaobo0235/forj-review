@@ -7,8 +7,7 @@
 import asyncio
 import inspect
 import logging
-import re
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from forj_review_assistant.businesses.context import ContextMapping, current_pack
@@ -21,35 +20,28 @@ from forj_review_assistant.businesses.packs import BUSINESS_PACKS
 from forj_review_assistant.businesses.packs.model import slot_document_types
 from forj_review_assistant.businesses.routing import (
     normalize_document_type,
-    route_fields,
 )
 from forj_review_assistant.contracts.recognition import (
     AgentBatchResult,
+    DocumentClassification,
     MaterialCompletenessReport,
     QwenExtraction,
-    RecognizedDocument,
     RetryAttempt,
 )
-from forj_review_assistant.contracts.review import FieldObservation
 from forj_review_assistant.integrations.recognition.client import QwenClient
 from forj_review_assistant.integrations.recognition.errors import (
     classify_qwen_error,
     describe_qwen_error,
 )
+from forj_review_assistant.integrations.recognition.projection import build_extracted_evidence
 from forj_review_assistant.integrations.recognition.retry import (
     RETRYABLE_UNCERTAIN_PREFIX,
     retry_reason_for_error,
     retry_reason_for_extraction,
 )
 
-# 并发与超时语义分两条路径，容易混淆：
-# - 逐图流式路径（POST /api/review/jobs/{id}/images）每次只提交一张图，
-#   因此 MAX_CONCURRENT_IMAGES 永远不会被争用，REVIEW_DEADLINE_SECONDS
-#   也会退化为单图截止。真正生效的整单并发上限在 services.jobs 的
-#   Fair Scheduler（REVIEW_MODEL_GLOBAL_CONCURRENCY /
-#   REVIEW_MODEL_JOB_CONCURRENCY），不在本模块。
-# - 整批路径（extract_async）一次传入全部图片，这里的并发上限和整单
-#   截止才按本意生效。
+# 整批提取在此限制并发与截止时间；异步作业逐图调用本服务，
+# 跨任务的并发和公平性由 runtime/scheduling 中的调度器控制。
 MAX_CONCURRENT_IMAGES = 6
 IMAGE_TIMEOUT_SECONDS = 50.0
 REVIEW_DEADLINE_SECONDS = 55.0
@@ -73,50 +65,11 @@ GENERIC_SCOPE_HINTS = {"", "unknown"} | {
 SLOT_DOCUMENT_TYPES = ContextMapping(SLOT_DOCUMENT_TYPES, slot_document_types)
 
 
-def _derived_from(
-    policy: Any, field_name: str, extracted_fields: Mapping[str, Any]
-) -> str | None:
-    """该字段的值是不是从票面另一个号码派生的；是则返回那个号码的字段键。
-
-    数电发票票面只有一个号码，页面上的「发票代码」由兼容层补齐。派生关系写在
-    材料声明里（`MaterialDeclaration.derived_field`），这里只负责查。
-    """
-    derived = getattr(policy, "derived_field", None)
-    if derived is None:
-        return None
-    number_field, derived_field = derived
-    if field_name == derived_field and number_field in extracted_fields:
-        return number_field
-    return None
-
-
-def _covered_pages(value: Any) -> list[int]:
-    """Normalize page numbers returned as arrays or common OCR text variants."""
-
-    values = value if isinstance(value, list) else [value]
-    pages: set[int] = set()
-    for item in values:
-        if isinstance(item, bool):
-            continue
-        if isinstance(item, (int, float)):
-            number = int(item)
-            if number > 0:
-                pages.add(number)
-            continue
-        for raw in re.findall(r"(?:第\s*)?(\d{1,2})(?:\s*页)?", str(item)):
-            number = int(raw)
-            if number > 0:
-                pages.add(number)
-    return sorted(pages)
-
-
 def declared_material_types(business_type: Any) -> frozenset[str] | None:
     """该业务扩展包声明的材料类型集合；没有扩展包时返回 None 表示不限制。
 
-    `_expected_document_type` 以前查的是跨业务合并的全局政策表，于是报废置换的
-    「机动车销售发票」会被过户页面上「二手车发票」的小标题命中：类型串了业务，
-    字段白名单跟着错，最后必然"材料类型不符"重试一次再失败。候选必须限制在
-    本业务自己声明的材料里。
+    候选必须限制在本业务自己声明的材料里，避免通用材料关键词
+    命中其他业务的类型，导致读取白名单错误。
 
     返回 None 而不是空集合：尚未声明扩展包的业务没有这份名单，空集合会把它们
     全部推进两阶段分类，那是行为回退而不是收紧。
@@ -190,6 +143,23 @@ class AgentService:
         async def run_one(image: Any) -> None:
             """处理单张图片，并在每个终态向调用方发送进度快照。"""
             image_name = image.image_id or image.index
+            classification: DocumentClassification | None = None
+
+            def remember_classification(fact: DocumentClassification) -> None:
+                nonlocal classification
+                classification = fact
+                result.document_classifications[:] = [
+                    item for item in result.document_classifications if item.target_id != fact.target_id
+                ]
+                result.document_classifications.append(fact)
+
+            expected_type = _expected_document_type(image, allowed_document_types)
+            if expected_type:
+                remember_classification(DocumentClassification(
+                    target_id=str(image_name), document_type=expected_type,
+                    business_scope=image.business_scope,
+                    identity_sides=image.identity_sides_hint if expected_type == "identity_card" else [],
+                ))
             if image.business_scope == "other":
                 result.limitations.append(
                     f"图片 {image_name} 不属于车辆审核资料，已跳过"
@@ -217,6 +187,8 @@ class AgentService:
                             self._extract_image(
                                 image,
                                 allowed_document_types=allowed_document_types,
+                                known_classification=classification,
+                                on_classified=remember_classification,
                             ),
                             timeout=min(self.image_timeout, max(0.001, deadline - loop.time())),
                         )
@@ -249,6 +221,8 @@ class AgentService:
                                         retry_reason=reason,
                                         focus_boxes=self._focus_boxes(extraction, reason),
                                         allowed_document_types=allowed_document_types,
+                                        known_classification=classification,
+                                        on_classified=remember_classification,
                                     ),
                                     timeout=min(self.image_timeout, remaining),
                                 )
@@ -310,63 +284,12 @@ class AgentService:
                 await self._notify(on_progress, result)
                 return
 
-            result.recognized_documents.append(RecognizedDocument(
-                target_id=str(image_name), image_index=image.index,
-                document_type=policy.document_type, business_scope=image.business_scope,
-                covered_pages=_covered_pages(extraction.fields.get("registration.covered_pages")),
-                uncertain_fields=list(extraction.uncertain_fields),
-                uncertain_values={field: extraction.fields.get(field) for field in extraction.uncertain_fields},
-                qr_codes=list(dict.fromkeys(code.strip() for code in extraction.qr_codes if code.strip())),
-            ))
-
-            routed_fields, routing_limitation = route_fields(
-                image.business_scope,
-                policy.document_type,
-                extraction.fields,
-                group_order=image.group_order,
-            )
-            routed_regions: dict[str, list[float]] = {}
-            source_regions = {region.field: list(region.box) for region in extraction.evidence_regions}
-            for region in extraction.evidence_regions:
-                region_fields, _ = route_fields(
-                    image.business_scope,
-                    policy.document_type,
-                    {region.field: "__evidence_region__"},
-                    group_order=image.group_order,
-                )
-                for routed_field in region_fields:
-                    routed_regions.setdefault(routed_field, list(region.box))
+            document, observations, routing_limitation = build_extracted_evidence(image, extraction, policy)
+            result.recognized_documents.append(document)
+            result.observations.extend(observations)
             if routing_limitation:
                 result.limitations.append(f"图片 {image_name}：{routing_limitation}")
-            accepted = 0
-            accepted_fields: list[str] = []
-            entries = [(k, v, None) for k, v in routed_fields.items()]
-            for field_name, value, source_field in entries:
-                if value:
-                    result.observations.append(
-                        FieldObservation(
-                            field=field_name,
-                            source_field=source_field,
-                            uncertain=bool(source_field and source_field in extraction.uncertain_fields),
-                            source_type="image",
-                            source_id=str(image_name),
-                            document_type=policy.document_type,
-                            image_index=image.index,
-                            image_id=str(image_name),
-                            business_scope=image.business_scope,
-                            group_title=image.group_title,
-                            group_order=image.group_order,
-                            value=value,
-                            # 派生字段标出它来自哪个号码：工作台据此说明
-                            # 「发票代码由票面数电号码适配」，不让审核员以为
-                            # 票面上真印了一个发票代码。关系由材料声明给出。
-                            derived_from=_derived_from(policy, field_name, extraction.fields),
-                            evidence_region=source_regions.get(source_field) if source_field else routed_regions.get(field_name),
-                            confidence=extraction.confidence,
-                        )
-                    )
-                    accepted += 1
-                    accepted_fields.append(field_name)
+            accepted_fields = [item.field for item in observations]
             if extraction.confidence is not None:
                 result.confidences.append(extraction.confidence)
             result.completed_count += 1
@@ -379,11 +302,10 @@ class AgentService:
                 image_name,
                 policy.document_type,
                 # 前端从页面文案判出来的类型，和后端最终采用的政策并排打出来。
-                # 两者不一致就是材料类型串了业务——报废置换的「机动车销售发票」
-                # 和过户的「二手车销售统一发票」撞在一起时，只有这一行能看出来。
+                # 两者不一致可用于排查材料类型跨业务误配。
                 image.category_hint or "-",
                 image.document_type_hint or "-",
-                accepted,
+                len(observations),
                 # 只记录字段键，便于排查材料路由缺失，避免记录证件原值。
                 ",".join(sorted(accepted_fields)) or "-",
                 len(extraction.uncertain_fields),
@@ -422,6 +344,8 @@ class AgentService:
         retry_reason: str | None = None,
         focus_boxes: Sequence[Sequence[float]] | None = None,
         allowed_document_types: frozenset[str] | None = None,
+        known_classification: DocumentClassification | None = None,
+        on_classified: Callable[[DocumentClassification], None] | None = None,
     ) -> tuple[QwenExtraction, DocumentPolicy | None]:
         """已知槽位使用专属提示词；真正未知的图片先分类再专属提取。
 
@@ -430,31 +354,28 @@ class AgentService:
         payload = image.model_dump()
         if focus_boxes:
             retry_reason = (retry_reason or "") + "；重点重读原图归一化区域 " + str(list(focus_boxes))
-        expected_type = _expected_document_type(image, allowed_document_types)
+        expected_type = (
+            known_classification.document_type if known_classification
+            else _expected_document_type(image, allowed_document_types)
+        )
         policy = DOCUMENT_POLICIES.get(expected_type or "")
-        if policy is not None:
-            extract_fields = self.client.extract_fields
-            extraction = await extract_fields(
-                payload,
-                policy,
-                **self._retry_kwargs(extract_fields, retry_reason),
+        if policy is None:
+            classification = await self.client.classify_document(payload)
+            classified_type = normalize_document_type(classification.document_type)
+            if (
+                classified_type not in DOCUMENT_POLICIES
+                or allowed_document_types is not None and classified_type not in allowed_document_types
+                or classification.confidence < CLASSIFICATION_CONFIDENCE_THRESHOLD
+            ):
+                raise RuntimeError("资料类型无法可靠识别")
+            policy = DOCUMENT_POLICIES[classified_type]
+            known_classification = DocumentClassification(
+                target_id=str(image.image_id or image.index), document_type=classified_type,
+                business_scope=image.business_scope,
+                identity_sides=classification.identity_sides if classified_type == "identity_card" else [],
             )
-            return extraction.model_copy(
-                update={
-                    "document_type": normalize_document_type(
-                        extraction.document_type
-                    )
-                }
-            ), policy
-
-        classification = await self.client.classify_document(payload)
-        classified_type = normalize_document_type(classification.document_type)
-        if (
-            classified_type not in DOCUMENT_POLICIES
-            or classification.confidence < CLASSIFICATION_CONFIDENCE_THRESHOLD
-        ):
-            raise RuntimeError("资料类型无法可靠识别")
-        policy = DOCUMENT_POLICIES[classified_type]
+            if on_classified:
+                on_classified(known_classification)
         extract_fields = self.client.extract_fields
         extraction = await extract_fields(
             payload,
@@ -464,6 +385,16 @@ class AgentService:
         normalized = extraction.model_copy(
             update={"document_type": normalize_document_type(extraction.document_type)}
         )
+        side = extraction.fields.get("identity_card.side")
+        if (
+            known_classification and policy.document_type == "identity_card"
+            and normalize_document_type(extraction.document_type) == "identity_card"
+            and isinstance(side, str) and side in {"FRONT", "BACK"}
+            and "identity_card.side" not in extraction.uncertain_fields
+            and (extraction.confidence is None or extraction.confidence >= CLASSIFICATION_CONFIDENCE_THRESHOLD)
+            and not known_classification.identity_sides and on_classified
+        ):
+            on_classified(known_classification.model_copy(update={"identity_sides": [side]}))
         return normalized, policy
 
     @staticmethod

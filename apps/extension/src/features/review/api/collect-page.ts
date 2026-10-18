@@ -50,7 +50,7 @@ export async function collectPageData(
   // 先获取页面目录，再并发拉取目录中各 Profile 的采集清单。
   // 目录不可用时按内置业务列表降级。
   const pageCatalog = await fetchPageCatalog(agentBaseUrl);
-  const manifests = await loadCollectManifests(pageCatalog);
+  const manifests = pageCatalog ? await loadCollectManifests(pageCatalog) : [];
   const pageData = (await chrome.tabs.sendMessage(tab.id, {
     type: "COLLECT_PAGE_MANIFEST",
     businessSelection:
@@ -71,8 +71,15 @@ export async function collectPageData(
         (!item.profile_version ||
           item.profile_version === pageData.profileVersion),
   );
+  if (!pageCatalog) {
+    applyCollectManifest(null);
+    return {...pageData, sourceTabId: tab.id,
+      reviewServiceError: "审核服务未连接，请确认服务已启动后点击“重新读取页面”。页面识别规则仍然保留。"};
+  }
   if (pageData.pageId && !selectedManifest) {
-    throw new Error("当前页面的采集配置不可用，请检查服务连接后重新采集");
+    applyCollectManifest(null);
+    return {...pageData, sourceTabId: tab.id,
+      reviewServiceError: "当前页面已识别，但审核采集配置不可用或尚未配置，请检查服务配置后重新读取页面。"};
   }
   applyCollectManifest(selectedManifest);
   return { ...pageData, sourceTabId: tab.id };

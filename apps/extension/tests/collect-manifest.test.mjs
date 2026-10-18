@@ -232,9 +232,9 @@ test("面板的中文字段名和材料名来自清单而不是内置表", () =>
 });
 
 test("应用清单后槽位表来自清单而不是内置表", () => {
-  // 清单不可用时退回内置表：已知槽位仍能解析。
+  // 清单不可用时保留未知，不能再猜报废置换的图片顺序。
   applyCollectManifest(null);
-  assert.equal(ReviewBusinessScope.documentTypeFor("old_vehicle", 2, "unknown"), "registration_certificate");
+  assert.equal(ReviewBusinessScope.documentTypeFor("old_vehicle", 2, "unknown"), "unknown");
 
   assert.equal(applyCollectManifest(manifest), true);
   assert.equal(ReviewBusinessScope.documentTypeFor("old_vehicle", 2, "unknown"), "registration_certificate");

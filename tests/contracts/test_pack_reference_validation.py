@@ -173,6 +173,36 @@ def test_duplicate_field_key_is_rejected() -> None:
         validate_pack_references(pack)
 
 
+@pytest.mark.parametrize("options", [(), ((),)])
+def test_presence_never_accepts_an_empty_alternative(options):
+    from forj_review_assistant.businesses.material_policies import (
+        MaterialPolicy,
+        MaterialPresenceGroup,
+    )
+
+    pack = _pack(material_policy=MaterialPolicy(
+        mode="enforce", presence_groups=(MaterialPresenceGroup("subject", "主体", options),),
+    ))
+    with pytest.raises(ValueError, match="空方案"):
+        validate_pack_references(pack)
+
+
+def test_presence_rejects_an_undeclared_document_type():
+    from forj_review_assistant.businesses.material_policies import (
+        MaterialPolicy,
+        MaterialPresenceGroup,
+        MaterialRequirement,
+    )
+
+    pack = _pack(material_policy=MaterialPolicy(
+        mode="enforce", presence_groups=(MaterialPresenceGroup("subject", "主体", (
+            (MaterialRequirement("synthetic_unknown", "vehicle"),),
+        )),),
+    ))
+    with pytest.raises(ValueError, match="未声明的材料"):
+        validate_pack_references(pack)
+
+
 def test_slot_scope_must_be_a_declared_scope() -> None:
     pack = _pack(
         materials=(

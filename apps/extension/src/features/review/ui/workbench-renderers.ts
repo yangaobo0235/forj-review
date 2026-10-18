@@ -2,6 +2,7 @@ import { h, type VNode } from "vue";
 import type { PageData, ReviewResponse } from "../../../shared/contracts/review";
 import type { PageFillResult } from "../../../platform/extension/page-fill-client";
 import EvidenceReviewWorkbench from "./EvidenceReviewWorkbench.vue";
+import type { ModelFillResult } from "../../../shared/contracts/vehicle-model";
 
 export interface WorkbenchRendererProps {
   review: ReviewResponse;
@@ -10,6 +11,7 @@ export interface WorkbenchRendererProps {
   onApplyPageFieldValue: (field: string, value: string, expectedValue?: string | null) => Promise<PageFillResult>;
   onApplyPageFieldGroupValue: (fields: string[], value: string, expectedValues?: Record<string, string | null | undefined>) => Promise<PageFillResult>;
   onRerun: () => Promise<void>;
+  onApplyVehicleModel?: (searchId: string, modelId: string) => Promise<ModelFillResult>;
 }
 
 const renderEvidenceWorkbench = (props: WorkbenchRendererProps): VNode => h(EvidenceReviewWorkbench, props);

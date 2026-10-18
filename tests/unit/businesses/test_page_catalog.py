@@ -1,6 +1,4 @@
-"""报废置换保留路径识别；其余三个业务声明各自的激活审核页签。"""
-
-from collections import defaultdict
+"""活动页面目录及独立配置的共享地址声明。"""
 
 from forj_review_assistant.businesses.page_catalog import (
     active_identities,
@@ -11,14 +9,24 @@ from forj_review_assistant.businesses.page_catalog import (
 from forj_review_assistant.contracts.review import BusinessType, Region
 
 
-def test_shared_path_lists_three_businesses() -> None:
-    """车源校验也在一致性入口内执行，三个业务均使用 default 规则。"""
+def test_bundled_extension_catalog_matches_backend_declarations():
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[3]
+    source = (root / "apps/extension/src/platform/browser/catalog/bundled-page-catalog.ts").read_text(encoding="utf-8")
+    bundled = json.loads(source.split(" = ", 1)[1].strip().removesuffix(";"))
+    assert bundled == page_catalog(), "运行 scripts/dev/export-page-catalog.py 更新识别目录"
+
+
+def test_consistency_paths_keep_all_three_review_steps() -> None:
+    """新车源与一致性使用激活页签区分。"""
     for path in ("/consistency-qingdao", "/consistency-changchun"):
         found = {(item.business_type, item.region) for item in identities_for_path(path)}
         assert found == {
             (BusinessType.CONSISTENCY, Region.DEFAULT),
-            (BusinessType.TRANSFER, Region.DEFAULT),
             (BusinessType.VEHICLE_SOURCE, Region.DEFAULT),
+            (BusinessType.TRANSFER, Region.DEFAULT),
         }, path
 
 
@@ -27,43 +35,28 @@ def test_unique_paths_look_the_same_as_before() -> None:
     cases = {
         "/scrap-replace-qingdao": (BusinessType.SCRAP_REPLACEMENT, Region.QINGDAO),
         "/scrap-replace-changchun": (BusinessType.SCRAP_REPLACEMENT, Region.CHANGCHUN),
-        "/vehicle-source": (BusinessType.VEHICLE_SOURCE, Region.DEFAULT),
     }
     for path, expected in cases.items():
         found = [(item.business_type, item.region) for item in identities_for_path(path)]
         assert found == [expected], path
 
 
-def test_shared_path_businesses_declare_distinct_review_tabs() -> None:
-    by_path: dict[str, list] = defaultdict(list)
-    for item in active_identities():
-        for path in item.paths:
-            by_path[path].append(item)
+def test_configured_pages_can_share_route_with_distinct_tabs() -> None:
+    from forj_review_assistant.businesses.configuration.compiler import compile_page
+    from forj_review_assistant.businesses.configuration.schema import PageDefinition
 
-    for path, items in by_path.items():
-        if len(items) < 2:
-            continue
-        assert all(item.review_tab for item in items), path
-        assert len({item.review_tab for item in items}) == len(items), path
-
-
-def test_anchors_of_businesses_sharing_a_path_do_not_overlap() -> None:
-    """共用一个地址的两个业务不能有相同的特征词。
-
-    有重叠就意味着某个词在两个页面上都出现，识别会变得依赖「命中了几个」，
-    改版挪走一个词就能把结论翻过来，而且不报错。
-    """
-    by_path: dict[str, list] = defaultdict(list)
-    for item in active_identities():
-        for path in item.paths:
-            by_path[path].append(item)
-
-    for path, items in by_path.items():
-        if len(items) < 2:
-            continue
-        for index, left in enumerate(items):
-            for right in items[index + 1:]:
-                assert not set(left.anchors) & set(right.anchors), path
+    profiles = tuple(compile_page(PageDefinition.model_validate({
+        "page_id": key, "business_type": key, "title": title, "paths": ["/sample-review"],
+        "review_tab": title, "scopes": [key],
+        "materials": [{"document_type": "permit", "label": "许可证"}],
+        "fields": [{"key": f"{key}.number", "label": "编号", "aliases": ["编号"],
+                    "evidence": [{"material": "permit", "field": "printed.number"}]}],
+    })) for key, title in (("initial", "初审"), ("final", "复审")))
+    candidates = identities_for_path("/sample-review", profiles)
+    assert {(item.business_type, item.review_tab) for item in candidates} == {
+        ("initial", "初审"), ("final", "复审"),
+    }
+    assert len(page_catalog(profiles)["identities"]) == 2
 
 
 def test_anchors_avoid_words_the_whole_backend_shares() -> None:
@@ -102,14 +95,12 @@ def test_catalog_shape_matches_what_the_browser_reads() -> None:
         if item["business_type"] == "scrap_replacement":
             assert "review_tab" not in item
         else:
-            assert item["review_tab"] in {"车源审核", "过户审核", "一致性审核"}
+            assert item["review_tab"] == {"consistency": "一致性审核", "vehicle_source": "车源审核", "transfer": "过户审核"}[item["business_type"]]
 
 
-def test_pack_declared_anchors_reach_the_catalog() -> None:
-    """扩展包里的页面特征会汇总进清单，不另维护一份。"""
-    vehicle_source = next(
-        item for item in active_identities()
-        if item.business_type is BusinessType.VEHICLE_SOURCE
-    )
-
-    assert "车源审核" in vehicle_source.anchors
+def test_scrap_pack_declared_anchors_reach_the_catalog() -> None:
+    from forj_review_assistant.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
+    declaration = SCRAP_REPLACEMENT_QINGDAO.pack_declaration.region(Region.QINGDAO)
+    identity = next(item for item in active_identities()
+                    if item.business_type == BusinessType.SCRAP_REPLACEMENT and item.region == Region.QINGDAO)
+    assert identity.anchors == declaration.page_anchors

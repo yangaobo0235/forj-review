@@ -1,3 +1,5 @@
+import pytest
+
 from scripts.ci.check_architecture import check_architecture
 
 
@@ -63,3 +65,18 @@ def test_graph_cannot_embed_builtin_registration_details(tmp_path):
         'handlers = {"scrap_certificate_qr": execute}\n', encoding="utf-8",
     )
     assert any("business registration" in item for item in check_architecture(tmp_path))
+
+
+@pytest.mark.parametrize(("path", "dependency", "reason"), [
+    ("runtime/workflow/capability_execution.py", "runtime.workflow.graph.ReviewWorkflow", "imports graph"),
+    ("runtime/workflow/state.py", "presentation.routing.build_review_tasks", "imports graph"),
+    ("presentation/task_factory.py", "businesses.profiles.BusinessProfile", "task factory"),
+    ("runtime/jobs/progress.py", "runtime.jobs.manager.ReviewJobManager", "progress view"),
+    ("runtime/workflow/capability_execution.py", "businesses.rules.affiliation.run_affiliation_subject", "concrete business rule"),
+])
+def test_refactored_modules_cannot_reintroduce_reverse_dependencies(tmp_path, path, dependency, reason):
+    target = tmp_path / path
+    target.parent.mkdir(parents=True)
+    module, symbol = dependency.rsplit(".", 1)
+    target.write_text(f"from forj_review_assistant.{module} import {symbol}\n", encoding="utf-8")
+    assert any(reason in item for item in check_architecture(tmp_path))

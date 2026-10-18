@@ -10,6 +10,7 @@ from fastapi import FastAPI
 
 from forj_review_assistant.interfaces.http.catalog import router as catalog_router
 from forj_review_assistant.interfaces.http.review import router as review_router
+from forj_review_assistant.interfaces.http.vehicle_models import router as vehicle_model_router
 from forj_review_assistant.observability.http import RequestLoggingMiddleware
 from forj_review_assistant.observability.logging import configured_logging
 from forj_review_assistant.runtime.jobs.manager import ReviewJobManager
@@ -41,4 +42,5 @@ def create_app(*, review_service: ReviewService | None = None) -> FastAPI:
     app.add_middleware(RequestLoggingMiddleware)
     app.include_router(catalog_router)
     app.include_router(review_router)
+    app.include_router(vehicle_model_router)
     return app

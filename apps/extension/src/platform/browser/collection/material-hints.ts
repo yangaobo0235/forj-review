@@ -4,9 +4,11 @@ import { ReviewBusinessScope } from "./business-scope.ts";
 
 /** 页面材料提示的解释器。正式采集和配置试运行必须使用同一套规则。 */
 export const classifyImage = (hint: string) => {
+  const group = ReviewBusinessScope.scopeForLabel(hint);
+  // 整个分区的标题不是单图材料名；尤其“新车及发票信息”不能把全组判成发票。
+  if (group && !["identity", "business_license"].includes(group.scope)) return group.scope;
   // 先问清单：材料关键词和它对应的类型是业务声明，后端是唯一来源。
-  // 内置表只兜清单不可用的情况——过户的「二手车发票」在内置表里根本没有，
-  // 只会命中宽泛的"发票"，判成别的业务的材料类型。
+  // 内置表只兜清单不可用的情况，避免宽泛关键词覆盖动态材料声明。
   const declared = manifestHintType(hint);
   if (declared) return declared;
   const text = hint.toLowerCase();
@@ -23,6 +25,14 @@ export const classifyImage = (hint: string) => {
   if (text.includes("新车资料") || text.includes("新车及发票信息") || text.includes("新车及发票资料")) return "new_vehicle";
   return "unknown";
 };
+
+/** 仅解释当前图片卡片的面别标签，不决定业务必传规则。 */
+export function identitySidesForLabel(label: string): Array<"FRONT" | "BACK"> {
+  const text = label.replace(/\s|[:：]/g, "");
+  if (/^身份证[（(]?(正面|人像面)[）)]?$/.test(text)) return ["FRONT"];
+  if (/^身份证[（(]?(反面|国徽面)[）)]?$/.test(text)) return ["BACK"];
+  return [];
+}
 
 export function imageDocumentType(candidate: {
   labelHint?: string; businessScope: string; groupOrder?: number; categoryHint?: string;

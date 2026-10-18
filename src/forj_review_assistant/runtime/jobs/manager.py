@@ -14,12 +14,14 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from forj_review_assistant.businesses.material_policies import MaterialPolicy
+from forj_review_assistant.businesses.material_presence import evaluate_presence
 from forj_review_assistant.businesses.packs import pack_for_business
-from forj_review_assistant.contracts.recognition import AgentBatchResult
+from forj_review_assistant.businesses.packs.model import BusinessExtensionPack
+from forj_review_assistant.contracts.recognition import AgentBatchResult, MaterialCompletenessReport
 from forj_review_assistant.contracts.review import (
     ImageInput,
     JobStatus,
-    ReviewGroupProgress,
     ReviewJobCreated,
     ReviewJobPhase,
     ReviewJobSnapshot,
@@ -28,6 +30,7 @@ from forj_review_assistant.contracts.review import (
     ReviewResponse,
 )
 from forj_review_assistant.observability.context import log_context
+from forj_review_assistant.runtime.jobs.progress import batch_progress, scope_progress
 from forj_review_assistant.runtime.scheduling.fair_scheduler import FairAsyncScheduler
 
 JOB_TTL_SECONDS = 600.0
@@ -49,6 +52,7 @@ class _StoredJob:
     timeline: dict[str, float] = field(default_factory=dict)
     terminal_logged: bool = False
     group_scopes: tuple[str, ...] = ()
+    material_policy: MaterialPolicy | None = None
 
 
 def _peak_rss_mb() -> int:
@@ -121,6 +125,7 @@ class ReviewJobManager:
         created_at = datetime.now().astimezone().isoformat()
         now = time.monotonic()
         valid_images = [image for image in request.images if not image.collection_error]
+        pack = self._pack_for_request(request)
         stored = _StoredJob(
             request=request,
             snapshot=ReviewJobSnapshot(
@@ -137,7 +142,11 @@ class ReviewJobManager:
             batch=AgentBatchResult(total_count=len(request.images)),
             pending_count=len(valid_images),
             timeline={"created_at": now},
-            group_scopes=self._group_scopes(request),
+            group_scopes=tuple(dict.fromkeys((
+                *(pack.scopes if pack else ()),
+                *(image.business_scope for image in request.images),
+            ))),
+            material_policy=pack.material_policy if pack else None,
         )
         for image in request.images:
             if image.collection_error:
@@ -338,38 +347,25 @@ class ReviewJobManager:
         )
 
     def _refresh_snapshot(self, stored: _StoredJob) -> None:
+        presence = evaluate_presence(stored.request, stored.material_policy, stored.batch)
+        if presence is not None:
+            stored.snapshot.material_completeness = MaterialCompletenessReport(
+                phase="COLLECTED", status="UNCERTAIN", presence=presence,
+            )
         stored.snapshot.failed_image_ids = list(dict.fromkeys(stored.batch.failed_image_ids))
         stored.snapshot.timed_out_image_ids = list(dict.fromkeys(stored.batch.timed_out_image_ids))
-        stored.snapshot.progress = ReviewProgress(
-            total_count=stored.batch.total_count,
-            submitted_count=len(stored.request.images),
-            completed_count=stored.batch.completed_count,
-            failed_count=stored.batch.failed_count,
-            timed_out_count=stored.batch.timed_out_count,
+        stored.snapshot.progress = batch_progress(stored.batch, len(stored.request.images))
+        stored.snapshot.groups = scope_progress(
+            stored.request, stored.batch, stored.group_scopes, final=False,
         )
-        stored.snapshot.groups = {
-            scope: self._group_progress(
-                stored.request,
-                {scope},
-                set(stored.batch.completed_image_ids),
-                set(stored.batch.failed_image_ids),
-                set(stored.batch.timed_out_image_ids),
-                final=False,
-            )
-            for scope in stored.group_scopes
-        }
 
-    def _group_scopes(self, request: ReviewRequest) -> tuple[str, ...]:
+    def _pack_for_request(self, request: ReviewRequest) -> BusinessExtensionPack | None:
         registry = getattr(self.review_service, "registry", None)
-        pack = (
+        return (
             registry.resolve(request.business_type, request.region, request.profile_version,
                              page_id=request.page_id).pack_declaration
             if registry is not None else pack_for_business(request.business_type)
         )
-        return tuple(dict.fromkeys((
-            *(pack.scopes if pack else ()),
-            *(image.business_scope for image in request.images),
-        )))
 
     @staticmethod
     def _image_id(image: ImageInput) -> str:
@@ -401,6 +397,7 @@ class ReviewJobManager:
         target.failed_image_ids.extend(incoming.failed_image_ids)
         target.timed_out_image_ids.extend(incoming.timed_out_image_ids)
         target.recognized_documents.extend(incoming.recognized_documents)
+        target.document_classifications.extend(incoming.document_classifications)
         target.retry_summary.attempts.extend(incoming.retry_summary.attempts)
 
     def _update_snapshot(
@@ -411,27 +408,8 @@ class ReviewJobManager:
         *,
         final: bool,
     ) -> None:
-        progress = ReviewProgress(
-            total_count=batch.total_count,
-            submitted_count=stored.snapshot.progress.submitted_count,
-            completed_count=batch.completed_count,
-            failed_count=batch.failed_count,
-            timed_out_count=batch.timed_out_count,
-        )
-        completed_ids = set(batch.completed_image_ids)
-        failed_ids = set(batch.failed_image_ids)
-        timed_out_ids = set(batch.timed_out_image_ids)
-        groups = {
-            scope: self._group_progress(
-                stored.request,
-                {scope},
-                completed_ids,
-                failed_ids,
-                timed_out_ids,
-                final=final,
-            )
-            for scope in stored.group_scopes
-        }
+        progress = batch_progress(batch, stored.snapshot.progress.submitted_count)
+        groups = scope_progress(stored.request, batch, stored.group_scopes, final=final)
         processed_count = (
             progress.completed_count + progress.failed_count + progress.timed_out_count
         )
@@ -460,39 +438,6 @@ class ReviewJobManager:
                 ReviewJobPhase.COMPLETED if final else ReviewJobPhase.RECOGNIZING
             )
             stored.updated_at = time.monotonic()
-
-    @staticmethod
-    def _group_progress(
-        request: ReviewRequest,
-        scopes: set[str],
-        completed_ids: set[str],
-        failed_ids: set[str],
-        timed_out_ids: set[str],
-        *,
-        final: bool,
-    ) -> ReviewGroupProgress:
-        ids = {
-            str(image.image_id or image.index)
-            for image in request.images
-            if image.business_scope in scopes
-        }
-        completed = len(ids & completed_ids)
-        failed = len(ids & failed_ids)
-        timed_out = len(ids & timed_out_ids)
-        processed = completed + failed + timed_out
-        if not ids or processed == len(ids):
-            status = JobStatus.PARTIAL if failed or timed_out else JobStatus.COMPLETED
-        elif final or processed:
-            status = JobStatus.PARTIAL
-        else:
-            status = JobStatus.RUNNING
-        return ReviewGroupProgress(
-            status=status,
-            total_count=len(ids),
-            completed_count=completed,
-            failed_count=failed,
-            timed_out_count=timed_out,
-        )
 
     def _cleanup(self) -> None:
         cutoff = time.monotonic() - self.ttl_seconds

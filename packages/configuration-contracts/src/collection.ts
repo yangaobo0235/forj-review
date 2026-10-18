@@ -26,6 +26,7 @@ export interface ManifestMaterial {
 }
 
 export interface CollectManifest {
+  ignored_image_labels?: string[];
   page_id?: string;
   business_type: string;
   region?: string;

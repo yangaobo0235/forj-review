@@ -76,7 +76,7 @@ export async function trialConfigurationPage(task: ConfigurationPending) {
   try {
     if (!task.manifest || !applyCollectManifest(task.manifest)) throw new Error("候选采集清单无效");
     const reviewTab = readActiveReviewTab(document, reviewTabLabels(task.page_catalog ?? null, location.href));
-    const collected = ReviewPageFieldCollector.collect(reviewTab.panel ?? document, null);
+    const collected = ReviewPageFieldCollector.collect(reviewTab.panel ?? document);
     const fields = Object.fromEntries(task.manifest.fields.map(field => [field.key,
       collected.ambiguousFields.includes(field.key) ? 2 : Object.hasOwn(collected.pageFields, field.key) ? 1 : 0]));
     const controlKinds = Object.fromEntries(collected.fieldTargets.map(target => [target.field, formControlKind(target.element)]));

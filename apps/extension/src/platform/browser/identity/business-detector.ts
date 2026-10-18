@@ -1,5 +1,4 @@
-import { buildPageAdapterRegistry } from "../adapters/index.ts";
-import { appliedPageCatalog, explainPageIdentity, matchPageIdentity, reviewTabLabels } from "../catalog/page-catalog.ts";
+import { effectivePageCatalog, explainPageIdentity, matchPageIdentity, reviewTabLabels } from "../catalog/page-catalog.ts";
 import type { ReviewTabState } from "../catalog/page-catalog.ts";
 import type { BusinessSelection } from "../../../shared/contracts/review";
 
@@ -9,18 +8,13 @@ import type { BusinessSelection } from "../../../shared/contracts/review";
  * 本模块只负责取用清单、判定冲突，不自行维护地址表。
  */
 
-const registry = buildPageAdapterRegistry();
-
 /**
- * 按页面识别清单判定业务；清单不可用时退回页面适配器内置表。
+ * 按页面识别清单判定业务；清单不可用时使用后端声明生成的随包目录。
  *
- * 清单可用但给不出唯一答案时**不退回内置表**：内置表只有地址，对共享地址
- * 无法确认当前审核步骤，不能用它绕过页签校验。
+ * 在线目录与随包目录都执行相同的路径、页签及面板校验，不绕过步骤确认。
  */
 function detect(url: string, pageText = "", reviewTab?: ReviewTabState | null): BusinessSelection | null {
-  const catalog = appliedPageCatalog();
-  if (catalog) return matchPageIdentity(catalog, url, pageText, reviewTab);
-  return registry.selection(url, pageText);
+  return matchPageIdentity(effectivePageCatalog(), url, pageText, reviewTab);
 }
 
 /**
@@ -29,13 +23,13 @@ function detect(url: string, pageText = "", reviewTab?: ReviewTabState | null): 
  * 页签模式说明当前步骤或面板问题；普通配置保留缺失特征词诊断。
  */
 function detectionHint(url: string, pageText: string, reviewTab?: ReviewTabState | null): string {
-  const labels = reviewTabLabels(appliedPageCatalog(), url);
+  const labels = reviewTabLabels(effectivePageCatalog(), url);
   if (labels.length) {
     if (!reviewTab?.label) return "未找到唯一激活的审核页签，请打开审核表单后重新采集";
     if (!labels.includes(reviewTab.label)) return `当前处于「${reviewTab.label}」，请切换到审核页签后重新采集`;
     return "审核页签对应的内容面板尚未显示或关联无效，请等待加载完成后重新采集";
   }
-  const diagnostics = explainPageIdentity(appliedPageCatalog(), url, pageText);
+  const diagnostics = explainPageIdentity(effectivePageCatalog(), url, pageText);
   if (!diagnostics.shared) return "无法识别当前审核业务，请人工选择";
   const missing = Object.entries(diagnostics.missingAnchors)
     .map(([name, words]) => `${name} 缺「${words.join("」「")}」`)
@@ -58,7 +52,7 @@ function resolve(
   const automatic = detect(url, pageText, reviewTab);
 
   // 列表、详情或切换中的面板不能通过人工选择变成可审核步骤。
-  if (!automatic && reviewTabLabels(appliedPageCatalog(), url).length) {
+  if (!automatic && reviewTabLabels(effectivePageCatalog(), url).length) {
     return { business: null, error: detectionHint(url, pageText, reviewTab) };
   }
 
@@ -78,7 +72,7 @@ function resolve(
     return { business: null, error: "人工选择的审核业务与当前页面不一致，请重新确认" };
   }
 
-  const identity = appliedPageCatalog()?.identities.find(i =>
+  const identity = effectivePageCatalog().identities.find(i =>
     i.business_type === manualSelection.businessType && i.region === manualSelection.region
     && (!manualSelection.pageId || i.page_id === manualSelection.pageId));
   return {

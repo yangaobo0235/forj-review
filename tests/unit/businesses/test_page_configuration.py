@@ -23,7 +23,6 @@ from forj_review_assistant.businesses.packs import build_collect_manifest
 from forj_review_assistant.businesses.profiles import (
     BUSINESS_PROFILES,
     SCRAP_REPLACEMENT_QINGDAO,
-    VEHICLE_SOURCE_DEFAULT,
 )
 from forj_review_assistant.businesses.registry import BusinessProfileNotFound, BusinessRegistry
 from forj_review_assistant.businesses.routing import route_fields
@@ -71,23 +70,43 @@ def _compile(data):
     return compile_page(PageDefinition.model_validate(data))
 
 
-def _patch(**changes):
+def _template():
+    """Synthetic compiler fixture, independent of shipped business declarations."""
+    return _compile({
+        "page_id": "sample:default", "business_type": "sample", "title": "示例审核",
+        "paths": ["/sample"], "review_tab": "示例审核", "scopes": ["sample"],
+        "identity_anchors": ["permit.plate_no"], "enable_rules": ["owner_consistency"],
+        "materials": [{"document_type": "permit", "label": "许可证", "required": True,
+                       "hints": ["许可证"]}],
+        "fields": [
+            {"key": "permit.issue_date", "label": "发证日期", "aliases": ["发证日期"],
+             "normalizer": "date", "max_age_days": 90,
+             "evidence": [{"material": "permit", "field": "printed.date"}]},
+            *[{"key": key, "label": key, "aliases": [key],
+               "evidence": [{"material": "permit", "field": key}]}
+              for key in ("permit.vin", "permit.usage_nature", "permit.plate_no",
+                          "old_vehicle.owner", "new_vehicle.owner")],
+            {"key": "permit.assessment", "label": "主体检查", "aliases": ["主体检查"],
+             "checks": ["OWNER-CONSISTENCY-001"],
+             "evidence": [{"material": "permit", "field": "printed.assessment"}]},
+        ],
+    })
+
+
+def _patch(*, template=None, **changes):
     data = {
-        "page_id": "vehicle_source:default",
-        "business_type": "vehicle_source",
-        "title": "车源审核",
-        "paths": ["/vehicle-source"],
-        "version": "2.0",
-        "extends": {"page_id": "vehicle_source:default", "version": "1.0"},
+        "page_id": "sample:default", "business_type": "sample", "title": "示例审核",
+        "paths": ["/sample"], "version": "2.0",
+        "extends": {"page_id": "sample:default", "version": "1.0"},
     }
     data.update(changes)
-    return compile_page(PageDefinition.model_validate(data), VEHICLE_SOURCE_DEFAULT)
+    return compile_page(PageDefinition.model_validate(data), template or _template())
 
 
 def test_review_tab_metadata_is_inherited_overridden_or_explicitly_removed(declaration):
     from forj_review_assistant.businesses.page_catalog import page_catalog
 
-    assert _patch().pack_declaration.region("default").review_tab == "车源审核"
+    assert _patch().pack_declaration.region("default").review_tab == "示例审核"
     assert _patch(review_tab="车辆校验").pack_declaration.region("default").review_tab == "车辆校验"
     assert _patch(review_tab=None).pack_declaration.region("default").review_tab == ""
     profile = _compile({**declaration, "review_tab": "许可证审核"})
@@ -116,14 +135,15 @@ def test_one_field_generates_collection_extraction_and_mapping(declaration):
 
 
 def test_template_changes_are_partial_and_do_not_mutate_original():
-    original = VEHICLE_SOURCE_DEFAULT.pack_declaration
-    profile = _patch(fields=[{"key": "vehicle.issue_date", "max_age_days": 180}])
+    template = _template()
+    original = template.pack_declaration
+    profile = _patch(template=template, fields=[{"key": "permit.issue_date", "max_age_days": 180}])
     field = next(
-        item for item in profile.pack_declaration.fields if item.key == "vehicle.issue_date"
+        item for item in profile.pack_declaration.fields if item.key == "permit.issue_date"
     )
     assert field.max_age_days == 180
     assert field.aliases == ("发证日期",)
-    assert field.sources == ("vehicle_license",)
+    assert field.sources == ("permit",)
     assert next(item for item in original.fields if item.key == field.key).max_age_days == 90
     assert profile.version == "2.0"
 
@@ -144,30 +164,30 @@ def test_page_configuration_can_authorize_supported_select_and_date_controls():
 
 
 def test_deleting_field_prunes_only_its_routes():
-    profile = _patch(remove_fields=["vehicle.usage_nature"])
-    assert "vehicle.usage_nature" not in {field.key for field in profile.pack_declaration.fields}
+    profile = _patch(remove_fields=["permit.usage_nature"])
+    assert "permit.usage_nature" not in {field.key for field in profile.pack_declaration.fields}
     assert all(
-        "vehicle.usage_nature" not in route.targets for route in profile.pack_declaration.routes
+        "permit.usage_nature" not in route.targets for route in profile.pack_declaration.routes
     )
-    assert any("vehicle.vin" in route.targets for route in profile.pack_declaration.routes)
+    assert any("permit.vin" in route.targets for route in profile.pack_declaration.routes)
 
 
 def test_deleting_rule_input_requires_explicit_rule_change():
-    with pytest.raises(ValueError, match="vehicle_model_consistency.*vehicle.model_code"):
-        _patch(remove_fields=["vehicle.model_code"])
+    with pytest.raises(ValueError, match="owner_consistency.*new_vehicle.owner"):
+        _patch(remove_fields=["new_vehicle.owner"])
     profile = _patch(
-        remove_fields=["vehicle.model_code"], disable_rules=["vehicle_model_consistency"],
-        fields=[{"key": "vehicle.model", "checks": []}],
+        remove_fields=["new_vehicle.owner"], disable_rules=["owner_consistency"],
+        fields=[{"key": "permit.assessment", "checks": []}],
     )
-    assert "vehicle_model_consistency" not in {item.capability_id for item in profile.capabilities}
+    assert "owner_consistency" not in {item.capability_id for item in profile.capabilities}
 
 
 def test_disabling_rule_requires_resolving_all_inherited_check_bindings():
-    with pytest.raises(ValueError, match="vehicle.model.*生产者"):
-        _patch(disable_rules=["vehicle_model_consistency"])
+    with pytest.raises(ValueError, match="permit.assessment.*生产者"):
+        _patch(disable_rules=["owner_consistency"])
     profile = _patch(
-        disable_rules=["vehicle_model_consistency"],
-        fields=[{"key": "vehicle.model", "checks": []}],
+        disable_rules=["owner_consistency"],
+        fields=[{"key": "permit.assessment", "checks": []}],
     )
     assert not profile.field_check_bindings
 
@@ -195,20 +215,20 @@ def test_disabling_rule_removes_only_its_presentation_group():
 
 def test_required_rule_only_field_cannot_survive_without_a_producer():
     template = _patch(fields=[{
-        "key": "vehicle.assessment", "label": "车型评估", "aliases": ["车型评估"],
-        "checks": ["VEHICLE-MODEL-POWER"],
+        "key": "permit.extra_assessment", "label": "额外主体检查", "aliases": ["额外主体检查"],
+        "checks": ["OWNER-CONSISTENCY-001"],
     }])
     data = {
-        "page_id": template.page_id, "business_type": "vehicle_source", "title": "车源",
-        "paths": ["/vehicle-source"], "version": "3.0",
+        "page_id": template.page_id, "business_type": "sample", "title": "示例",
+        "paths": ["/sample"], "version": "3.0",
         "extends": {"page_id": template.page_id, "version": "2.0"},
-        "disable_rules": ["vehicle_model_consistency"],
-        "fields": [{"key": "vehicle.model", "checks": []}],
+        "disable_rules": ["owner_consistency"],
+        "fields": [{"key": "permit.assessment", "checks": []}],
     }
-    with pytest.raises(ValueError, match="vehicle.assessment.*生产者"):
+    with pytest.raises(ValueError, match="permit.extra_assessment.*生产者"):
         compile_page(PageDefinition.model_validate(data), template)
-    data["fields"].append({"key": "vehicle.assessment", "checks": []})
-    with pytest.raises(ValueError, match="必审字段 vehicle.assessment"):
+    data["fields"].append({"key": "permit.extra_assessment", "checks": []})
+    with pytest.raises(ValueError, match="必审字段 permit.extra_assessment"):
         compile_page(PageDefinition.model_validate(data), template)
 
 
@@ -279,6 +299,37 @@ def _derive(template, **changes):
     }), template)
 
 
+@pytest.mark.parametrize("required", [True, False])
+def test_field_only_configuration_preserves_upload_policy(declaration, required):
+    from forj_review_assistant.businesses.material_policies import (
+        MaterialPolicy,
+        MaterialPresenceGroup,
+        MaterialRequirement,
+    )
+    from forj_review_assistant.businesses.material_presence import evaluate_presence
+    from forj_review_assistant.businesses.profiles import build_profile
+
+    declaration["materials"][0]["required"] = required
+    template = _compile(declaration)
+    upload_group = MaterialPresenceGroup("permit", "许可证图片", ((
+        MaterialRequirement("permit", "vehicle", minimum_count=2),
+    ),))
+    policy = replace(template.material_policy or MaterialPolicy(mode="observe"),
+                     mode="observe", presence_groups=(upload_group,))
+    template = build_profile(replace(template.pack_declaration, material_policy=policy),
+                             template.region, page_id=template.page_id)
+
+    derived = _derive(template, fields=[{"key": "permit.vin", "aliases": ["VIN"]}])
+    assert derived.material_policy.presence_groups == (upload_group,)
+    assert derived.material_policy.mode == "observe"
+    assert template.material_policy == policy
+    request = ReviewRequest(page_url="https://example.test/permit-review", images=[
+        ImageInput(index=0, src="https://example.test/permit.jpg", business_scope="vehicle",
+                   document_type_hint="permit"),
+    ])
+    assert evaluate_presence(request, derived.material_policy).status == "INCOMPLETE"
+
+
 def test_chained_changes_rebuild_extraction_and_preserve_explicit_inputs(declaration):
     declaration["materials"][0]["extra_fields"] = ["rule.internal"]
     declaration["fields"].append({
@@ -329,18 +380,18 @@ def test_material_removal_requires_updating_references_and_cleans_requirements(d
 
 
 def test_material_label_edit_preserves_requiredness():
-    profile = _patch(materials=[{"document_type": "vehicle_license", "label": "行驶证材料"}])
+    profile = _patch(materials=[{"document_type": "permit", "label": "新版许可证"}])
     assert (
         next(
             item
             for item in profile.material_policy.materials
-            if item.document_type == "vehicle_license"
+            if item.document_type == "permit"
         ).minimum_count
         == 1
     )
     assert (
-        profile.pack_declaration.material("vehicle_license").hints
-        == VEHICLE_SOURCE_DEFAULT.pack_declaration.material("vehicle_license").hints
+        profile.pack_declaration.material("permit").hints
+        == _template().pack_declaration.material("permit").hints
     )
 
 
@@ -405,11 +456,11 @@ def test_missing_material_and_unknown_rules_are_rejected(declaration):
 
 def test_field_typos_and_dangling_anchors_are_rejected(declaration):
     with pytest.raises(ValueError, match="不存在的字段"):
-        _patch(remove_fields=["vehicle.vinn"])
+        _patch(remove_fields=["permit.vinn"])
     with pytest.raises(ValueError, match="identity_anchors"):
         _compile({**declaration, "identity_anchors": ["permit.vinn"]})
     with pytest.raises(ValueError, match="identity_anchors"):
-        _patch(remove_fields=["vehicle.plate_no"])
+        _patch(remove_fields=["permit.plate_no"])
 
 
 def test_required_pages_automatically_request_page_number_extraction(declaration):
@@ -479,19 +530,20 @@ def test_registry_rejects_active_profiles_outside_its_snapshot(declaration):
 
 
 def test_loader_reports_file_and_does_not_change_templates(tmp_path):
+    template = _template()
     patch = {
-        "page_id": "vehicle_source:default",
-        "business_type": "vehicle_source",
-        "title": "车源",
-        "paths": ["/vehicle-source"],
+        "page_id": "sample:default",
+        "business_type": "sample",
+        "title": "示例",
+        "paths": ["/sample"],
         "version": "2.0",
-        "extends": {"page_id": "vehicle_source:default", "version": "1.0"},
+        "extends": {"page_id": "sample:default", "version": "1.0"},
         "remove_fields": ["vehicle.typo"],
     }
     (tmp_path / "bad.json").write_text(json.dumps(patch), encoding="utf-8")
     with pytest.raises(ValueError, match="bad.json.*不存在"):
-        load_page_profiles(tmp_path, (VEHICLE_SOURCE_DEFAULT,))
-    assert VEHICLE_SOURCE_DEFAULT.version == "1.0"
+        load_page_profiles(tmp_path, (template,))
+    assert template.version == "1.0"
 
 
 def test_http_catalog_and_collection_use_the_injected_registry(declaration):
@@ -517,7 +569,7 @@ def test_http_catalog_and_collection_use_the_injected_registry(declaration):
         )
         rules = client.get("/api/review/configuration/rules").json()["rules"]
         assert any(
-            item["id"] == "vehicle_model_consistency" and item["required_fields"] for item in rules
+            item["id"] == "owner_consistency" and item["required_fields"] for item in rules
         )
 
 

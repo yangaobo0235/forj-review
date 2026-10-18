@@ -1,7 +1,7 @@
 {
   "snapshot_version": "1.0",
-  "generated_at_utc": "2026-10-16T05:51:33.872257+00:00",
-  "git_head": "46c825b09344e6109ba061a43806f53b434f973e",
+  "generated_at_utc": "2026-10-17T14:30:24.925532+00:00",
+  "git_head": "9f47ead60027b227b8e5c864a9dbdc0413514011",
   "baseline": "当前工作区源码，包含未提交改动；不能只按 git_head 还原",
   "source_sha256": {
     "apps/configuration-web/package-lock.json": "710bcfddb5df19d321cbbf49de8dcc0518e6bc3bfdf2a7f12b6d12244de4e7c6",
@@ -23,22 +23,23 @@
     "apps/extension/package-lock.json": "c4a34c9e352842e4ac8d89177dd208b618f46e3706b3dc2a60d544a6754e14f4",
     "apps/extension/package.json": "b74a8e5ccac9eb55fd6a7869d52fc532cf1626f001f08ae6d0fea46fe98128fc",
     "apps/extension/public/manifest.json": "f149d7f69c745bf0e0eb92b444b9ceabc0c83c846a13180fb3bfb1336cc9848b",
-    "apps/extension/src/app/App.css": "c76495f9714a3f98de12d489d04acaed9a9e17ac0f2b535234e8b608433a1c46",
-    "apps/extension/src/app/App.vue": "9aa066ed63fd85ce7ce1a946c45f89cab251d952132c0698843ebf39e386b693",
+    "apps/extension/src/app/App.css": "1a69eb7556c47615adfb2d6f35f783cafaea029048e388840f3a43de493a046d",
+    "apps/extension/src/app/App.vue": "70586accf977ac48056233ea181b2a3de1c9027f1fd681d5e9b7a36c9dbdbb91",
     "apps/extension/src/app/theme.css": "498b5c672bf60c745089f0159284715a8aec8089c5c665db418909b98ccf01bf",
-    "apps/extension/src/entrypoints/background.ts": "6d05a63958b54dd74393c895962311cd784c8481cf6feb39395540c6d95d01d1",
-    "apps/extension/src/entrypoints/content.ts": "9e5ded2ff484e1951c6f738252f3f7c9d7e07fbec3d31826d50df97665b32c70",
+    "apps/extension/src/entrypoints/background.ts": "6fff066a754ac60618903647c1e76a65e91a966a34b51d0a6a3f34729d5093bc",
+    "apps/extension/src/entrypoints/content.ts": "953d41537a80b3204a7c5f44002764604754a5e47d01854abd33ba9502fe93d0",
     "apps/extension/src/features/configuration-capture/bridge.ts": "70a6c1b673cb1d587cf13f682647b0c0e10da176004153b9f4fa14a68e613329",
     "apps/extension/src/features/configuration-capture/CaptureLauncher.vue": "f3e79ea2f408effb9a7742e1ee5781d6312dee92d1a7b58b42328deca713d52a",
-    "apps/extension/src/features/review/api/collect-page.ts": "05ee3acf32b89c4d5a300b098e7c5488c6a2f2a31fdb8951eff581c914d96efc",
-    "apps/extension/src/features/review/api/review-client.ts": "f092071b0e71195505c9dc71e63314e4f73924645e83a1308eae1f9c23f75567",
+    "apps/extension/src/features/review/api/collect-page.ts": "42bdb27c6bfe1ddc6f6a8357a95fc554de09db95877160d537f82e9edd19edba",
+    "apps/extension/src/features/review/api/review-client.ts": "a45d6f37205ffd9938330a94f6eb311b7bd58c097055bf7377cd6e15e3ab4778",
     "apps/extension/src/features/review/api/review-jobs.ts": "1276872491067f8acce2117d3e42ce2f0b3d37bcf81858d168d8c15808380b44",
-    "apps/extension/src/features/review/model/review-panel.ts": "5d1788963cccd911b7417c5b4d8407b2bdfd63533f5c315c6f87104c05d7de92",
+    "apps/extension/src/features/review/model/review-panel.ts": "d5f75b4ceb481003dea0edf89404fe9b07716500a283ef566487d1ca08b30edc",
     "apps/extension/src/features/review/model/review-tasks.ts": "30871de42b1a4c034f1c293701354ff3b5eef97c311b8417c846a5f15bfe2885",
-    "apps/extension/src/features/review/model/use-review-workflow.ts": "c89a9b80dbfb6c8b044b89d324b3f8312a5c90e625411ccb49c4a9f8caa6b666",
+    "apps/extension/src/features/review/model/use-review-workflow.ts": "dae20240abef9f7c9499b7b4f6091cd0bcbb056dd4340cf6ca0627a750e3e88c",
+    "apps/extension/src/features/review/model/use-vehicle-model-review.ts": "93346ba6f1974f817dc26f0c407ff38ff0d84f8e227d9293405e5a63a5574929",
     "apps/extension/src/features/review/model/workbench.ts": "1ff0664fe1effdb8991611808cbcf27d415ee774f370d0d2928b6b7c55998762",
     "apps/extension/src/features/review/presentation/advice.ts": "ce0a618118985e60596c0443b85e71b39de394a3255f7238d016a6c181674bab",
-    "apps/extension/src/features/review/presentation/evidence.ts": "ae405d78fe2e70cbea91073986b89f9ddca81045f05e78eb68d8df5c9a955510",
+    "apps/extension/src/features/review/presentation/evidence.ts": "e8a146a50a668f61f22996f9eefda55e4e9f07e87125f6fe2697cda1f2380d28",
     "apps/extension/src/features/review/presentation/exception.ts": "2479897e134465c3981df97e9ca3eb606aab9edb5bcc9eca0aeceb147208aa4c",
     "apps/extension/src/features/review/presentation/qr.ts": "3df7e2c448e3840150b297bf704374156a1a7b8bd9dc1cd1bbcba7a7e80f0507",
     "apps/extension/src/features/review/presentation/value-diff.ts": "8a5b32cc2d83ce6c08025a01f8a490fe7c3ed968f7affaf00a3568b06090d7e3",
@@ -49,6 +50,7 @@
     "apps/extension/src/features/review/ui/EvidenceSource.vue": "745aa77c8dbc3ca46c68e7813d1f6b24b82b33b34b6c72674230c7bbcc8842eb",
     "apps/extension/src/features/review/ui/LegacyReviewResults.vue": "2539d027bd1b1ae45adc9a78230ec009cfc698c5880ae801d51b6c067b1bcaa7",
     "apps/extension/src/features/review/ui/ManualValueInput.vue": "043aebb5d46df1309f01b62287058d351eb4476de6cfdf5698da2a569755583f",
+    "apps/extension/src/features/review/ui/MaterialPresence.vue": "d5ab8b3d2cae70812931a6b855d00b558f11263e84daa4d2f569eea65952e2d8",
     "apps/extension/src/features/review/ui/MismatchText.vue": "eb0d8fb9c03c8034e03fa15e1df1ce25f4d9762db73d885d3fa5c92bc85c7d8e",
     "apps/extension/src/features/review/ui/QrResults.vue": "997779b5856a20b7c4d52aeedcad1ccf29da8f03e1abaacba12780b39eb87124",
     "apps/extension/src/features/review/ui/QrUrl.vue": "ecc97012052e1e72133121ba878816a2e943193cd6d7e6f75329d6bcd3e169b3",
@@ -56,60 +58,68 @@
     "apps/extension/src/features/review/ui/review-result-props.ts": "cc49f4dc62315c39d2872287cfb7af0b0d9f8afe2f6f8dc795d0e723f2907131",
     "apps/extension/src/features/review/ui/ReviewAdvice.vue": "ece9132446a05877ca85e36c80cb08552ee0cee497dd4fd3a3f31d51685f861d",
     "apps/extension/src/features/review/ui/ReviewProgress.vue": "f43b61323bd65f1bb16129de633eada62c9c30459147668a8e578d2a4f7459f1",
-    "apps/extension/src/features/review/ui/ReviewResults.vue": "c6043dc2a33e822270b3b8b1d311f942db9228b024c4feb005044090de6b1c14",
-    "apps/extension/src/features/review/ui/ReviewStepDetail.vue": "37ffc8a24ce0807ebe453ef4fbda7b6976cf6c14687daa5ec2d1b497393f6f86",
+    "apps/extension/src/features/review/ui/ReviewResults.vue": "47665e631b942bb81372255933fce16c8a5bd47a548dcbd24f7183f0f1b0092c",
+    "apps/extension/src/features/review/ui/ReviewStepDetail.vue": "dad571ec1940a9a3caa3757c76b7622eefb7cf56ed9cc7ae4a5538efa854a447",
     "apps/extension/src/features/review/ui/ReviewTaskList.vue": "15d3de0f2b8e940d2d5b21c6d61087d8af8be76d750a4ba38673843152c97f55",
-    "apps/extension/src/features/review/ui/ReviewWorkbench.vue": "fc231943e4d7b256cba95b0746a65256a7847b21961ec0ecf064adfb03806c3e",
+    "apps/extension/src/features/review/ui/ReviewWorkbench.vue": "bcbbf2a847ca38c76171f64a96e69483712c426fa475b800489b1a5899e16d94",
     "apps/extension/src/features/review/ui/StructuredEvidence.vue": "24b7fbfffb3a6633127f72504e7fb12f2fc529f54ad9f5f684d3abc20c7a247f",
     "apps/extension/src/features/review/ui/ValueDifference.vue": "9d17e0c75a4b07a86e1325a222a15a7812c0af02f5703b765e09a91b3a19bb63",
-    "apps/extension/src/features/review/ui/workbench-props.ts": "4bb583e6b9f72d61650f8ff16c2db2329f1b6c8cdded6e8aef7a8a5b2c3d2350",
-    "apps/extension/src/features/review/ui/workbench-renderers.ts": "07e487377a9af9ffdc69f55d4c94e19e01f2d26e18f1030b5e59adde87de6e59",
+    "apps/extension/src/features/review/ui/VehicleModelPicker.vue": "71102ff59e6d895fd8201ccaf48ee30b0b10a4314a2749cdd938ef427ca6aa7a",
+    "apps/extension/src/features/review/ui/workbench-props.ts": "00cca01d8fddd89364eddbec8ea2724fcd893ac6428ce800c13242c20ab15957",
+    "apps/extension/src/features/review/ui/workbench-renderers.ts": "cd06334d9e546af69d9da03bbef865183ea58bbfba73af63eac2be3cd7a19456",
     "apps/extension/src/main.ts": "fdc1c8db9a6afcb998edeb0a44a0b08def4492ca482db7c966c76d7cd1d01f78",
     "apps/extension/src/platform/browser/actions/date-picker.ts": "cdc5f0b3d7c87a48b506323c9dd1cef8dcf270aa7a9906238f22c6463787c796",
     "apps/extension/src/platform/browser/actions/image-focus.ts": "9ea4689987e77bb40f5989fc37c2e4ee53b519d1f9c7dfd544992f82ae94cba8",
-    "apps/extension/src/platform/browser/actions/page-field-writer.ts": "6ffd2eb5ea29817562a5016606adaee0d7f462646c2537fa19ebb7f316ba86c3",
-    "apps/extension/src/platform/browser/adapters/consistency-adapter.ts": "768ebaa61a700f1dfdcff674b64dd8aa8d789d53ec4c08b08fdaf151ec9eb4cd",
-    "apps/extension/src/platform/browser/adapters/index.ts": "2ad517a691b941bacf6f4bb1ed8ab9d1524b7d0a4cf63931a36a4c9ac06eb045",
+    "apps/extension/src/platform/browser/actions/page-field-writer.ts": "6577d652dad741c6d37c898035eae3655206d887c8efeb7b136b73acab124eef",
+    "apps/extension/src/platform/browser/adapters/consistency-adapter.ts": "d57180e093c9464800ea6015a6c625b6d9f790f076f537b49b36f236dbecd3ca",
+    "apps/extension/src/platform/browser/adapters/index.ts": "2cd47c8520dd6f435b7d2af93337e4dc33064ec4e7c6487bca48648f727a953a",
     "apps/extension/src/platform/browser/adapters/page-adapter.ts": "5c574a186ab64116e0ee4ad4fb84fb9e6c9c4e86c9aade02b2670beea12cfd54",
     "apps/extension/src/platform/browser/adapters/scrap-replacement-adapter.ts": "fbf9f3f33f1ce8abd6a35b05c7d0eaffa94c7b8e59b7fe62df70faf91a89c446",
     "apps/extension/src/platform/browser/adapters/selection.ts": "adf9951d59f5828f492649cf0fa6992a5c6a880ea61b38ebbe440504352ae6be",
-    "apps/extension/src/platform/browser/adapters/vehicle-source-adapter.ts": "5fe91ecc3368d881f932c377196761bebaadd5ed04b03b170d2225e9bec4df5c",
-    "apps/extension/src/platform/browser/catalog/collect-manifest.ts": "b4e560a2f3b8457496b74ecb09093ee94907059aee5960827ee08d1807bef9ff",
-    "apps/extension/src/platform/browser/catalog/page-catalog.ts": "223a160d32489abac19f8cceca92a3d9e2929e41c946f0ad385c1647951e31bb",
-    "apps/extension/src/platform/browser/collection/business-scope.ts": "b2f786716534fd6ce104c116e51259f89216fec7e4e479b77c6b330383ec7475",
-    "apps/extension/src/platform/browser/collection/collect-image-candidates.ts": "dbb10b4300bbd1b02baeddffc592370cdcdf0db0db00da38341e07834cb623ad",
-    "apps/extension/src/platform/browser/collection/configuration-discovery.ts": "428d81b3467e9946fa35ef346010bd76935ffc3f4d4ff7ae3aaf2b33e6131c4a",
-    "apps/extension/src/platform/browser/collection/image-candidates.ts": "6ea9713e870b6c2918f6e536fcf59c185a10ab1df1c8277c2057a2dc756db005",
+    "apps/extension/src/platform/browser/catalog/bundled-page-catalog.ts": "996925085092f09c8f1a6c6af046aac05270409c33adb464e9397ec8a79c2254",
+    "apps/extension/src/platform/browser/catalog/collect-manifest.ts": "2cc35498805f6efe4a8fa5f20d5361c21445810c8dffce7a367c23f1fe0cb13a",
+    "apps/extension/src/platform/browser/catalog/page-catalog.ts": "9a6fe6565444b5fc9b21b8b2779f7bbe1cdacac1ed714b26029f9c09befc33d5",
+    "apps/extension/src/platform/browser/collection/business-scope.ts": "cea5bb7fe0b89b28b350e1a3bb9e4b3a5797f20931c5cef58754b70a836bf2ea",
+    "apps/extension/src/platform/browser/collection/collect-image-candidates.ts": "ca8363b2a1cecf5ae62355a23ac428ddd0368409fd918ccb32a5c657856d2b0a",
+    "apps/extension/src/platform/browser/collection/configuration-discovery.ts": "66d25699800568559894432e8883e11cbf58d79b11c01aa6edfac57084076d66",
+    "apps/extension/src/platform/browser/collection/image-candidates.ts": "063690bb99147fbb8d9493f9b90a8ce8aa9c7063fbce3b793b8de5b5703f00f0",
     "apps/extension/src/platform/browser/collection/image-label.ts": "a4416e0686ca76d92abecd3feac85ee480840f7ff0616555304b71c7fd4b7dd4",
-    "apps/extension/src/platform/browser/collection/material-hints.ts": "9ffd80a675a88050df412fb584887732af6ce81f582c9236770dbc86e0eb06ef",
-    "apps/extension/src/platform/browser/collection/page-field-collector.ts": "cb44de6fd7ad2749aea5649ec2c8dd7afe1f13feafe9711d907492f9d8a0ea6a",
+    "apps/extension/src/platform/browser/collection/material-hints.ts": "4b30b35b0aa068e4a9cdd9aa36b7e3ef21aa1c27d74d1c2b7db7d4f9c935e097",
+    "apps/extension/src/platform/browser/collection/page-field-collector.ts": "e8f1366d8067ee179be76e15cc748b7ef6f23b1d6306abe18a9d1f9263491ab4",
     "apps/extension/src/platform/browser/dom.ts": "87e0240b05eec03a1adb1df7898979a09450e6d49f7958236af87f0e989565ab",
     "apps/extension/src/platform/browser/form-controls.ts": "b34b7f13daf90743439ece6305a35f6c73c7ef4389c4cf03b1e742d491b2b19a",
-    "apps/extension/src/platform/browser/identity/business-detector.ts": "8b5773cc870c162582cf9248d29e3e4b679b18f78db61d074a6043d8c25cda30",
-    "apps/extension/src/platform/browser/identity/page-identity.ts": "828b44c4e60fac51bc98ee2d820adc4cfb150db2e61a523e7743271d3e6604ca",
+    "apps/extension/src/platform/browser/identity/active-review-tab.ts": "ff5d8f29c6605bf3dbfd03f05d63b86b0775ab3dfea7fc40cc3ed23764344107",
+    "apps/extension/src/platform/browser/identity/business-detector.ts": "0e79f23df4f18446cc501f369e21d121ac2f4954fa59ed588c9f80874e599cb8",
+    "apps/extension/src/platform/browser/identity/page-identity.ts": "6eb28434a1aa05e278fd0886cd3e4109a121674e31e4b42c6185b499445d496f",
+    "apps/extension/src/platform/browser/vehicle-model-catalog.ts": "f37b2638881393d455c9ee0a73fde2b1c461f6bc9836f0406dca291002a3d0fe",
     "apps/extension/src/platform/extension/execute-page-actions.ts": "b9e114f730ac85e8e6041e23b311b79d1533c022ad86e0e1e1f6632bd2a41c25",
     "apps/extension/src/platform/extension/image-focus-client.ts": "e38ebcee303784df63d86808d192a0e679424444584322fe1b6fe637c30bcba5",
     "apps/extension/src/platform/extension/page-action-registry.ts": "ea0fd7791bb704d362c26f8a48756f93e792e92870591fb2158c06e55bd07414",
     "apps/extension/src/platform/extension/page-fill-client.ts": "8cb0ba248a8527bc5f87648b59b3ef25a464f095e2da4c02896347ba47155fcc",
+    "apps/extension/src/platform/extension/vehicle-model-client.ts": "61de69f9466182669a6097d618f6760af1713f716c366cad56d78230eba2fbd2",
+    "apps/extension/src/platform/extension/vehicle-model-server.ts": "83efad1a8e1aa742c093237d5710fa72a8f66a3651738f281ea9b1b297a46710",
+    "apps/extension/src/platform/extension/vehicle-model-sessions.ts": "f8af76c70601600bf99b6c43003bcafc9a389c073d60998430f555269a705d08",
+    "apps/extension/src/shared/agent-url.ts": "3227ca131de3aab20f73958e926f809e73b685768e789fd400a9e55ed15b69f1",
     "apps/extension/src/shared/contracts/collection.ts": "b4a12c548677725408f27f9300dbecc9be3391064c26b0c3f3c7594309a0e94e",
     "apps/extension/src/shared/contracts/configuration.ts": "5bb676d6f9f17273f395b42cac4b5df62af31aeed8504eaf4da83c348a5c3fed",
     "apps/extension/src/shared/contracts/page-fill.ts": "04157a03c7c8a22c739cd4a13acb908759e4971f0873bc1116a94c50fce63894",
-    "apps/extension/src/shared/contracts/review.ts": "9b8ca27ab7ed81ca61b54fec354e66736d5a611d893dc5eff49f1204b1436b3d",
+    "apps/extension/src/shared/contracts/review.ts": "c131ef0f2c5d42ef18a834a8fe9d1a5f20be009c63516b16bb05623e73b1db79",
+    "apps/extension/src/shared/contracts/vehicle-model.ts": "22962978828bb849106ff0b536fc07df07acb540ab58a58b1e8aa72540c552f7",
     "apps/extension/src/shared/diagnostics.ts": "1bc54207d8a97f09e434ef167085fa3229a4b2baa1fee5c66de8c5f567a24578",
     "apps/extension/src/shared/ui/Icon.vue": "8011b084f74a5ad06244de29875a322ffb1324ff3d72281aa281b1c0c0895cca",
-    "apps/extension/vite.config.ts": "2aeb794c8b80d82cdc62aa2bb87c7fbe17b9895f337dacd871c514fb7b01d6e1",
-    "docker-compose.server.yml": "85603e232ae8028d073c22f400b3942a91c51c3b6bdfc57b224547eaaadedc4b",
-    "packages/configuration-contracts/src/collection.ts": "fe4a28ca04a95fd5fde8beb58a5502ce91938529d37fe682cbcb6631c7780924",
-    "packages/configuration-contracts/src/configuration.ts": "d753abbff7c753540ddb7be7d08d6318badd61b667bcd1eb580794420b22005f",
+    "apps/extension/vite.config.ts": "bccd5935faaaad74c5da54537d4daab3c1f421299eb79c46b47be8b269611bf0",
+    "docker-compose.server.yml": "770a9c0e06d269b2c75c838dbe9cc8f33f7388957f0ebef6fd1dee87f0909082",
+    "packages/configuration-contracts/src/collection.ts": "9b730cda53b7b854fb5991bfe22c0f290546d0da76ee9f5a64e4a3399352bfde",
+    "packages/configuration-contracts/src/configuration.ts": "a053e7e72810275289ca1d011e567198ef7b1e70646b96baa8f2d7f8db214613",
     "packages/configuration-contracts/src/index.ts": "ffcf4ac0b6a278644a1c7fb2958ed914f27b3e089d9f2b7599fdb68b33d5f90a",
-    "pyproject.toml": "156fab8ff6e0cf60e5657c7cc8ddcccf0f1b7fa87db8ae6edf0328a7afd4f6a9",
+    "pyproject.toml": "92d5f7fed58f4da2629a78636cfefd7be8faf496221f47904d0be1bff3b36772",
     "scripts/dev/export-business-snapshot.py": "c8461e4d15f937b0d575925e6e6bf3b994657b17b713d8170b9fd35bcfc3e4f7",
     "scripts/dev/start-agent.ps1": "be5475d08e0ed1de6941486c5c9af08fad7f8983fa26df828d55b5b1d36e69b6",
     "src/forj_configuration_agent/__init__.py": "2e96496ebf4f295f1f5d12c226db5c83c0aff9b6c4fa51732fd34d224ccf090e",
     "src/forj_configuration_agent/application/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "src/forj_configuration_agent/application/conversation.py": "d7fe50bf58b61f2a9a08814eaeb2e0afbe4eaa5d6527e4a7840664deede6cabe",
     "src/forj_configuration_agent/application/diagnostics.py": "91d4e1c78794fc7906ff91210e43276b8306c7e951bf7ff024c9fa835617ddf8",
-    "src/forj_configuration_agent/application/drafts.py": "6fba086175a75cd20e5e341f183d43a910d3be198586d68892a53e063002fc1b",
+    "src/forj_configuration_agent/application/drafts.py": "fbe4a571683d9d0b0d3e1f65302ee0560da0f2f9229feac2e7377e8e0ec1576a",
     "src/forj_configuration_agent/application/service.py": "d2995f9fc44c146aa388424e8e70576f27c240e55dad21e758961759a0ff10e6",
     "src/forj_configuration_agent/application/tool_execution.py": "7db6573c7aaa7f4d4457f436b7fcb25a74bfd365060e96f2010347cea0bd1bfb",
     "src/forj_configuration_agent/application/validation.py": "f67c3796dd8e6c6e6ce7cf39c3bf2bdefc91f467e32677c5564cd1a58f67bbc2",
@@ -139,43 +149,41 @@
     "src/forj_review_assistant/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "src/forj_review_assistant/__main__.py": "bf70c822b08b27229ce8b1d35134ea9603f353b0eaaf74e6c08955ff6c22caf6",
     "src/forj_review_assistant/bootstrap/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "src/forj_review_assistant/bootstrap/application.py": "105b4c9547418b207db56c333c10ee418b050c5d862f7f668e013d3041426a39",
+    "src/forj_review_assistant/bootstrap/application.py": "a653763ab5407b4f643ad1ce50d979b9c6974dee55ebe8b84865e100070a6dba",
     "src/forj_review_assistant/businesses/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "src/forj_review_assistant/businesses/completeness.py": "3ea1026657c3d52ab5de734946991a295a56a2790311a66a9e745a72571dd9d6",
+    "src/forj_review_assistant/businesses/completeness.py": "6a334d1a160cf4480bf8b7d3f6ade3929ae0e393152210795ef823999ed5ebc4",
     "src/forj_review_assistant/businesses/configuration/__init__.py": "de53ab64277f9e65c9926c8ec9455dad49b5c692107c612a7569e5f4e37e6122",
-    "src/forj_review_assistant/businesses/configuration/compiler.py": "dfdc917131eab0f9d24affc613d4f821af90ed8769441ce11ae9c126cf665d90",
+    "src/forj_review_assistant/businesses/configuration/compiler.py": "a8fdf09738137027f0ca99aafa04ddebb8e6d83f48d2cdaf503976ee159a9d3f",
     "src/forj_review_assistant/businesses/configuration/history.py": "7f679cb59adc71f77447025df138d9533618731a89d17289ac8c9478a41aad6d",
     "src/forj_review_assistant/businesses/configuration/inspection.py": "ffc9aa048e37ffd557bc3c5a1f25e373b95384b80f8a185a47dd3053233e0361",
     "src/forj_review_assistant/businesses/configuration/loader.py": "2cbf97a7aeb6a7be83ee7f1352814b90840f280ed875f78863b1591dd0ec22cf",
-    "src/forj_review_assistant/businesses/configuration/schema.py": "1502a96b7d9723a35951457950ba13bc7c25a40a8def78feefe4ed2cf46f94d4",
+    "src/forj_review_assistant/businesses/configuration/schema.py": "c5b8be8d5a01d9e82ee96c9079cc4e78b9ac3f1215051f8a0723791c543fb9cd",
     "src/forj_review_assistant/businesses/context.py": "c2ae59fba6c0b8fbefd5674572d16da56357466135b7b976318856fe362e6c9b",
-    "src/forj_review_assistant/businesses/context_validation.py": "2f104530acccac37156c3ec317396e06e3cf85f6e103bfef9b625b26f77a1acd",
+    "src/forj_review_assistant/businesses/context_validation.py": "2f7d1b3eb7fa7a742190af52afba6ed75ecdf329f54fec40c94969a19c506bb0",
     "src/forj_review_assistant/businesses/external_check_catalog.py": "e8ca31a9c4ea8b3f2a6dfa964772602482bf6b3de54b98dcc360633cce100617",
     "src/forj_review_assistant/businesses/field_policies.py": "e7118660dc7923c5de8edd298933fb5074b15e6896341e8150e1196646783684",
     "src/forj_review_assistant/businesses/fields.py": "8468032e6f7e38cebcae5c2b91a2b287b0f6cf3d58522fabdaca361bcbe57ef0",
-    "src/forj_review_assistant/businesses/material_policies.py": "79c3ba4abfe1abc7732509b642f0c4c51140d4872f1f54c5c2e83720ad6d67ad",
-    "src/forj_review_assistant/businesses/materials.py": "a329ca4b10e346c5a0b0563b53f74583ddf10550cd580615b11d9813c854732e",
-    "src/forj_review_assistant/businesses/packs/__init__.py": "7816946cd3e7c6eb1321ef6e04e9e8a2de0fda62f39d3df2fbce27b70c90e56d",
-    "src/forj_review_assistant/businesses/packs/model.py": "8a43573d6c20e2e7db3670786b6f739288fa4942457a6fa6c7bf4679926c7bbd",
-    "src/forj_review_assistant/businesses/packs/scrap_replacement.py": "6609aef9342a1439f3031ed259522b1a69d2a8212ce028180e7d68c3b90f8f04",
-    "src/forj_review_assistant/businesses/packs/transfer.py": "0cd6b8da3c6137fe46ef90500a297c0e1a59893664501159c813286cfba81d78",
-    "src/forj_review_assistant/businesses/packs/vehicle_source.py": "673e1e63841259d2d4575b66ce953401fecdbebdd6c240fa64b6ab0c20247b09",
+    "src/forj_review_assistant/businesses/material_policies.py": "1f26374b7069cbf7068f0ed33137796f4f1b65bb258996d35d8f869ef1fbe3b2",
+    "src/forj_review_assistant/businesses/materials.py": "991e9ec6c3afa640cecbb8afa6b03951fe42977f8014281cec96d6f631e750eb",
+    "src/forj_review_assistant/businesses/packs/__init__.py": "c7bd86beaf45b8d12b3a8a0ab6a9eeef07d35fecf258853455f20a23d30a035e",
+    "src/forj_review_assistant/businesses/packs/model.py": "8ed202a1eaa438f15f934966da53cba31d968f58446282adf488bd6b6c019f77",
+    "src/forj_review_assistant/businesses/packs/scrap_replacement.py": "23ee168c6614edb8704b43d5558954edff842344185602dd99fd7c327498a833",
+    "src/forj_review_assistant/businesses/packs/vehicle_source.py": "1b2268c70a60564008793d31669e93fd1000cb02ff2eb0fe7b66aaa88946a7a7",
     "src/forj_review_assistant/businesses/page_action_catalog.py": "5529a972b2c279cbff678fb56fdb9cd9733ce31e1794e6369448ef515c4ffd97",
-    "src/forj_review_assistant/businesses/page_catalog.py": "b560aad30f8a3dc5202889a85a8303828aa04338f2a58bc5e0ae3263bb56773b",
+    "src/forj_review_assistant/businesses/page_catalog.py": "64066a5e827a6afce545c6df1b1bc004ac4cfdceb3252fd0483f394867237c66",
     "src/forj_review_assistant/businesses/profile_validation.py": "3ed96f629483b0eaea19d10bf3afb0cec34c00bcf07293ff34c082ae18ea585e",
-    "src/forj_review_assistant/businesses/profiles.py": "e669d3d2c72f8bcbd72823ce3dab32779aa77fdfeedfee7336402e07238fcf62",
+    "src/forj_review_assistant/businesses/profiles.py": "8caca1f1ceebb4d6bc74aae67bf9e8a5810918af976dea065b27cccc646e15a0",
     "src/forj_review_assistant/businesses/registry.py": "e3a88f66baa6b05d3486136417844361b4569ba6cf4702462465712cfe4937a3",
     "src/forj_review_assistant/businesses/replacement_policies.py": "66336419775aa7210908b0d32e9077e22219f784e65fa06db717e6d8b789a7f9",
-    "src/forj_review_assistant/businesses/routing.py": "1ed9e65f884ec40286d32dd3215a185216fc55201518bc52064f6c46c6ff4c5b",
+    "src/forj_review_assistant/businesses/routing.py": "10390b7553d0df2a745d21762119241f6adcde19fc4c85818100a26374b5f9b1",
     "src/forj_review_assistant/businesses/rules/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "src/forj_review_assistant/businesses/rules/affiliation.py": "18e47d5c1b223f347d9273bd6c07258bf4435bee5c24801b3850d24f2c43247e",
-    "src/forj_review_assistant/businesses/rules/catalog.py": "22dbe7c68d9f369f8e5af3c6036633d68c811afa0c4b83cfc01567c9af540de2",
-    "src/forj_review_assistant/businesses/rules/invoice_verification.py": "6fec1c58563680805f71f83d69365519b33ed3ec62e28952b65b135b536f3e7f",
+    "src/forj_review_assistant/businesses/rules/catalog.py": "1ed141ed39c2ea13672c324df2fb5aa98d850a50b13b5f9fc149039fd2f3e795",
+    "src/forj_review_assistant/businesses/rules/invoice_verification.py": "9db0bebc1d8075d85a1733d5e68cf851f103c4a95354dc66d46a0a889dae2aac",
     "src/forj_review_assistant/businesses/rules/owner_consistency.py": "b240d28ab3b2aa66655c2b243a2404a77862c048fd14a2d8cee087e9ed3fbba6",
     "src/forj_review_assistant/businesses/rules/replacement_policy.py": "9db04aaeb34785facef1cb3f255891f926b02aa709d61d0b689013fc569af62c",
     "src/forj_review_assistant/businesses/rules/scrap_certificate_qr.py": "96ee24fff48f98fb3e1f5a005c1c7b2b9056e1b1f637d3898566ebfd11d17e77",
-    "src/forj_review_assistant/businesses/rules/transfer_invoice_date.py": "b33513b6fb41ccbe125cd0d41c00aef3fe16cdd6e5ccd8f40af6736667eca135",
-    "src/forj_review_assistant/businesses/rules/vehicle_model.py": "8bdbb5f78d0c0d2127087fa1cfa9c6bc2c20702bbe994426faa9327264e689f2",
+    "src/forj_review_assistant/businesses/rules/vehicle_source_model.py": "e99c95c9c4fd647359425f6b0c823fcc3f95c5ab64dc2a46f94eeddc645b63f5",
     "src/forj_review_assistant/businesses/rules/vehicle_type_light_duty.py": "96328f14be7ed31b37d7a1a1a4400b145152aed997ca2e4f7d41980370c1a29e",
     "src/forj_review_assistant/capabilities/__init__.py": "1c454622a268cd7cca1dd05d647e935c467c2673c83dbba9ff11ad02481ad430",
     "src/forj_review_assistant/capabilities/business_rules.py": "5436ca876e7260b8939f86cf6cdea6e010d2d6431a678dfaad2010006233d8bf",
@@ -187,20 +195,22 @@
     "src/forj_review_assistant/capabilities/subgraphs/common.py": "8a322690861dbeaa865e097d6b0ab844682ce166c7edc85b8ccf4b9570cc02c4",
     "src/forj_review_assistant/config/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "src/forj_review_assistant/config/configuration_io.py": "f5ce8f816451415103107868d356bb0af520150a0237e5fb62d4246e42adbebf",
-    "src/forj_review_assistant/config/settings.py": "e81c71e7212cd63a51843e384674e116c763510f87c5a5d4521d4831bf1f6b0e",
+    "src/forj_review_assistant/config/settings.py": "1979145141a03b6c132e6d9f1e3aaff870a8c7459a048b0ff02659b53b5f27eb",
+    "src/forj_review_assistant/config/vehicle_models.py": "cee058db0c4dfef27a61c66681cce028d3ed0df9a4d45b9f109ffb2f509dce05",
     "src/forj_review_assistant/contracts/__init__.py": "4ee22c81474ad558222ab364b8eedff2b936d57b31a1651edcfcb60795cf2017",
     "src/forj_review_assistant/contracts/checks.py": "c8ee0834a98a3276f5769df7aa49c22ecce88ffc942f32e74c40421a7b06dc6b",
     "src/forj_review_assistant/contracts/decisions.py": "087b2976e9ca5ed82dc2a009dc0c99125a81c2027debbb8e48638f77b1112cb0",
     "src/forj_review_assistant/contracts/evidence.py": "a52262f4f2f2b85214ae2837d848c1c6fc66291e67d743c10231b3e896136d9c",
-    "src/forj_review_assistant/contracts/recognition.py": "9717bac61bf1c0855d17571617221ffbe096cac2ed1a195fcbe77dcd30d2689d",
-    "src/forj_review_assistant/contracts/review.py": "01fc9905598215c1aac5919e69fed34c7c69a0f97ae2452b8034b7bb9b271cd0",
+    "src/forj_review_assistant/contracts/recognition.py": "15e6c759769da9783a73096480e13a204f54ca8c0cc925ed8f80aa029c57b29d",
+    "src/forj_review_assistant/contracts/review.py": "9eae9463ec1a5608eef118f55742c7011122d59f051a765a2df98482c0632356",
     "src/forj_review_assistant/contracts/review_schema.py": "634142df9977b04ec6604fc3d877cc1e590f8b562fbd90f16f88f78d7bbab495",
+    "src/forj_review_assistant/contracts/vehicle_models.py": "25dc9f5f606a646cc124636b0553221d16060e382b32cfb87aa2af3f3e718c5d",
     "src/forj_review_assistant/evidence/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "src/forj_review_assistant/evidence/collection.py": "cc79151fe6ee262f4f23b8f76b84941288ed6f8c6a99cde362f18621b3afa9e4",
     "src/forj_review_assistant/evidence/comparison/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "src/forj_review_assistant/evidence/comparison/aggregate.py": "0eed71cbf20fd5dff852a872a0804750e76eee7b26e495f4c7814974104713ff",
     "src/forj_review_assistant/evidence/comparison/check_results.py": "fc22a5ec380afba2e722c482561d5baf0d99d87b1eeecd7f560d2f7e8ea0c4da",
-    "src/forj_review_assistant/evidence/comparison/composite_fields.py": "7e971806bbe546adf742424cf9c68a3dfb132501e122e9950fb53e0ee32c348f",
+    "src/forj_review_assistant/evidence/comparison/composite_fields.py": "2ffed4472fd2f11c390a34379c20bdee78561185a4688a449ce3f4e466bc3a82",
     "src/forj_review_assistant/evidence/comparison/evidence_values.py": "12d46d34f6a3bd9bcde3cae25d500616b5d864798da5579a4e54e98649e6b1c3",
     "src/forj_review_assistant/evidence/comparison/review.py": "f3c613bd103a7dece3a48bb1e646ee1a0360ebdbd36ef7b724aa0cad5fea6b86",
     "src/forj_review_assistant/evidence/comparison/settled_values.py": "1b56569e222a1cf5751dcce901fcb8532019bda064a0b8ce8f4224fe8a6cebfc",
@@ -217,14 +227,16 @@
     "src/forj_review_assistant/integrations/recognition/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "src/forj_review_assistant/integrations/recognition/client.py": "6b661e4872835ef898e4c1af3ce91b5ae25bfcb5ee9c9a57229e4a668b60af1d",
     "src/forj_review_assistant/integrations/recognition/errors.py": "abf7b039abeefcfc77aded45ad8f4694e16ed16eda32d89ca7c2c886ed5c7d62",
-    "src/forj_review_assistant/integrations/recognition/extraction.py": "1814146b869a4a5b80eb6bfc4dd317177cfc3f1637665667d9f60004f97eb56e",
+    "src/forj_review_assistant/integrations/recognition/extraction.py": "fab2d8562f3fe494f75a824d5d1e47cc620953a58ef068520a5be47aa5245d0c",
     "src/forj_review_assistant/integrations/recognition/retry.py": "48da727e9836d4ea455cb38253bf220e4e8b4e551a32cebdf13902fcf4262705",
+    "src/forj_review_assistant/integrations/vehicle_models.py": "577a3ca30e469b87c6a60d4ec3bc0af147f27305fb98cdb1f09673df4f08cf26",
     "src/forj_review_assistant/interfaces/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "src/forj_review_assistant/interfaces/cli.py": "b3ed1508ac390676962ae88e5cf60cdc41cc953c9523e1b32386789c4b4f464a",
     "src/forj_review_assistant/interfaces/http/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "src/forj_review_assistant/interfaces/http/catalog.py": "0b3da10df1b4e46d5761ccf8a9a4ee3087029a229b930ea83f0f3b8bddefb0e5",
     "src/forj_review_assistant/interfaces/http/dependencies.py": "2952c409aee6768a42d36ba30a75d3a32685c023a0d2c2d4dc752e4a9857d96e",
     "src/forj_review_assistant/interfaces/http/review.py": "ec7a8342283513f2daa980653a1468914811cf34c4042b2fec93028fff55cb86",
+    "src/forj_review_assistant/interfaces/http/vehicle_models.py": "4fd18ed744d35e3507b8d6d6620ba4ec3954b5c053f8e81d0b4f0015a9da8ca7",
     "src/forj_review_assistant/interfaces/page_tools.py": "646ec0c4e2212be23dee4d33ead3e05dc885ec29ec0dc01640ae6e75bdc004d2",
     "src/forj_review_assistant/main.py": "bef7a29cf19258db27e0acf63908390e5df642ceb052f29f5475a0074624ad52",
     "src/forj_review_assistant/observability/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -236,21 +248,21 @@
     "src/forj_review_assistant/presentation/assembly.py": "cbf60cedd603dd084ff9216218bc14f48a92539921ecaae8a2f251c786b45a42",
     "src/forj_review_assistant/presentation/projectors.py": "7465bf0bf5a800507b41433d323783c62e3d0e462c30950134168d6a09c0e240",
     "src/forj_review_assistant/presentation/response.py": "d7dbe0b18a4243a09d367644d049f2180cd1e2b28bd186f5af100427a11dffc1",
-    "src/forj_review_assistant/presentation/routing.py": "2e7777ad380636cc7f7be6c1c8cfb797088338f5d336cfdb7895d50efd987423",
+    "src/forj_review_assistant/presentation/routing.py": "e75e367c6c6eb43a051fc28f8dd02d6a7136804ad1724a4d284c6ba365f3350d",
     "src/forj_review_assistant/presentation/tasks.py": "c4ebcc23901cd0fdd5ca187fa2a3fddedbc6e16b666e85a71e23ab1ad4bef1b3",
     "src/forj_review_assistant/runtime/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "src/forj_review_assistant/runtime/configuration/__init__.py": "fdca7f5d59b8d2ff4594274abdc836d878c7ab811fb37de1ae4b1e5c69d9b367",
     "src/forj_review_assistant/runtime/configuration/service.py": "5a2843c2bb9db187394fb12550db840c0fee8a96516241341e9900598dde2c16",
     "src/forj_review_assistant/runtime/jobs/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "src/forj_review_assistant/runtime/jobs/manager.py": "6705f47b686fadf7824482f66f3a8b2b9896bbcb919dcd3ec58450ce8571db46",
-    "src/forj_review_assistant/runtime/review_service.py": "ebf5f8abfe868e56b8f42c7d5e7cb1ccc410b355d994608c5132a161a18ad49d",
+    "src/forj_review_assistant/runtime/jobs/manager.py": "53ebceb56445af1777bc4b0dc618821b27e9a428c5f9b343bfe62c686de44c0f",
+    "src/forj_review_assistant/runtime/review_service.py": "74f06705ffcc50e6adfe40a80c0935b978cb0036805867b806833bf2baf7ba3c",
     "src/forj_review_assistant/runtime/scheduling/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "src/forj_review_assistant/runtime/scheduling/fair_scheduler.py": "31e34ea9ffb5413e2b92c6e90b37a91ede22913e11cc1ae87cb31f07c6cf4790",
     "src/forj_review_assistant/runtime/workflow/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "src/forj_review_assistant/runtime/workflow/capability_assembly.py": "6d4e18fb09cab57f171ff59fae26c4ddb98498d5a7f0b9483a053b556d64f98f",
     "src/forj_review_assistant/runtime/workflow/graph.py": "340225e74f83e5ef314cad36f5cd9dbd053d557032947a6106f8e4479b6f0f0f",
     "src/forj_review_assistant/runtime/workflow/planner.py": "62dffa5f8c96a04ae6b707b5ca023a87e9bbfa32c40909f12405f9ea6c192fb8",
-    "uv.lock": "ceb43719e6232bc90f12cf88f5b773b7f820339713d8d38b3172bda88c108615"
+    "uv.lock": "ba97093cb7e8f6267a4e1c115a6c683b933897abb4df33d2bd24a44167f19fdf"
   },
   "catalog": {
     "version": "1.0",
@@ -280,32 +292,20 @@
         "region": "default",
         "title": "车源审核",
         "page_id": "vehicle_source:default",
-        "paths": [
-          "/vehicle-source"
-        ],
-        "anchors": [
-          "车源审核",
-          "行驶证信息"
-        ]
-      },
-      {
-        "business_type": "transfer",
-        "region": "default",
-        "title": "过户审核",
-        "page_id": "transfer:default",
+        "review_tab": "车源审核",
         "paths": [
           "/consistency-qingdao",
           "/consistency-changchun"
         ],
         "anchors": [
-          "审核过户凭证",
-          "过户发票买家名称",
-          "转入地车管所"
+          "行驶证信息",
+          "规格参数"
         ]
       },
       {
         "business_type": "consistency",
         "region": "default",
+        "review_tab": "一致性审核",
         "paths": [
           "/consistency-qingdao",
           "/consistency-changchun"
@@ -315,6 +315,18 @@
           "车辆所有人类型",
           "新车挂靠"
         ]
+      },
+      {
+        "business_type": "transfer",
+        "region": "default",
+        "title": "过户审核（未配置）",
+        "page_id": "transfer:default",
+        "review_tab": "过户审核",
+        "paths": [
+          "/consistency-qingdao",
+          "/consistency-changchun"
+        ],
+        "anchors": []
       }
     ]
   },
@@ -497,7 +509,9 @@
             "minimum_count": 1,
             "required_pages": [],
             "display_name": "旧车行驶证",
-            "alternative_group": ""
+            "alternative_group": "",
+            "identity_side": null,
+            "presence_name": ""
           },
           {
             "document_type": "registration_certificate",
@@ -508,7 +522,9 @@
               2
             ],
             "display_name": "旧车登记证第 1、2 页",
-            "alternative_group": ""
+            "alternative_group": "",
+            "identity_side": null,
+            "presence_name": "旧车登记证"
           },
           {
             "document_type": "scrap_certificate",
@@ -516,7 +532,9 @@
             "minimum_count": 1,
             "required_pages": [],
             "display_name": "报废证明",
-            "alternative_group": ""
+            "alternative_group": "",
+            "identity_side": null,
+            "presence_name": ""
           },
           {
             "document_type": "vehicle_license",
@@ -524,7 +542,9 @@
             "minimum_count": 1,
             "required_pages": [],
             "display_name": "新车行驶证",
-            "alternative_group": ""
+            "alternative_group": "",
+            "identity_side": null,
+            "presence_name": ""
           },
           {
             "document_type": "registration_certificate",
@@ -535,7 +555,9 @@
               2
             ],
             "display_name": "新车登记证第 1、2 页",
-            "alternative_group": ""
+            "alternative_group": "",
+            "identity_side": null,
+            "presence_name": "新车登记证"
           },
           {
             "document_type": "invoice",
@@ -543,10 +565,136 @@
             "minimum_count": 1,
             "required_pages": [],
             "display_name": "新车发票",
-            "alternative_group": ""
+            "alternative_group": "",
+            "identity_side": null,
+            "presence_name": ""
           }
         ],
-        "field_sources": []
+        "field_sources": [],
+        "presence_groups": [
+          {
+            "key": "old_vehicle",
+            "display_name": "报废车辆资料",
+            "alternatives": [
+              [
+                {
+                  "document_type": "vehicle_license",
+                  "business_scope": "old_vehicle",
+                  "minimum_count": 1,
+                  "required_pages": [],
+                  "display_name": "旧车行驶证",
+                  "alternative_group": "",
+                  "identity_side": null,
+                  "presence_name": ""
+                },
+                {
+                  "document_type": "registration_certificate",
+                  "business_scope": "old_vehicle",
+                  "minimum_count": 1,
+                  "required_pages": [
+                    1,
+                    2
+                  ],
+                  "display_name": "旧车登记证第 1、2 页",
+                  "alternative_group": "",
+                  "identity_side": null,
+                  "presence_name": "旧车登记证"
+                },
+                {
+                  "document_type": "scrap_certificate",
+                  "business_scope": "old_vehicle",
+                  "minimum_count": 1,
+                  "required_pages": [],
+                  "display_name": "报废证明",
+                  "alternative_group": "",
+                  "identity_side": null,
+                  "presence_name": ""
+                }
+              ]
+            ]
+          },
+          {
+            "key": "new_vehicle",
+            "display_name": "新车资料",
+            "alternatives": [
+              [
+                {
+                  "document_type": "vehicle_license",
+                  "business_scope": "new_vehicle",
+                  "minimum_count": 1,
+                  "required_pages": [],
+                  "display_name": "新车行驶证",
+                  "alternative_group": "",
+                  "identity_side": null,
+                  "presence_name": ""
+                },
+                {
+                  "document_type": "registration_certificate",
+                  "business_scope": "new_vehicle",
+                  "minimum_count": 1,
+                  "required_pages": [
+                    1,
+                    2
+                  ],
+                  "display_name": "新车登记证第 1、2 页",
+                  "alternative_group": "",
+                  "identity_side": null,
+                  "presence_name": "新车登记证"
+                },
+                {
+                  "document_type": "invoice",
+                  "business_scope": "new_vehicle",
+                  "minimum_count": 1,
+                  "required_pages": [],
+                  "display_name": "新车发票",
+                  "alternative_group": "",
+                  "identity_side": null,
+                  "presence_name": ""
+                }
+              ]
+            ]
+          },
+          {
+            "key": "subject",
+            "display_name": "主体资料（营业执照或身份证正反面）",
+            "alternatives": [
+              [
+                {
+                  "document_type": "business_license",
+                  "business_scope": "business_license",
+                  "minimum_count": 1,
+                  "required_pages": [],
+                  "display_name": "营业执照",
+                  "alternative_group": "",
+                  "identity_side": null,
+                  "presence_name": ""
+                }
+              ],
+              [
+                {
+                  "document_type": "identity_card",
+                  "business_scope": "identity",
+                  "minimum_count": 1,
+                  "required_pages": [],
+                  "display_name": "身份证正面",
+                  "alternative_group": "",
+                  "identity_side": "FRONT",
+                  "presence_name": ""
+                },
+                {
+                  "document_type": "identity_card",
+                  "business_scope": "identity",
+                  "minimum_count": 1,
+                  "required_pages": [],
+                  "display_name": "身份证反面",
+                  "alternative_group": "",
+                  "identity_side": "BACK",
+                  "presence_name": ""
+                }
+              ]
+            ]
+          }
+        ]
       },
       "field_check_bindings": [
         [
@@ -1036,12 +1184,7 @@
               "报废车辆资料",
               "旧车资料"
             ],
-            "slots": [
-              [
-                "old_vehicle",
-                3
-              ]
-            ]
+            "slots": []
           },
           {
             "document_type": "vehicle_license",
@@ -1052,16 +1195,7 @@
               "新车资料",
               "报废车辆资料"
             ],
-            "slots": [
-              [
-                "old_vehicle",
-                1
-              ],
-              [
-                "new_vehicle",
-                1
-              ]
-            ]
+            "slots": []
           },
           {
             "document_type": "registration_certificate",
@@ -1072,16 +1206,7 @@
               "旧车资料",
               "新车资料"
             ],
-            "slots": [
-              [
-                "old_vehicle",
-                2
-              ],
-              [
-                "new_vehicle",
-                2
-              ]
-            ]
+            "slots": []
           },
           {
             "document_type": "invoice",
@@ -1090,12 +1215,7 @@
               "发票",
               "新车资料"
             ],
-            "slots": [
-              [
-                "new_vehicle",
-                3
-              ]
-            ]
+            "slots": []
           },
           {
             "document_type": "business_license",
@@ -1948,12 +2068,7 @@
               "registration_date",
               "fuel_type"
             ],
-            "slots": [
-              [
-                "old_vehicle",
-                3
-              ]
-            ],
+            "slots": [],
             "derived_field": null
           },
           {
@@ -2014,16 +2129,7 @@
               "registration_date",
               "fuel_type"
             ],
-            "slots": [
-              [
-                "old_vehicle",
-                1
-              ],
-              [
-                "new_vehicle",
-                1
-              ]
-            ],
+            "slots": [],
             "derived_field": null
           },
           {
@@ -2078,16 +2184,7 @@
             "allowed_scopes": [],
             "scope_independent": false,
             "scoped_vehicle_fields": [],
-            "slots": [
-              [
-                "old_vehicle",
-                2
-              ],
-              [
-                "new_vehicle",
-                2
-              ]
-            ],
+            "slots": [],
             "derived_field": null
           },
           {
@@ -2140,12 +2237,7 @@
               "registration_date",
               "fuel_type"
             ],
-            "slots": [
-              [
-                "new_vehicle",
-                3
-              ]
-            ],
+            "slots": [],
             "derived_field": [
               "invoice.invoice_no",
               "invoice.code"
@@ -2274,6 +2366,7 @@
             "occurrence": 0
           }
         ],
+        "ignored_image_labels": [],
         "routes": [
           {
             "document_type": "registration_certificate",
@@ -2430,7 +2523,8 @@
             "admin_paths": [
               "/scrap-replace-qingdao"
             ],
-            "page_anchors": []
+            "page_anchors": [],
+            "review_tab": ""
           },
           {
             "region": "changchun",
@@ -2456,7 +2550,8 @@
             "admin_paths": [
               "/scrap-replace-changchun"
             ],
-            "page_anchors": []
+            "page_anchors": [],
+            "review_tab": ""
           }
         ],
         "capability_specs": [
@@ -2657,7 +2752,9 @@
               "minimum_count": 1,
               "required_pages": [],
               "display_name": "旧车行驶证",
-              "alternative_group": ""
+              "alternative_group": "",
+              "identity_side": null,
+              "presence_name": ""
             },
             {
               "document_type": "registration_certificate",
@@ -2668,7 +2765,9 @@
                 2
               ],
               "display_name": "旧车登记证第 1、2 页",
-              "alternative_group": ""
+              "alternative_group": "",
+              "identity_side": null,
+              "presence_name": "旧车登记证"
             },
             {
               "document_type": "scrap_certificate",
@@ -2676,7 +2775,9 @@
               "minimum_count": 1,
               "required_pages": [],
               "display_name": "报废证明",
-              "alternative_group": ""
+              "alternative_group": "",
+              "identity_side": null,
+              "presence_name": ""
             },
             {
               "document_type": "vehicle_license",
@@ -2684,7 +2785,9 @@
               "minimum_count": 1,
               "required_pages": [],
               "display_name": "新车行驶证",
-              "alternative_group": ""
+              "alternative_group": "",
+              "identity_side": null,
+              "presence_name": ""
             },
             {
               "document_type": "registration_certificate",
@@ -2695,7 +2798,9 @@
                 2
               ],
               "display_name": "新车登记证第 1、2 页",
-              "alternative_group": ""
+              "alternative_group": "",
+              "identity_side": null,
+              "presence_name": "新车登记证"
             },
             {
               "document_type": "invoice",
@@ -2703,10 +2808,136 @@
               "minimum_count": 1,
               "required_pages": [],
               "display_name": "新车发票",
-              "alternative_group": ""
+              "alternative_group": "",
+              "identity_side": null,
+              "presence_name": ""
             }
           ],
-          "field_sources": []
+          "field_sources": [],
+          "presence_groups": [
+            {
+              "key": "old_vehicle",
+              "display_name": "报废车辆资料",
+              "alternatives": [
+                [
+                  {
+                    "document_type": "vehicle_license",
+                    "business_scope": "old_vehicle",
+                    "minimum_count": 1,
+                    "required_pages": [],
+                    "display_name": "旧车行驶证",
+                    "alternative_group": "",
+                    "identity_side": null,
+                    "presence_name": ""
+                  },
+                  {
+                    "document_type": "registration_certificate",
+                    "business_scope": "old_vehicle",
+                    "minimum_count": 1,
+                    "required_pages": [
+                      1,
+                      2
+                    ],
+                    "display_name": "旧车登记证第 1、2 页",
+                    "alternative_group": "",
+                    "identity_side": null,
+                    "presence_name": "旧车登记证"
+                  },
+                  {
+                    "document_type": "scrap_certificate",
+                    "business_scope": "old_vehicle",
+                    "minimum_count": 1,
+                    "required_pages": [],
+                    "display_name": "报废证明",
+                    "alternative_group": "",
+                    "identity_side": null,
+                    "presence_name": ""
+                  }
+                ]
+              ]
+            },
+            {
+              "key": "new_vehicle",
+              "display_name": "新车资料",
+              "alternatives": [
+                [
+                  {
+                    "document_type": "vehicle_license",
+                    "business_scope": "new_vehicle",
+                    "minimum_count": 1,
+                    "required_pages": [],
+                    "display_name": "新车行驶证",
+                    "alternative_group": "",
+                    "identity_side": null,
+                    "presence_name": ""
+                  },
+                  {
+                    "document_type": "registration_certificate",
+                    "business_scope": "new_vehicle",
+                    "minimum_count": 1,
+                    "required_pages": [
+                      1,
+                      2
+                    ],
+                    "display_name": "新车登记证第 1、2 页",
+                    "alternative_group": "",
+                    "identity_side": null,
+                    "presence_name": "新车登记证"
+                  },
+                  {
+                    "document_type": "invoice",
+                    "business_scope": "new_vehicle",
+                    "minimum_count": 1,
+                    "required_pages": [],
+                    "display_name": "新车发票",
+                    "alternative_group": "",
+                    "identity_side": null,
+                    "presence_name": ""
+                  }
+                ]
+              ]
+            },
+            {
+              "key": "subject",
+              "display_name": "主体资料（营业执照或身份证正反面）",
+              "alternatives": [
+                [
+                  {
+                    "document_type": "business_license",
+                    "business_scope": "business_license",
+                    "minimum_count": 1,
+                    "required_pages": [],
+                    "display_name": "营业执照",
+                    "alternative_group": "",
+                    "identity_side": null,
+                    "presence_name": ""
+                  }
+                ],
+                [
+                  {
+                    "document_type": "identity_card",
+                    "business_scope": "identity",
+                    "minimum_count": 1,
+                    "required_pages": [],
+                    "display_name": "身份证正面",
+                    "alternative_group": "",
+                    "identity_side": "FRONT",
+                    "presence_name": ""
+                  },
+                  {
+                    "document_type": "identity_card",
+                    "business_scope": "identity",
+                    "minimum_count": 1,
+                    "required_pages": [],
+                    "display_name": "身份证反面",
+                    "alternative_group": "",
+                    "identity_side": "BACK",
+                    "presence_name": ""
+                  }
+                ]
+              ]
+            }
+          ]
         },
         "retry_policy": {
           "semantic_retry_count": 1,
@@ -2929,7 +3160,9 @@
             "minimum_count": 1,
             "required_pages": [],
             "display_name": "旧车行驶证",
-            "alternative_group": ""
+            "alternative_group": "",
+            "identity_side": null,
+            "presence_name": ""
           },
           {
             "document_type": "registration_certificate",
@@ -2940,7 +3173,9 @@
               2
             ],
             "display_name": "旧车登记证第 1、2 页",
-            "alternative_group": ""
+            "alternative_group": "",
+            "identity_side": null,
+            "presence_name": "旧车登记证"
           },
           {
             "document_type": "scrap_certificate",
@@ -2948,7 +3183,9 @@
             "minimum_count": 1,
             "required_pages": [],
             "display_name": "报废证明",
-            "alternative_group": ""
+            "alternative_group": "",
+            "identity_side": null,
+            "presence_name": ""
           },
           {
             "document_type": "vehicle_license",
@@ -2956,7 +3193,9 @@
             "minimum_count": 1,
             "required_pages": [],
             "display_name": "新车行驶证",
-            "alternative_group": ""
+            "alternative_group": "",
+            "identity_side": null,
+            "presence_name": ""
           },
           {
             "document_type": "registration_certificate",
@@ -2967,7 +3206,9 @@
               2
             ],
             "display_name": "新车登记证第 1、2 页",
-            "alternative_group": ""
+            "alternative_group": "",
+            "identity_side": null,
+            "presence_name": "新车登记证"
           },
           {
             "document_type": "invoice",
@@ -2975,10 +3216,136 @@
             "minimum_count": 1,
             "required_pages": [],
             "display_name": "新车发票",
-            "alternative_group": ""
+            "alternative_group": "",
+            "identity_side": null,
+            "presence_name": ""
           }
         ],
-        "field_sources": []
+        "field_sources": [],
+        "presence_groups": [
+          {
+            "key": "old_vehicle",
+            "display_name": "报废车辆资料",
+            "alternatives": [
+              [
+                {
+                  "document_type": "vehicle_license",
+                  "business_scope": "old_vehicle",
+                  "minimum_count": 1,
+                  "required_pages": [],
+                  "display_name": "旧车行驶证",
+                  "alternative_group": "",
+                  "identity_side": null,
+                  "presence_name": ""
+                },
+                {
+                  "document_type": "registration_certificate",
+                  "business_scope": "old_vehicle",
+                  "minimum_count": 1,
+                  "required_pages": [
+                    1,
+                    2
+                  ],
+                  "display_name": "旧车登记证第 1、2 页",
+                  "alternative_group": "",
+                  "identity_side": null,
+                  "presence_name": "旧车登记证"
+                },
+                {
+                  "document_type": "scrap_certificate",
+                  "business_scope": "old_vehicle",
+                  "minimum_count": 1,
+                  "required_pages": [],
+                  "display_name": "报废证明",
+                  "alternative_group": "",
+                  "identity_side": null,
+                  "presence_name": ""
+                }
+              ]
+            ]
+          },
+          {
+            "key": "new_vehicle",
+            "display_name": "新车资料",
+            "alternatives": [
+              [
+                {
+                  "document_type": "vehicle_license",
+                  "business_scope": "new_vehicle",
+                  "minimum_count": 1,
+                  "required_pages": [],
+                  "display_name": "新车行驶证",
+                  "alternative_group": "",
+                  "identity_side": null,
+                  "presence_name": ""
+                },
+                {
+                  "document_type": "registration_certificate",
+                  "business_scope": "new_vehicle",
+                  "minimum_count": 1,
+                  "required_pages": [
+                    1,
+                    2
+                  ],
+                  "display_name": "新车登记证第 1、2 页",
+                  "alternative_group": "",
+                  "identity_side": null,
+                  "presence_name": "新车登记证"
+                },
+                {
+                  "document_type": "invoice",
+                  "business_scope": "new_vehicle",
+                  "minimum_count": 1,
+                  "required_pages": [],
+                  "display_name": "新车发票",
+                  "alternative_group": "",
+                  "identity_side": null,
+                  "presence_name": ""
+                }
+              ]
+            ]
+          },
+          {
+            "key": "subject",
+            "display_name": "主体资料（营业执照或身份证正反面）",
+            "alternatives": [
+              [
+                {
+                  "document_type": "business_license",
+                  "business_scope": "business_license",
+                  "minimum_count": 1,
+                  "required_pages": [],
+                  "display_name": "营业执照",
+                  "alternative_group": "",
+                  "identity_side": null,
+                  "presence_name": ""
+                }
+              ],
+              [
+                {
+                  "document_type": "identity_card",
+                  "business_scope": "identity",
+                  "minimum_count": 1,
+                  "required_pages": [],
+                  "display_name": "身份证正面",
+                  "alternative_group": "",
+                  "identity_side": "FRONT",
+                  "presence_name": ""
+                },
+                {
+                  "document_type": "identity_card",
+                  "business_scope": "identity",
+                  "minimum_count": 1,
+                  "required_pages": [],
+                  "display_name": "身份证反面",
+                  "alternative_group": "",
+                  "identity_side": "BACK",
+                  "presence_name": ""
+                }
+              ]
+            ]
+          }
+        ]
       },
       "field_check_bindings": [
         [
@@ -3468,12 +3835,7 @@
               "报废车辆资料",
               "旧车资料"
             ],
-            "slots": [
-              [
-                "old_vehicle",
-                3
-              ]
-            ]
+            "slots": []
           },
           {
             "document_type": "vehicle_license",
@@ -3484,16 +3846,7 @@
               "新车资料",
               "报废车辆资料"
             ],
-            "slots": [
-              [
-                "old_vehicle",
-                1
-              ],
-              [
-                "new_vehicle",
-                1
-              ]
-            ]
+            "slots": []
           },
           {
             "document_type": "registration_certificate",
@@ -3504,16 +3857,7 @@
               "旧车资料",
               "新车资料"
             ],
-            "slots": [
-              [
-                "old_vehicle",
-                2
-              ],
-              [
-                "new_vehicle",
-                2
-              ]
-            ]
+            "slots": []
           },
           {
             "document_type": "invoice",
@@ -3522,12 +3866,7 @@
               "发票",
               "新车资料"
             ],
-            "slots": [
-              [
-                "new_vehicle",
-                3
-              ]
-            ]
+            "slots": []
           },
           {
             "document_type": "business_license",
@@ -4380,12 +4719,7 @@
               "registration_date",
               "fuel_type"
             ],
-            "slots": [
-              [
-                "old_vehicle",
-                3
-              ]
-            ],
+            "slots": [],
             "derived_field": null
           },
           {
@@ -4446,16 +4780,7 @@
               "registration_date",
               "fuel_type"
             ],
-            "slots": [
-              [
-                "old_vehicle",
-                1
-              ],
-              [
-                "new_vehicle",
-                1
-              ]
-            ],
+            "slots": [],
             "derived_field": null
           },
           {
@@ -4510,16 +4835,7 @@
             "allowed_scopes": [],
             "scope_independent": false,
             "scoped_vehicle_fields": [],
-            "slots": [
-              [
-                "old_vehicle",
-                2
-              ],
-              [
-                "new_vehicle",
-                2
-              ]
-            ],
+            "slots": [],
             "derived_field": null
           },
           {
@@ -4572,12 +4888,7 @@
               "registration_date",
               "fuel_type"
             ],
-            "slots": [
-              [
-                "new_vehicle",
-                3
-              ]
-            ],
+            "slots": [],
             "derived_field": [
               "invoice.invoice_no",
               "invoice.code"
@@ -4706,6 +5017,7 @@
             "occurrence": 0
           }
         ],
+        "ignored_image_labels": [],
         "routes": [
           {
             "document_type": "registration_certificate",
@@ -4862,7 +5174,8 @@
             "admin_paths": [
               "/scrap-replace-qingdao"
             ],
-            "page_anchors": []
+            "page_anchors": [],
+            "review_tab": ""
           },
           {
             "region": "changchun",
@@ -4888,7 +5201,8 @@
             "admin_paths": [
               "/scrap-replace-changchun"
             ],
-            "page_anchors": []
+            "page_anchors": [],
+            "review_tab": ""
           }
         ],
         "capability_specs": [
@@ -5089,7 +5403,9 @@
               "minimum_count": 1,
               "required_pages": [],
               "display_name": "旧车行驶证",
-              "alternative_group": ""
+              "alternative_group": "",
+              "identity_side": null,
+              "presence_name": ""
             },
             {
               "document_type": "registration_certificate",
@@ -5100,7 +5416,9 @@
                 2
               ],
               "display_name": "旧车登记证第 1、2 页",
-              "alternative_group": ""
+              "alternative_group": "",
+              "identity_side": null,
+              "presence_name": "旧车登记证"
             },
             {
               "document_type": "scrap_certificate",
@@ -5108,7 +5426,9 @@
               "minimum_count": 1,
               "required_pages": [],
               "display_name": "报废证明",
-              "alternative_group": ""
+              "alternative_group": "",
+              "identity_side": null,
+              "presence_name": ""
             },
             {
               "document_type": "vehicle_license",
@@ -5116,7 +5436,9 @@
               "minimum_count": 1,
               "required_pages": [],
               "display_name": "新车行驶证",
-              "alternative_group": ""
+              "alternative_group": "",
+              "identity_side": null,
+              "presence_name": ""
             },
             {
               "document_type": "registration_certificate",
@@ -5127,7 +5449,9 @@
                 2
               ],
               "display_name": "新车登记证第 1、2 页",
-              "alternative_group": ""
+              "alternative_group": "",
+              "identity_side": null,
+              "presence_name": "新车登记证"
             },
             {
               "document_type": "invoice",
@@ -5135,10 +5459,136 @@
               "minimum_count": 1,
               "required_pages": [],
               "display_name": "新车发票",
-              "alternative_group": ""
+              "alternative_group": "",
+              "identity_side": null,
+              "presence_name": ""
             }
           ],
-          "field_sources": []
+          "field_sources": [],
+          "presence_groups": [
+            {
+              "key": "old_vehicle",
+              "display_name": "报废车辆资料",
+              "alternatives": [
+                [
+                  {
+                    "document_type": "vehicle_license",
+                    "business_scope": "old_vehicle",
+                    "minimum_count": 1,
+                    "required_pages": [],
+                    "display_name": "旧车行驶证",
+                    "alternative_group": "",
+                    "identity_side": null,
+                    "presence_name": ""
+                  },
+                  {
+                    "document_type": "registration_certificate",
+                    "business_scope": "old_vehicle",
+                    "minimum_count": 1,
+                    "required_pages": [
+                      1,
+                      2
+                    ],
+                    "display_name": "旧车登记证第 1、2 页",
+                    "alternative_group": "",
+                    "identity_side": null,
+                    "presence_name": "旧车登记证"
+                  },
+                  {
+                    "document_type": "scrap_certificate",
+                    "business_scope": "old_vehicle",
+                    "minimum_count": 1,
+                    "required_pages": [],
+                    "display_name": "报废证明",
+                    "alternative_group": "",
+                    "identity_side": null,
+                    "presence_name": ""
+                  }
+                ]
+              ]
+            },
+            {
+              "key": "new_vehicle",
+              "display_name": "新车资料",
+              "alternatives": [
+                [
+                  {
+                    "document_type": "vehicle_license",
+                    "business_scope": "new_vehicle",
+                    "minimum_count": 1,
+                    "required_pages": [],
+                    "display_name": "新车行驶证",
+                    "alternative_group": "",
+                    "identity_side": null,
+                    "presence_name": ""
+                  },
+                  {
+                    "document_type": "registration_certificate",
+                    "business_scope": "new_vehicle",
+                    "minimum_count": 1,
+                    "required_pages": [
+                      1,
+                      2
+                    ],
+                    "display_name": "新车登记证第 1、2 页",
+                    "alternative_group": "",
+                    "identity_side": null,
+                    "presence_name": "新车登记证"
+                  },
+                  {
+                    "document_type": "invoice",
+                    "business_scope": "new_vehicle",
+                    "minimum_count": 1,
+                    "required_pages": [],
+                    "display_name": "新车发票",
+                    "alternative_group": "",
+                    "identity_side": null,
+                    "presence_name": ""
+                  }
+                ]
+              ]
+            },
+            {
+              "key": "subject",
+              "display_name": "主体资料（营业执照或身份证正反面）",
+              "alternatives": [
+                [
+                  {
+                    "document_type": "business_license",
+                    "business_scope": "business_license",
+                    "minimum_count": 1,
+                    "required_pages": [],
+                    "display_name": "营业执照",
+                    "alternative_group": "",
+                    "identity_side": null,
+                    "presence_name": ""
+                  }
+                ],
+                [
+                  {
+                    "document_type": "identity_card",
+                    "business_scope": "identity",
+                    "minimum_count": 1,
+                    "required_pages": [],
+                    "display_name": "身份证正面",
+                    "alternative_group": "",
+                    "identity_side": "FRONT",
+                    "presence_name": ""
+                  },
+                  {
+                    "document_type": "identity_card",
+                    "business_scope": "identity",
+                    "minimum_count": 1,
+                    "required_pages": [],
+                    "display_name": "身份证反面",
+                    "alternative_group": "",
+                    "identity_side": "BACK",
+                    "presence_name": ""
+                  }
+                ]
+              ]
+            }
+          ]
         },
         "retry_policy": {
           "semantic_retry_count": 1,
@@ -5193,20 +5643,28 @@
       "unconfigured_message": null,
       "page_interaction": true,
       "required_fields": [
-        "vehicle.type",
         "vehicle.plate_no",
         "vehicle.vin",
         "vehicle.engine_no",
-        "vehicle.license_vehicle_type",
-        "vehicle.brand_model",
-        "vehicle.usage_nature",
+        "vehicle.license_type",
         "vehicle.registration_date",
         "vehicle.issue_date",
-        "vehicle.owner",
-        "vehicle.fuel_type",
-        "vehicle.engine_model"
+        "vehicle.owner"
       ],
       "capabilities": [
+        {
+          "capability_id": "vehicle_source_model",
+          "kind": "RULE",
+          "version": "1.0",
+          "stage": "POST_COMPARE",
+          "input_facts": [],
+          "output_facts": [],
+          "required": true,
+          "dependencies": [],
+          "timeout_seconds": 30,
+          "retries": 0,
+          "failure_policy": "MANUAL_REVIEW"
+        },
         {
           "capability_id": "material_completeness",
           "kind": "MATERIAL",
@@ -5219,45 +5677,34 @@
           "timeout_seconds": 30,
           "retries": 0,
           "failure_policy": "MANUAL_REVIEW"
-        },
-        {
-          "capability_id": "vehicle_model_consistency",
-          "kind": "RULE",
-          "version": "1.0",
-          "stage": "POST_COMPARE",
-          "input_facts": [],
-          "output_facts": [],
-          "required": true,
-          "dependencies": [],
-          "timeout_seconds": 30,
-          "retries": 0,
-          "failure_policy": "MANUAL_REVIEW"
         }
       ],
       "bindings": [
         {
-          "capability_id": "material_completeness",
+          "capability_id": "vehicle_source_model",
           "enabled": true,
-          "required": null,
+          "required": true,
           "parameters": []
         },
         {
-          "capability_id": "vehicle_model_consistency",
+          "capability_id": "material_completeness",
           "enabled": true,
-          "required": null,
+          "required": true,
           "parameters": []
         }
       ],
       "material_policy": {
-        "mode": "enforce",
+        "mode": "observe",
         "materials": [
           {
             "document_type": "vehicle_license",
             "business_scope": "vehicle",
             "minimum_count": 1,
             "required_pages": [],
-            "display_name": "机动车行驶证",
-            "alternative_group": ""
+            "display_name": "行驶证正面",
+            "alternative_group": "",
+            "identity_side": null,
+            "presence_name": ""
           },
           {
             "document_type": "registration_certificate",
@@ -5267,31 +5714,84 @@
               1,
               2
             ],
-            "display_name": "机动车登记证书第 1、2 页",
-            "alternative_group": "vehicle_supplement"
+            "display_name": "登记证书1、2页",
+            "alternative_group": "model_evidence",
+            "identity_side": null,
+            "presence_name": ""
           },
           {
             "document_type": "vehicle_nameplate",
             "business_scope": "vehicle",
             "minimum_count": 1,
             "required_pages": [],
-            "display_name": "车辆铭牌",
-            "alternative_group": "vehicle_supplement"
+            "display_name": "铭牌",
+            "alternative_group": "model_evidence",
+            "identity_side": null,
+            "presence_name": ""
           }
         ],
-        "field_sources": []
+        "field_sources": [],
+        "presence_groups": [
+          {
+            "key": "license",
+            "display_name": "行驶证正面",
+            "alternatives": [
+              [
+                {
+                  "document_type": "vehicle_license",
+                  "business_scope": "vehicle",
+                  "minimum_count": 1,
+                  "required_pages": [],
+                  "display_name": "行驶证正面",
+                  "alternative_group": "",
+                  "identity_side": null,
+                  "presence_name": ""
+                }
+              ]
+            ]
+          },
+          {
+            "key": "model_evidence",
+            "display_name": "车型辅助材料",
+            "alternatives": [
+              [
+                {
+                  "document_type": "registration_certificate",
+                  "business_scope": "vehicle",
+                  "minimum_count": 1,
+                  "required_pages": [
+                    1,
+                    2
+                  ],
+                  "display_name": "登记证书1、2页",
+                  "alternative_group": "model_evidence",
+                  "identity_side": null,
+                  "presence_name": ""
+                }
+              ],
+              [
+                {
+                  "document_type": "vehicle_nameplate",
+                  "business_scope": "vehicle",
+                  "minimum_count": 1,
+                  "required_pages": [],
+                  "display_name": "铭牌",
+                  "alternative_group": "model_evidence",
+                  "identity_side": null,
+                  "presence_name": ""
+                }
+              ]
+            ]
+          }
+        ]
       },
       "field_check_bindings": [
         [
-          "VEHICLE-MODEL-POWER",
-          "vehicle.model"
+          "VEHICLE-SOURCE-BRAND-MODEL",
+          "vehicle.brand_model"
         ],
         [
-          "VEHICLE-MODEL-CODE",
-          "vehicle.model"
-        ],
-        [
-          "VEHICLE-MODEL-EMISSION",
+          "VEHICLE-SOURCE-MODEL",
           "vehicle.model"
         ]
       ],
@@ -5309,92 +5809,37 @@
         "scopes": [
           "vehicle"
         ],
-        "page_sections": [],
-        "page_groups": [
+        "ignored_image_labels": [
+          "行驶证反面",
+          "登记证书3、4页",
+          "登记证书3,4页",
+          "登记证书3，4页"
+        ],
+        "page_sections": [
           {
-            "label": "证件照",
-            "scope": "vehicle",
-            "title": "证件照"
-          },
-          {
-            "label": "行驶证",
-            "scope": "vehicle",
-            "title": "行驶证"
-          },
-          {
-            "label": "行驶证信息",
-            "scope": "vehicle",
+            "key": "license",
             "title": "行驶证信息"
           },
           {
-            "label": "行驶证资料",
+            "key": "spec",
+            "title": "规格参数"
+          }
+        ],
+        "page_groups": [
+          {
+            "label": "证件资料",
             "scope": "vehicle",
-            "title": "行驶证资料"
+            "title": "证件资料"
           },
           {
-            "label": "登记证书",
-            "scope": "vehicle",
-            "title": "登记证书"
-          },
-          {
-            "label": "机动车登记证书",
-            "scope": "vehicle",
-            "title": "机动车登记证书"
-          },
-          {
-            "label": "车辆铭牌",
-            "scope": "vehicle",
-            "title": "车辆铭牌"
-          },
-          {
-            "label": "铭牌",
-            "scope": "vehicle",
-            "title": "铭牌"
-          },
-          {
-            "label": "车源资料",
-            "scope": "vehicle",
-            "title": "车源资料"
-          },
-          {
-            "label": "车源信息",
-            "scope": "vehicle",
-            "title": "车源信息"
-          },
-          {
-            "label": "车辆资料",
-            "scope": "vehicle",
-            "title": "车辆资料"
-          },
-          {
-            "label": "车身与车籍信息",
-            "scope": "vehicle",
-            "title": "车身与车籍信息"
-          },
-          {
-            "label": "补充信息",
-            "scope": "vehicle",
-            "title": "补充信息"
-          },
-          {
-            "label": "车况承诺书",
+            "label": "车况资料",
             "scope": "other",
-            "title": "车况承诺书"
+            "title": "车况资料"
           },
           {
-            "label": "车况照片",
+            "label": "附件",
             "scope": "other",
-            "title": "车况照片"
-          },
-          {
-            "label": "其他资料",
-            "scope": "other",
-            "title": "其他资料"
-          },
-          {
-            "label": "其他图片",
-            "scope": "other",
-            "title": "其他图片"
+            "title": "附件"
           }
         ],
         "fields": [
@@ -5406,7 +5851,7 @@
             ],
             "section": "unknown",
             "section_required": false,
-            "reviewable": true,
+            "reviewable": false,
             "locator_name": "",
             "locator_id": "",
             "occurrence": 1
@@ -5416,10 +5861,11 @@
             "label": "车牌号码",
             "aliases": [
               "车牌号码",
-              "号牌号码"
+              "号牌号码",
+              "车牌号"
             ],
-            "section": "unknown",
-            "section_required": false,
+            "section": "license",
+            "section_required": true,
             "reviewable": true,
             "locator_name": "",
             "locator_id": "",
@@ -5433,8 +5879,8 @@
               "车架号",
               "车辆识别代号"
             ],
-            "section": "unknown",
-            "section_required": false,
+            "section": "license",
+            "section_required": true,
             "reviewable": true,
             "locator_name": "",
             "locator_id": "",
@@ -5447,47 +5893,21 @@
               "发动机号",
               "发动机号码"
             ],
-            "section": "unknown",
-            "section_required": false,
+            "section": "license",
+            "section_required": true,
             "reviewable": true,
             "locator_name": "",
             "locator_id": "",
             "occurrence": 1
           },
           {
-            "key": "vehicle.license_vehicle_type",
+            "key": "vehicle.license_type",
             "label": "行驶证车辆类型",
             "aliases": [
               "行驶证车辆类型"
             ],
-            "section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1
-          },
-          {
-            "key": "vehicle.brand_model",
-            "label": "品牌型号",
-            "aliases": [
-              "品牌型号"
-            ],
-            "section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1
-          },
-          {
-            "key": "vehicle.usage_nature",
-            "label": "使用性质",
-            "aliases": [
-              "使用性质"
-            ],
-            "section": "unknown",
-            "section_required": false,
+            "section": "license",
+            "section_required": true,
             "reviewable": true,
             "locator_name": "",
             "locator_id": "",
@@ -5499,8 +5919,8 @@
             "aliases": [
               "注册日期"
             ],
-            "section": "unknown",
-            "section_required": false,
+            "section": "license",
+            "section_required": true,
             "reviewable": true,
             "locator_name": "",
             "locator_id": "",
@@ -5512,8 +5932,8 @@
             "aliases": [
               "发证日期"
             ],
-            "section": "unknown",
-            "section_required": false,
+            "section": "license",
+            "section_required": true,
             "reviewable": true,
             "locator_name": "",
             "locator_id": "",
@@ -5523,10 +5943,24 @@
             "key": "vehicle.owner",
             "label": "所有人",
             "aliases": [
-              "所有人"
+              "所有人",
+              "车辆所有人"
             ],
-            "section": "unknown",
-            "section_required": false,
+            "section": "license",
+            "section_required": true,
+            "reviewable": true,
+            "locator_name": "",
+            "locator_id": "",
+            "occurrence": 1
+          },
+          {
+            "key": "vehicle.brand_model",
+            "label": "品牌型号",
+            "aliases": [
+              "品牌型号"
+            ],
+            "section": "license",
+            "section_required": true,
             "reviewable": true,
             "locator_name": "",
             "locator_id": "",
@@ -5538,61 +5972,157 @@
             "aliases": [
               "车型"
             ],
-            "section": "unknown",
-            "section_required": false,
+            "section": "spec",
+            "section_required": true,
             "reviewable": true,
             "locator_name": "",
             "locator_id": "",
             "occurrence": 1
           },
           {
-            "key": "vehicle.fuel_type",
+            "key": "spec.brand",
+            "label": "品牌",
+            "aliases": [
+              "品牌"
+            ],
+            "section": "spec",
+            "section_required": true,
+            "reviewable": false,
+            "locator_name": "",
+            "locator_id": "",
+            "occurrence": 1
+          },
+          {
+            "key": "spec.series",
+            "label": "车系",
+            "aliases": [
+              "车系"
+            ],
+            "section": "spec",
+            "section_required": true,
+            "reviewable": false,
+            "locator_name": "",
+            "locator_id": "",
+            "occurrence": 1
+          },
+          {
+            "key": "spec.drive_form",
+            "label": "驱动形式",
+            "aliases": [
+              "驱动形式"
+            ],
+            "section": "spec",
+            "section_required": true,
+            "reviewable": false,
+            "locator_name": "",
+            "locator_id": "",
+            "occurrence": 1
+          },
+          {
+            "key": "spec.fuel_type",
             "label": "燃料种类",
             "aliases": [
               "燃料种类"
             ],
-            "section": "unknown",
-            "section_required": false,
-            "reviewable": true,
+            "section": "spec",
+            "section_required": true,
+            "reviewable": false,
             "locator_name": "",
             "locator_id": "",
             "occurrence": 1
           },
           {
-            "key": "vehicle.engine_model",
+            "key": "spec.emission_standard",
+            "label": "排放标准",
+            "aliases": [
+              "排放标准"
+            ],
+            "section": "spec",
+            "section_required": true,
+            "reviewable": false,
+            "locator_name": "",
+            "locator_id": "",
+            "occurrence": 1
+          },
+          {
+            "key": "spec.max_hp",
+            "label": "最大马力",
+            "aliases": [
+              "最大马力"
+            ],
+            "section": "spec",
+            "section_required": true,
+            "reviewable": false,
+            "locator_name": "",
+            "locator_id": "",
+            "occurrence": 1
+          },
+          {
+            "key": "spec.engine_brand",
+            "label": "发动机品牌",
+            "aliases": [
+              "发动机品牌"
+            ],
+            "section": "spec",
+            "section_required": true,
+            "reviewable": false,
+            "locator_name": "",
+            "locator_id": "",
+            "occurrence": 1
+          },
+          {
+            "key": "spec.engine_model",
             "label": "发动机型号",
             "aliases": [
               "发动机型号"
             ],
-            "section": "unknown",
-            "section_required": false,
-            "reviewable": true,
+            "section": "spec",
+            "section_required": true,
+            "reviewable": false,
+            "locator_name": "",
+            "locator_id": "",
+            "occurrence": 1
+          },
+          {
+            "key": "spec.cargo_length",
+            "label": "货箱长度",
+            "aliases": [
+              "货箱长度"
+            ],
+            "section": "spec",
+            "section_required": true,
+            "reviewable": false,
             "locator_name": "",
             "locator_id": "",
             "occurrence": 1
           }
         ],
         "writable_fields": [
-          "vehicle.type",
           "vehicle.plate_no",
           "vehicle.vin",
           "vehicle.engine_no",
-          "vehicle.license_vehicle_type",
-          "vehicle.brand_model",
-          "vehicle.usage_nature",
+          "vehicle.license_type",
           "vehicle.registration_date",
           "vehicle.issue_date",
           "vehicle.owner",
+          "vehicle.brand_model",
           "vehicle.model",
-          "vehicle.fuel_type",
-          "vehicle.engine_model"
+          "spec.brand",
+          "spec.series",
+          "spec.drive_form",
+          "spec.fuel_type",
+          "spec.emission_standard",
+          "spec.max_hp",
+          "spec.engine_brand",
+          "spec.engine_model",
+          "spec.cargo_length"
         ],
         "writable_control_kinds": [
           "text",
           "textarea",
           "number",
-          "select",
-          "date"
+          "date",
+          "select"
         ],
         "identity_anchors": [
           "vehicle.vin",
@@ -5605,39 +6135,29 @@
         "materials": [
           {
             "document_type": "vehicle_license",
-            "label": "机动车行驶证",
+            "label": "行驶证正面",
             "hints": [
-              "行驶证",
               "行驶证正面",
-              "行驶证反面",
-              "证件照",
-              "车源资料",
-              "车辆资料"
+              "行驶证"
             ],
             "slots": []
           },
           {
             "document_type": "registration_certificate",
-            "label": "机动车登记证书",
+            "label": "登记证书1、2页",
             "hints": [
-              "登记证书",
-              "机动车登记证",
-              "登记证",
-              "证件照",
-              "车源资料",
-              "车辆资料"
+              "登记证书1、2页",
+              "登记证书1,2页",
+              "登记证书"
             ],
             "slots": []
           },
           {
             "document_type": "vehicle_nameplate",
-            "label": "车辆铭牌",
+            "label": "铭牌",
             "hints": [
               "车辆铭牌",
-              "铭牌",
-              "证件照",
-              "车源资料",
-              "车辆资料"
+              "铭牌"
             ],
             "slots": []
           }
@@ -5651,34 +6171,35 @@
         ],
         "sections": [
           {
-            "key": "vehicle",
-            "title": "车源车辆信息"
+            "key": "license",
+            "title": "行驶证信息"
+          },
+          {
+            "key": "spec",
+            "title": "规格参数"
           }
         ],
         "fields": [
           {
             "key": "vehicle.type",
             "label": "车辆类型",
-            "section": "vehicle",
+            "section": "",
             "aliases": [
               "车辆类型"
             ],
             "page_section": "unknown",
             "section_required": false,
-            "reviewable": true,
-            "mode": "PARALLEL",
-            "sources": [
-              "vehicle_license",
-              "registration_certificate"
-            ],
+            "reviewable": false,
+            "mode": null,
+            "sources": [],
             "allow_single_evidence": true,
             "uncertain_requires_review": true,
             "page_evidence_required": true,
-            "normalizer": "vehicle_type",
+            "normalizer": "default",
             "authority": [],
             "material_field": null,
-            "required": true,
-            "writable": true,
+            "required": false,
+            "writable": false,
             "max_age_days": null,
             "locator_name": "",
             "locator_id": "",
@@ -5688,13 +6209,14 @@
           {
             "key": "vehicle.plate_no",
             "label": "车牌号码",
-            "section": "vehicle",
+            "section": "license",
             "aliases": [
               "车牌号码",
-              "号牌号码"
+              "号牌号码",
+              "车牌号"
             ],
-            "page_section": "unknown",
-            "section_required": false,
+            "page_section": "license",
+            "section_required": true,
             "reviewable": true,
             "mode": "SINGLE_SOURCE",
             "sources": [
@@ -5703,8 +6225,25 @@
             "allow_single_evidence": true,
             "uncertain_requires_review": true,
             "page_evidence_required": true,
-            "normalizer": "plate",
-            "authority": [],
+            "normalizer": "identifier",
+            "authority": [
+              {
+                "source": "image",
+                "label": "行驶证正面",
+                "document_types": [
+                  "vehicle_license"
+                ],
+                "match": "full",
+                "required": false
+              },
+              {
+                "source": "page",
+                "label": "页面字段",
+                "document_types": [],
+                "match": "full",
+                "required": true
+              }
+            ],
             "material_field": null,
             "required": true,
             "writable": true,
@@ -5717,20 +6256,18 @@
           {
             "key": "vehicle.vin",
             "label": "VIN",
-            "section": "vehicle",
+            "section": "license",
             "aliases": [
               "VIN",
               "车架号",
               "车辆识别代号"
             ],
-            "page_section": "unknown",
-            "section_required": false,
+            "page_section": "license",
+            "section_required": true,
             "reviewable": true,
-            "mode": "PARALLEL",
+            "mode": "SINGLE_SOURCE",
             "sources": [
-              "vehicle_license",
-              "registration_certificate",
-              "vehicle_nameplate"
+              "vehicle_license"
             ],
             "allow_single_evidence": true,
             "uncertain_requires_review": true,
@@ -5739,29 +6276,19 @@
             "authority": [
               {
                 "source": "image",
-                "label": "行驶证",
+                "label": "行驶证正面",
                 "document_types": [
                   "vehicle_license"
                 ],
                 "match": "full",
-                "required": true
+                "required": false
               },
               {
                 "source": "page",
-                "label": "申请页面",
+                "label": "页面字段",
                 "document_types": [],
                 "match": "full",
-                "required": false
-              },
-              {
-                "source": "image",
-                "label": "登记证书或车辆铭牌",
-                "document_types": [
-                  "registration_certificate",
-                  "vehicle_nameplate"
-                ],
-                "match": "suffix8",
-                "required": false
+                "required": true
               }
             ],
             "material_field": null,
@@ -5776,75 +6303,17 @@
           {
             "key": "vehicle.engine_no",
             "label": "发动机号",
-            "section": "vehicle",
+            "section": "license",
             "aliases": [
               "发动机号",
               "发动机号码"
             ],
-            "page_section": "unknown",
-            "section_required": false,
+            "page_section": "license",
+            "section_required": true,
             "reviewable": true,
             "mode": "SINGLE_SOURCE",
             "sources": [
               "vehicle_license"
-            ],
-            "allow_single_evidence": true,
-            "uncertain_requires_review": true,
-            "page_evidence_required": true,
-            "normalizer": "identifier",
-            "authority": [],
-            "material_field": null,
-            "required": true,
-            "writable": true,
-            "max_age_days": null,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1,
-            "task_projector": ""
-          },
-          {
-            "key": "vehicle.license_vehicle_type",
-            "label": "行驶证车辆类型",
-            "section": "vehicle",
-            "aliases": [
-              "行驶证车辆类型"
-            ],
-            "page_section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "mode": "SINGLE_SOURCE",
-            "sources": [
-              "vehicle_license"
-            ],
-            "allow_single_evidence": true,
-            "uncertain_requires_review": true,
-            "page_evidence_required": true,
-            "normalizer": "text",
-            "authority": [],
-            "material_field": null,
-            "required": true,
-            "writable": true,
-            "max_age_days": null,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1,
-            "task_projector": ""
-          },
-          {
-            "key": "vehicle.brand_model",
-            "label": "品牌型号",
-            "section": "vehicle",
-            "aliases": [
-              "品牌型号"
-            ],
-            "page_section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "mode": "PARALLEL",
-            "sources": [
-              "vehicle_license",
-              "registration_certificate",
-              "vehicle_nameplate"
             ],
             "allow_single_evidence": true,
             "uncertain_requires_review": true,
@@ -5853,29 +6322,19 @@
             "authority": [
               {
                 "source": "image",
-                "label": "行驶证",
+                "label": "行驶证正面",
                 "document_types": [
                   "vehicle_license"
                 ],
                 "match": "full",
-                "required": true
+                "required": false
               },
               {
                 "source": "page",
-                "label": "申请页面",
+                "label": "页面字段",
                 "document_types": [],
                 "match": "full",
-                "required": false
-              },
-              {
-                "source": "image",
-                "label": "登记证书或车辆铭牌",
-                "document_types": [
-                  "registration_certificate",
-                  "vehicle_nameplate"
-                ],
-                "match": "full",
-                "required": false
+                "required": true
               }
             ],
             "material_field": null,
@@ -5888,14 +6347,14 @@
             "task_projector": ""
           },
           {
-            "key": "vehicle.usage_nature",
-            "label": "使用性质",
-            "section": "vehicle",
+            "key": "vehicle.license_type",
+            "label": "行驶证车辆类型",
+            "section": "license",
             "aliases": [
-              "使用性质"
+              "行驶证车辆类型"
             ],
-            "page_section": "unknown",
-            "section_required": false,
+            "page_section": "license",
+            "section_required": true,
             "reviewable": true,
             "mode": "SINGLE_SOURCE",
             "sources": [
@@ -5905,7 +6364,24 @@
             "uncertain_requires_review": true,
             "page_evidence_required": true,
             "normalizer": "text",
-            "authority": [],
+            "authority": [
+              {
+                "source": "image",
+                "label": "行驶证正面",
+                "document_types": [
+                  "vehicle_license"
+                ],
+                "match": "full",
+                "required": false
+              },
+              {
+                "source": "page",
+                "label": "页面字段",
+                "document_types": [],
+                "match": "full",
+                "required": true
+              }
+            ],
             "material_field": null,
             "required": true,
             "writable": true,
@@ -5918,12 +6394,12 @@
           {
             "key": "vehicle.registration_date",
             "label": "注册日期",
-            "section": "vehicle",
+            "section": "license",
             "aliases": [
               "注册日期"
             ],
-            "page_section": "unknown",
-            "section_required": false,
+            "page_section": "license",
+            "section_required": true,
             "reviewable": true,
             "mode": "SINGLE_SOURCE",
             "sources": [
@@ -5933,163 +6409,22 @@
             "uncertain_requires_review": true,
             "page_evidence_required": true,
             "normalizer": "date",
-            "authority": [],
-            "material_field": null,
-            "required": true,
-            "writable": true,
-            "max_age_days": null,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1,
-            "task_projector": ""
-          },
-          {
-            "key": "vehicle.issue_date",
-            "label": "发证日期",
-            "section": "vehicle",
-            "aliases": [
-              "发证日期"
-            ],
-            "page_section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "mode": "SINGLE_SOURCE",
-            "sources": [
-              "vehicle_license"
-            ],
-            "allow_single_evidence": true,
-            "uncertain_requires_review": true,
-            "page_evidence_required": true,
-            "normalizer": "date",
-            "authority": [],
-            "material_field": null,
-            "required": true,
-            "writable": true,
-            "max_age_days": 90,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1,
-            "task_projector": ""
-          },
-          {
-            "key": "vehicle.owner",
-            "label": "所有人",
-            "section": "vehicle",
-            "aliases": [
-              "所有人"
-            ],
-            "page_section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "mode": "SINGLE_SOURCE",
-            "sources": [
-              "vehicle_license"
-            ],
-            "allow_single_evidence": true,
-            "uncertain_requires_review": true,
-            "page_evidence_required": true,
-            "normalizer": "party_name",
-            "authority": [],
-            "material_field": null,
-            "required": true,
-            "writable": true,
-            "max_age_days": null,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1,
-            "task_projector": ""
-          },
-          {
-            "key": "vehicle.model",
-            "label": "车型",
-            "section": "vehicle",
-            "aliases": [
-              "车型"
-            ],
-            "page_section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "mode": null,
-            "sources": [],
-            "allow_single_evidence": true,
-            "uncertain_requires_review": true,
-            "page_evidence_required": true,
-            "normalizer": "default",
-            "authority": [],
-            "material_field": null,
-            "required": false,
-            "writable": true,
-            "max_age_days": null,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1,
-            "task_projector": ""
-          },
-          {
-            "key": "vehicle.fuel_type",
-            "label": "燃料种类",
-            "section": "vehicle",
-            "aliases": [
-              "燃料种类"
-            ],
-            "page_section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "mode": "PARALLEL",
-            "sources": [
-              "vehicle_license",
-              "registration_certificate"
-            ],
-            "allow_single_evidence": true,
-            "uncertain_requires_review": true,
-            "page_evidence_required": true,
-            "normalizer": "fuel_type",
-            "authority": [],
-            "material_field": null,
-            "required": true,
-            "writable": true,
-            "max_age_days": null,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1,
-            "task_projector": ""
-          },
-          {
-            "key": "vehicle.engine_model",
-            "label": "发动机型号",
-            "section": "vehicle",
-            "aliases": [
-              "发动机型号"
-            ],
-            "page_section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "mode": "PARALLEL",
-            "sources": [
-              "registration_certificate",
-              "vehicle_nameplate"
-            ],
-            "allow_single_evidence": true,
-            "uncertain_requires_review": true,
-            "page_evidence_required": true,
-            "normalizer": "engine_model",
             "authority": [
               {
                 "source": "image",
-                "label": "登记证书或车辆铭牌",
+                "label": "行驶证正面",
                 "document_types": [
-                  "registration_certificate",
-                  "vehicle_nameplate"
+                  "vehicle_license"
                 ],
                 "match": "full",
-                "required": true
+                "required": false
               },
               {
                 "source": "page",
-                "label": "申请页面",
+                "label": "页面字段",
                 "document_types": [],
                 "match": "full",
-                "required": false
+                "required": true
               }
             ],
             "material_field": null,
@@ -6102,12 +6437,105 @@
             "task_projector": ""
           },
           {
-            "key": "vehicle.model_code",
-            "label": "整车型号",
-            "section": "vehicle",
-            "aliases": [],
-            "page_section": "unknown",
-            "section_required": false,
+            "key": "vehicle.issue_date",
+            "label": "发证日期",
+            "section": "license",
+            "aliases": [
+              "发证日期"
+            ],
+            "page_section": "license",
+            "section_required": true,
+            "reviewable": true,
+            "mode": "SINGLE_SOURCE",
+            "sources": [
+              "vehicle_license"
+            ],
+            "allow_single_evidence": true,
+            "uncertain_requires_review": true,
+            "page_evidence_required": true,
+            "normalizer": "date",
+            "authority": [
+              {
+                "source": "image",
+                "label": "行驶证正面",
+                "document_types": [
+                  "vehicle_license"
+                ],
+                "match": "full",
+                "required": false
+              },
+              {
+                "source": "page",
+                "label": "页面字段",
+                "document_types": [],
+                "match": "full",
+                "required": true
+              }
+            ],
+            "material_field": null,
+            "required": true,
+            "writable": true,
+            "max_age_days": null,
+            "locator_name": "",
+            "locator_id": "",
+            "occurrence": 1,
+            "task_projector": ""
+          },
+          {
+            "key": "vehicle.owner",
+            "label": "所有人",
+            "section": "license",
+            "aliases": [
+              "所有人",
+              "车辆所有人"
+            ],
+            "page_section": "license",
+            "section_required": true,
+            "reviewable": true,
+            "mode": "SINGLE_SOURCE",
+            "sources": [
+              "vehicle_license"
+            ],
+            "allow_single_evidence": true,
+            "uncertain_requires_review": true,
+            "page_evidence_required": true,
+            "normalizer": "party_name",
+            "authority": [
+              {
+                "source": "image",
+                "label": "行驶证正面",
+                "document_types": [
+                  "vehicle_license"
+                ],
+                "match": "full",
+                "required": false
+              },
+              {
+                "source": "page",
+                "label": "页面字段",
+                "document_types": [],
+                "match": "full",
+                "required": true
+              }
+            ],
+            "material_field": null,
+            "required": true,
+            "writable": true,
+            "max_age_days": null,
+            "locator_name": "",
+            "locator_id": "",
+            "occurrence": 1,
+            "task_projector": ""
+          },
+          {
+            "key": "vehicle.brand_model",
+            "label": "品牌型号",
+            "section": "license",
+            "aliases": [
+              "品牌型号"
+            ],
+            "page_section": "license",
+            "section_required": true,
             "reviewable": true,
             "mode": null,
             "sources": [],
@@ -6118,7 +6546,7 @@
             "authority": [],
             "material_field": null,
             "required": false,
-            "writable": false,
+            "writable": true,
             "max_age_days": null,
             "locator_name": "",
             "locator_id": "",
@@ -6126,12 +6554,14 @@
             "task_projector": ""
           },
           {
-            "key": "vehicle.power_kw",
-            "label": "发动机功率",
-            "section": "vehicle",
-            "aliases": [],
-            "page_section": "unknown",
-            "section_required": false,
+            "key": "vehicle.model",
+            "label": "车型",
+            "section": "spec",
+            "aliases": [
+              "车型"
+            ],
+            "page_section": "spec",
+            "section_required": true,
             "reviewable": true,
             "mode": null,
             "sources": [],
@@ -6142,7 +6572,7 @@
             "authority": [],
             "material_field": null,
             "required": false,
-            "writable": false,
+            "writable": true,
             "max_age_days": null,
             "locator_name": "",
             "locator_id": "",
@@ -6150,13 +6580,271 @@
             "task_projector": ""
           },
           {
-            "key": "vehicle.emission_standard",
+            "key": "spec.brand",
+            "label": "品牌",
+            "section": "spec",
+            "aliases": [
+              "品牌"
+            ],
+            "page_section": "spec",
+            "section_required": true,
+            "reviewable": false,
+            "mode": null,
+            "sources": [],
+            "allow_single_evidence": true,
+            "uncertain_requires_review": true,
+            "page_evidence_required": true,
+            "normalizer": "default",
+            "authority": [],
+            "material_field": null,
+            "required": false,
+            "writable": true,
+            "max_age_days": null,
+            "locator_name": "",
+            "locator_id": "",
+            "occurrence": 1,
+            "task_projector": ""
+          },
+          {
+            "key": "spec.series",
+            "label": "车系",
+            "section": "spec",
+            "aliases": [
+              "车系"
+            ],
+            "page_section": "spec",
+            "section_required": true,
+            "reviewable": false,
+            "mode": null,
+            "sources": [],
+            "allow_single_evidence": true,
+            "uncertain_requires_review": true,
+            "page_evidence_required": true,
+            "normalizer": "default",
+            "authority": [],
+            "material_field": null,
+            "required": false,
+            "writable": true,
+            "max_age_days": null,
+            "locator_name": "",
+            "locator_id": "",
+            "occurrence": 1,
+            "task_projector": ""
+          },
+          {
+            "key": "spec.drive_form",
+            "label": "驱动形式",
+            "section": "spec",
+            "aliases": [
+              "驱动形式"
+            ],
+            "page_section": "spec",
+            "section_required": true,
+            "reviewable": false,
+            "mode": null,
+            "sources": [],
+            "allow_single_evidence": true,
+            "uncertain_requires_review": true,
+            "page_evidence_required": true,
+            "normalizer": "default",
+            "authority": [],
+            "material_field": null,
+            "required": false,
+            "writable": true,
+            "max_age_days": null,
+            "locator_name": "",
+            "locator_id": "",
+            "occurrence": 1,
+            "task_projector": ""
+          },
+          {
+            "key": "spec.fuel_type",
+            "label": "燃料种类",
+            "section": "spec",
+            "aliases": [
+              "燃料种类"
+            ],
+            "page_section": "spec",
+            "section_required": true,
+            "reviewable": false,
+            "mode": null,
+            "sources": [],
+            "allow_single_evidence": true,
+            "uncertain_requires_review": true,
+            "page_evidence_required": true,
+            "normalizer": "default",
+            "authority": [],
+            "material_field": null,
+            "required": false,
+            "writable": true,
+            "max_age_days": null,
+            "locator_name": "",
+            "locator_id": "",
+            "occurrence": 1,
+            "task_projector": ""
+          },
+          {
+            "key": "spec.emission_standard",
             "label": "排放标准",
-            "section": "vehicle",
+            "section": "spec",
+            "aliases": [
+              "排放标准"
+            ],
+            "page_section": "spec",
+            "section_required": true,
+            "reviewable": false,
+            "mode": null,
+            "sources": [],
+            "allow_single_evidence": true,
+            "uncertain_requires_review": true,
+            "page_evidence_required": true,
+            "normalizer": "default",
+            "authority": [],
+            "material_field": null,
+            "required": false,
+            "writable": true,
+            "max_age_days": null,
+            "locator_name": "",
+            "locator_id": "",
+            "occurrence": 1,
+            "task_projector": ""
+          },
+          {
+            "key": "spec.max_hp",
+            "label": "最大马力",
+            "section": "spec",
+            "aliases": [
+              "最大马力"
+            ],
+            "page_section": "spec",
+            "section_required": true,
+            "reviewable": false,
+            "mode": null,
+            "sources": [],
+            "allow_single_evidence": true,
+            "uncertain_requires_review": true,
+            "page_evidence_required": true,
+            "normalizer": "default",
+            "authority": [],
+            "material_field": null,
+            "required": false,
+            "writable": true,
+            "max_age_days": null,
+            "locator_name": "",
+            "locator_id": "",
+            "occurrence": 1,
+            "task_projector": ""
+          },
+          {
+            "key": "spec.engine_brand",
+            "label": "发动机品牌",
+            "section": "spec",
+            "aliases": [
+              "发动机品牌"
+            ],
+            "page_section": "spec",
+            "section_required": true,
+            "reviewable": false,
+            "mode": null,
+            "sources": [],
+            "allow_single_evidence": true,
+            "uncertain_requires_review": true,
+            "page_evidence_required": true,
+            "normalizer": "default",
+            "authority": [],
+            "material_field": null,
+            "required": false,
+            "writable": true,
+            "max_age_days": null,
+            "locator_name": "",
+            "locator_id": "",
+            "occurrence": 1,
+            "task_projector": ""
+          },
+          {
+            "key": "spec.engine_model",
+            "label": "发动机型号",
+            "section": "spec",
+            "aliases": [
+              "发动机型号"
+            ],
+            "page_section": "spec",
+            "section_required": true,
+            "reviewable": false,
+            "mode": null,
+            "sources": [],
+            "allow_single_evidence": true,
+            "uncertain_requires_review": true,
+            "page_evidence_required": true,
+            "normalizer": "default",
+            "authority": [],
+            "material_field": null,
+            "required": false,
+            "writable": true,
+            "max_age_days": null,
+            "locator_name": "",
+            "locator_id": "",
+            "occurrence": 1,
+            "task_projector": ""
+          },
+          {
+            "key": "spec.cargo_length",
+            "label": "货箱长度",
+            "section": "spec",
+            "aliases": [
+              "货箱长度"
+            ],
+            "page_section": "spec",
+            "section_required": true,
+            "reviewable": false,
+            "mode": null,
+            "sources": [],
+            "allow_single_evidence": true,
+            "uncertain_requires_review": true,
+            "page_evidence_required": true,
+            "normalizer": "default",
+            "authority": [],
+            "material_field": null,
+            "required": false,
+            "writable": true,
+            "max_age_days": null,
+            "locator_name": "",
+            "locator_id": "",
+            "occurrence": 1,
+            "task_projector": ""
+          },
+          {
+            "key": "vehicle.announcement_model",
+            "label": "整车型号",
+            "section": "",
             "aliases": [],
             "page_section": "unknown",
             "section_required": false,
-            "reviewable": true,
+            "reviewable": false,
+            "mode": null,
+            "sources": [],
+            "allow_single_evidence": true,
+            "uncertain_requires_review": true,
+            "page_evidence_required": true,
+            "normalizer": "default",
+            "authority": [],
+            "material_field": null,
+            "required": false,
+            "writable": false,
+            "max_age_days": null,
+            "locator_name": "",
+            "locator_id": "",
+            "occurrence": 1,
+            "task_projector": ""
+          },
+          {
+            "key": "vehicle.engine_model",
+            "label": "发动机型号（材料）",
+            "section": "",
+            "aliases": [],
+            "page_section": "unknown",
+            "section_required": false,
+            "reviewable": false,
             "mode": null,
             "sources": [],
             "allow_single_evidence": true,
@@ -6177,58 +6865,28 @@
         "materials": [
           {
             "document_type": "vehicle_license",
-            "display_name": "机动车行驶证",
+            "display_name": "行驶证正面",
             "fields": [
               "vehicle.plate_no",
               "vehicle.vin",
               "vehicle.engine_no",
-              "vehicle.type",
-              "vehicle.brand_model",
-              "vehicle.usage_nature",
+              "vehicle.license_type",
               "vehicle.registration_date",
               "vehicle.issue_date",
               "vehicle.owner",
-              "vehicle.fuel_type"
+              "vehicle.brand_model"
             ],
-            "guidance": "识别机动车行驶证正反面，正反面可能拼在同一张图中。分别读取号牌号码、车辆识别代号、发动机号码、车辆类型、品牌型号、使用性质、注册日期、发证日期、所有人和燃料种类。",
-            "scoped_fields": [
-              [
-                "vehicle",
-                [
-                  "vehicle.plate_no",
-                  "vehicle.vin",
-                  "vehicle.engine_no",
-                  "vehicle.type",
-                  "vehicle.brand_model",
-                  "vehicle.usage_nature",
-                  "vehicle.registration_date",
-                  "vehicle.issue_date",
-                  "vehicle.owner",
-                  "vehicle.fuel_type"
-                ]
-              ]
-            ],
-            "scoped_guidance": [
-              [
-                "vehicle",
-                "读取正面号牌号码、车辆识别代号、发动机号码、车辆类型、使用性质、品牌型号、注册日期、发证日期、所有人和燃料种类。车辆识别代号不得读取车辆型号或发动机号码；号牌号码不得读取档案编号或条形码数字；车辆类型保留票面完整原文；注册日期只读取‘注册日期’，不得使用发证日期或检验有效期代替。‘品牌型号’栏按票面完整原文读取，品牌名和型号代码一起写入 vehicle.brand_model。行驶证上只有‘发动机号码’，没有‘发动机型号’，不要把发动机号码当作发动机型号，也不要用它拼出车辆型号。"
-              ]
-            ],
-            "scoped_names": [
-              [
-                "vehicle",
-                "机动车行驶证"
-              ]
-            ],
+            "guidance": "只读取行驶证正面及同图副页的实际文字。发动机号是号码，不是发动机型号。vehicle.license_type读取完整车辆类型，不折叠为大类。品牌型号保留品牌文字和实际可见型号，末尾被截断就保留截断值，禁止补写。不得从登记证或铭牌代读。",
+            "scoped_fields": [],
+            "scoped_guidance": [],
+            "scoped_names": [],
             "hints": [
-              "行驶证",
               "行驶证正面",
-              "行驶证反面",
-              "证件照",
-              "车源资料",
-              "车辆资料"
+              "行驶证"
             ],
-            "allowed_scopes": [],
+            "allowed_scopes": [
+              "vehicle"
+            ],
             "scope_independent": false,
             "scoped_vehicle_fields": [],
             "slots": [],
@@ -6236,48 +6894,25 @@
           },
           {
             "document_type": "registration_certificate",
-            "display_name": "机动车登记证书",
+            "display_name": "登记证书1、2页",
             "fields": [
+              "vehicle.announcement_model",
+              "vehicle.engine_model",
               "vehicle.vin",
-              "vehicle.model_code",
-              "vehicle.brand_model",
-              "vehicle.fuel_type",
-              "vehicle.emission_standard",
-              "vehicle.power_kw",
               "registration.covered_pages"
             ],
-            "guidance": "识别机动车登记证书第 1、2 页，读取车辆识别代号、车辆型号、车辆品牌、发动机型号、燃料种类、排量或功率，以及页脚实际印刷的页码。",
-            "scoped_fields": [
-              [
-                "vehicle",
-                [
-                  "vehicle.vin",
-                  "vehicle.engine_model",
-                  "vehicle.model_code",
-                  "vehicle.brand_model",
-                  "vehicle.fuel_type",
-                  "vehicle.emission_standard",
-                  "vehicle.power_kw",
-                  "registration.covered_pages"
-                ]
-              ]
-            ],
-            "scoped_guidance": [
-              [
-                "vehicle",
-                "读取注册登记机动车信息栏的车辆识别代号、车辆型号、车辆品牌、‘发动机型号’和‘燃料种类’，以及排量或功率栏的千瓦数。登记证书没有‘品牌型号’栏目，vehicle.brand_model 必须由‘车辆品牌’栏直接接上‘车辆型号’栏组成，中间不加空格或符号（车辆品牌‘解放牌’＋车辆型号‘CA4250P66M25T1A1E6’→‘解放牌CA4250P66M25T1A1E6’）。vehicle.model_code 只输出‘车辆型号’栏的型号代码本身，不含中文品牌名。第 11 项‘发动机号码’绝不能作为发动机型号；车辆识别代号不能读取车辆型号。排放标准只在证件明确印刷‘国四/国五/国六’或‘Ⅳ/Ⅴ/Ⅵ’时写入 vehicle.emission_standard。registration.covered_pages 只输出图片页脚实际印刷的页码数组，例如页脚同时出现‘第1页’和‘第2页’时输出 [1,2]，不要按上传顺序推测。"
-              ]
-            ],
+            "guidance": "只从登记证书第1、2页读取车辆型号、发动机型号、车辆识别代号。整车型号写vehicle.announcement_model；发动机型号写vehicle.engine_model，禁止用发动机号码替代。保留型号的全部后缀。第3、4页不用于推断这些字段。registration.covered_pages仅记录原图明确可见的页码，输出整数数组，不猜测未展示页码。",
+            "scoped_fields": [],
+            "scoped_guidance": [],
             "scoped_names": [],
             "hints": [
-              "登记证书",
-              "机动车登记证",
-              "登记证",
-              "证件照",
-              "车源资料",
-              "车辆资料"
+              "登记证书1、2页",
+              "登记证书1,2页",
+              "登记证书"
             ],
-            "allowed_scopes": [],
+            "allowed_scopes": [
+              "vehicle"
+            ],
             "scope_independent": false,
             "scoped_vehicle_fields": [],
             "slots": [],
@@ -6285,43 +6920,23 @@
           },
           {
             "document_type": "vehicle_nameplate",
-            "display_name": "车辆铭牌",
+            "display_name": "铭牌",
             "fields": [
-              "vehicle.vin",
-              "vehicle.model_code",
-              "vehicle.brand_model",
-              "vehicle.power_kw",
-              "vehicle.emission_standard"
+              "vehicle.announcement_model",
+              "vehicle.engine_model",
+              "vehicle.vin"
             ],
-            "guidance": "识别车身或驾驶室内的车辆铭牌，读取车辆识别代号、整车型号、发动机型号、发动机功率和排放标准。",
-            "scoped_fields": [
-              [
-                "vehicle",
-                [
-                  "vehicle.vin",
-                  "vehicle.engine_model",
-                  "vehicle.model_code",
-                  "vehicle.brand_model",
-                  "vehicle.power_kw",
-                  "vehicle.emission_standard"
-                ]
-              ]
-            ],
-            "scoped_guidance": [
-              [
-                "vehicle",
-                "读取铭牌上打刻或印刷的车辆识别代号、整车型号、发动机型号、发动机功率（千瓦）和排放标准。铭牌没有页码和轴数，不要为不存在的栏目写入字段；车辆识别代号不能读取底盘号以外的其他编号；排放标准只在铭牌明确标注‘国四/国五/国六’或‘Ⅳ/Ⅴ/Ⅵ’时写入；vehicle.model_code 只读取整车型号代码本身，不含中文品牌名。vehicle.brand_model 按铭牌印刷的品牌与整车型号原样拼接，中间不加空格或符号。"
-              ]
-            ],
+            "guidance": "读取铭牌上的完整整车型号、完整发动机型号和VIN。禁止推导马力、排放或销售版本；发动机号码不能替代发动机型号。",
+            "scoped_fields": [],
+            "scoped_guidance": [],
             "scoped_names": [],
             "hints": [
               "车辆铭牌",
-              "铭牌",
-              "证件照",
-              "车源资料",
-              "车辆资料"
+              "铭牌"
             ],
-            "allowed_scopes": [],
+            "allowed_scopes": [
+              "vehicle"
+            ],
             "scope_independent": false,
             "scoped_vehicle_fields": [],
             "slots": [],
@@ -6331,107 +6946,29 @@
         "material_extraction_seeds": null,
         "page_groups": [
           {
-            "label": "证件照",
+            "label": "证件资料",
             "scope": "vehicle",
-            "title": "证件照",
+            "title": "证件资料",
             "occurrence": 0
           },
           {
-            "label": "行驶证",
-            "scope": "vehicle",
-            "title": "行驶证",
-            "occurrence": 0
-          },
-          {
-            "label": "行驶证信息",
-            "scope": "vehicle",
-            "title": "行驶证信息",
-            "occurrence": 0
-          },
-          {
-            "label": "行驶证资料",
-            "scope": "vehicle",
-            "title": "行驶证资料",
-            "occurrence": 0
-          },
-          {
-            "label": "登记证书",
-            "scope": "vehicle",
-            "title": "登记证书",
-            "occurrence": 0
-          },
-          {
-            "label": "机动车登记证书",
-            "scope": "vehicle",
-            "title": "机动车登记证书",
-            "occurrence": 0
-          },
-          {
-            "label": "车辆铭牌",
-            "scope": "vehicle",
-            "title": "车辆铭牌",
-            "occurrence": 0
-          },
-          {
-            "label": "铭牌",
-            "scope": "vehicle",
-            "title": "铭牌",
-            "occurrence": 0
-          },
-          {
-            "label": "车源资料",
-            "scope": "vehicle",
-            "title": "车源资料",
-            "occurrence": 0
-          },
-          {
-            "label": "车源信息",
-            "scope": "vehicle",
-            "title": "车源信息",
-            "occurrence": 0
-          },
-          {
-            "label": "车辆资料",
-            "scope": "vehicle",
-            "title": "车辆资料",
-            "occurrence": 0
-          },
-          {
-            "label": "车身与车籍信息",
-            "scope": "vehicle",
-            "title": "车身与车籍信息",
-            "occurrence": 0
-          },
-          {
-            "label": "补充信息",
-            "scope": "vehicle",
-            "title": "补充信息",
-            "occurrence": 0
-          },
-          {
-            "label": "车况承诺书",
+            "label": "车况资料",
             "scope": "other",
-            "title": "车况承诺书",
+            "title": "车况资料",
             "occurrence": 0
           },
           {
-            "label": "车况照片",
+            "label": "附件",
             "scope": "other",
-            "title": "车况照片",
-            "occurrence": 0
-          },
-          {
-            "label": "其他资料",
-            "scope": "other",
-            "title": "其他资料",
-            "occurrence": 0
-          },
-          {
-            "label": "其他图片",
-            "scope": "other",
-            "title": "其他图片",
+            "title": "附件",
             "occurrence": 0
           }
+        ],
+        "ignored_image_labels": [
+          "行驶证反面",
+          "登记证书3、4页",
+          "登记证书3,4页",
+          "登记证书3，4页"
         ],
         "routes": [
           {
@@ -6440,7 +6977,7 @@
             "targets": [
               "vehicle.plate_no"
             ],
-            "scope": "vehicle",
+            "scope": "",
             "group_order": null
           },
           {
@@ -6449,7 +6986,7 @@
             "targets": [
               "vehicle.vin"
             ],
-            "scope": "vehicle",
+            "scope": "",
             "group_order": null
           },
           {
@@ -6458,25 +6995,16 @@
             "targets": [
               "vehicle.engine_no"
             ],
-            "scope": "vehicle",
+            "scope": "",
             "group_order": null
           },
           {
             "document_type": "vehicle_license",
-            "source_field": "vehicle.brand_model",
+            "source_field": "vehicle.license_type",
             "targets": [
-              "vehicle.brand_model"
+              "vehicle.license_type"
             ],
-            "scope": "vehicle",
-            "group_order": null
-          },
-          {
-            "document_type": "vehicle_license",
-            "source_field": "vehicle.usage_nature",
-            "targets": [
-              "vehicle.usage_nature"
-            ],
-            "scope": "vehicle",
+            "scope": "",
             "group_order": null
           },
           {
@@ -6485,7 +7013,7 @@
             "targets": [
               "vehicle.registration_date"
             ],
-            "scope": "vehicle",
+            "scope": "",
             "group_order": null
           },
           {
@@ -6494,7 +7022,7 @@
             "targets": [
               "vehicle.issue_date"
             ],
-            "scope": "vehicle",
+            "scope": "",
             "group_order": null
           },
           {
@@ -6503,25 +7031,25 @@
             "targets": [
               "vehicle.owner"
             ],
-            "scope": "vehicle",
+            "scope": "",
             "group_order": null
           },
           {
             "document_type": "vehicle_license",
-            "source_field": "vehicle.fuel_type",
+            "source_field": "vehicle.brand_model",
             "targets": [
-              "vehicle.fuel_type"
+              "vehicle.brand_model"
             ],
-            "scope": "vehicle",
+            "scope": "",
             "group_order": null
           },
           {
             "document_type": "registration_certificate",
-            "source_field": "vehicle.vin",
+            "source_field": "vehicle.announcement_model",
             "targets": [
-              "vehicle.vin"
+              "vehicle.announcement_model"
             ],
-            "scope": "vehicle",
+            "scope": "",
             "group_order": null
           },
           {
@@ -6530,61 +7058,25 @@
             "targets": [
               "vehicle.engine_model"
             ],
-            "scope": "vehicle",
+            "scope": "",
             "group_order": null
           },
           {
             "document_type": "registration_certificate",
-            "source_field": "vehicle.model_code",
-            "targets": [
-              "vehicle.model_code"
-            ],
-            "scope": "vehicle",
-            "group_order": null
-          },
-          {
-            "document_type": "registration_certificate",
-            "source_field": "vehicle.brand_model",
-            "targets": [
-              "vehicle.brand_model"
-            ],
-            "scope": "vehicle",
-            "group_order": null
-          },
-          {
-            "document_type": "registration_certificate",
-            "source_field": "vehicle.fuel_type",
-            "targets": [
-              "vehicle.fuel_type"
-            ],
-            "scope": "vehicle",
-            "group_order": null
-          },
-          {
-            "document_type": "registration_certificate",
-            "source_field": "vehicle.emission_standard",
-            "targets": [
-              "vehicle.emission_standard"
-            ],
-            "scope": "vehicle",
-            "group_order": null
-          },
-          {
-            "document_type": "registration_certificate",
-            "source_field": "vehicle.power_kw",
-            "targets": [
-              "vehicle.power_kw"
-            ],
-            "scope": "vehicle",
-            "group_order": null
-          },
-          {
-            "document_type": "vehicle_nameplate",
             "source_field": "vehicle.vin",
             "targets": [
               "vehicle.vin"
             ],
-            "scope": "vehicle",
+            "scope": "",
+            "group_order": null
+          },
+          {
+            "document_type": "vehicle_nameplate",
+            "source_field": "vehicle.announcement_model",
+            "targets": [
+              "vehicle.announcement_model"
+            ],
+            "scope": "",
             "group_order": null
           },
           {
@@ -6593,1352 +7085,16 @@
             "targets": [
               "vehicle.engine_model"
             ],
-            "scope": "vehicle",
+            "scope": "",
             "group_order": null
           },
           {
             "document_type": "vehicle_nameplate",
-            "source_field": "vehicle.model_code",
+            "source_field": "vehicle.vin",
             "targets": [
-              "vehicle.model_code"
+              "vehicle.vin"
             ],
-            "scope": "vehicle",
-            "group_order": null
-          },
-          {
-            "document_type": "vehicle_nameplate",
-            "source_field": "vehicle.brand_model",
-            "targets": [
-              "vehicle.brand_model"
-            ],
-            "scope": "vehicle",
-            "group_order": null
-          },
-          {
-            "document_type": "vehicle_nameplate",
-            "source_field": "vehicle.power_kw",
-            "targets": [
-              "vehicle.power_kw"
-            ],
-            "scope": "vehicle",
-            "group_order": null
-          },
-          {
-            "document_type": "vehicle_nameplate",
-            "source_field": "vehicle.emission_standard",
-            "targets": [
-              "vehicle.emission_standard"
-            ],
-            "scope": "vehicle",
-            "group_order": null
-          },
-          {
-            "document_type": "vehicle_license",
-            "source_field": "vehicle.type",
-            "targets": [
-              "vehicle.type",
-              "vehicle.license_vehicle_type"
-            ],
-            "scope": "vehicle",
-            "group_order": null
-          }
-        ],
-        "regions": [
-          {
-            "region": "default",
-            "version": "1.0",
-            "replacement_policy": null,
-            "admin_paths": [
-              "/vehicle-source"
-            ],
-            "page_anchors": [
-              "车源审核",
-              "行驶证信息"
-            ]
-          }
-        ],
-        "capability_specs": [
-          {
-            "capability_id": "material_completeness",
-            "kind": "MATERIAL",
-            "version": "1.0",
-            "stage": "EVIDENCE_VALIDATION",
-            "input_facts": [],
-            "output_facts": [],
-            "required": true,
-            "dependencies": [],
-            "timeout_seconds": 30,
-            "retries": 0,
-            "failure_policy": "MANUAL_REVIEW"
-          },
-          {
-            "capability_id": "vehicle_model_consistency",
-            "kind": "RULE",
-            "version": "1.0",
-            "stage": "POST_COMPARE",
-            "input_facts": [],
-            "output_facts": [],
-            "required": true,
-            "dependencies": [],
-            "timeout_seconds": 30,
-            "retries": 0,
-            "failure_policy": "MANUAL_REVIEW"
-          }
-        ],
-        "binding_declarations": [
-          {
-            "capability_id": "material_completeness",
-            "enabled": true,
-            "required": null,
-            "parameters": []
-          },
-          {
-            "capability_id": "vehicle_model_consistency",
-            "enabled": true,
-            "required": null,
-            "parameters": []
-          }
-        ],
-        "page_action_ids": [
-          "fill_review_fields"
-        ],
-        "page_interaction": true,
-        "writable_control_kinds": [
-          "text",
-          "textarea",
-          "number",
-          "select",
-          "date"
-        ],
-        "identity_anchors": [
-          "vehicle.vin",
-          "vehicle.plate_no",
-          "vehicle.owner"
-        ],
-        "record_identity_fields": [
-          "vehicle.vin"
-        ],
-        "field_check_bindings": [
-          [
-            "VEHICLE-MODEL-POWER",
-            "vehicle.model"
-          ],
-          [
-            "VEHICLE-MODEL-CODE",
-            "vehicle.model"
-          ],
-          [
-            "VEHICLE-MODEL-EMISSION",
-            "vehicle.model"
-          ]
-        ],
-        "qr_field_bindings": [],
-        "page_field_composites": [],
-        "invoice_verification_field": null,
-        "review_declared_fields_only": true,
-        "material_policy": {
-          "mode": "enforce",
-          "materials": [
-            {
-              "document_type": "vehicle_license",
-              "business_scope": "vehicle",
-              "minimum_count": 1,
-              "required_pages": [],
-              "display_name": "机动车行驶证",
-              "alternative_group": ""
-            },
-            {
-              "document_type": "registration_certificate",
-              "business_scope": "vehicle",
-              "minimum_count": 1,
-              "required_pages": [
-                1,
-                2
-              ],
-              "display_name": "机动车登记证书第 1、2 页",
-              "alternative_group": "vehicle_supplement"
-            },
-            {
-              "document_type": "vehicle_nameplate",
-              "business_scope": "vehicle",
-              "minimum_count": 1,
-              "required_pages": [],
-              "display_name": "车辆铭牌",
-              "alternative_group": "vehicle_supplement"
-            }
-          ],
-          "field_sources": []
-        },
-        "retry_policy": {
-          "semantic_retry_count": 1,
-          "confidence_threshold": 0.7,
-          "minimum_retry_window_seconds": 2.0,
-          "qr_web_retry_count": 1
-        },
-        "presentation": {
-          "hidden_fields": [],
-          "hidden_check_prefixes": [],
-          "groups": []
-        }
-      }
-    },
-    {
-      "business_type": "transfer",
-      "region": "default",
-      "version": "1.0",
-      "page_id": "transfer:default",
-      "active": true,
-      "configured": true,
-      "unconfigured_message": null,
-      "page_interaction": true,
-      "required_fields": [
-        "transfer.plate_no",
-        "transfer.vin",
-        "transfer.invoice_date",
-        "transfer.buyer_name",
-        "transfer.buyer_id",
-        "transfer.invoice_code",
-        "transfer.invoice_no",
-        "transfer.amount",
-        "transfer.seller_name",
-        "transfer.seller_id",
-        "transfer.model",
-        "transfer.destination_authority",
-        "transfer.market",
-        "transfer.market_tax_no"
-      ],
-      "capabilities": [
-        {
-          "capability_id": "material_completeness",
-          "kind": "MATERIAL",
-          "version": "1.0",
-          "stage": "EVIDENCE_VALIDATION",
-          "input_facts": [],
-          "output_facts": [],
-          "required": true,
-          "dependencies": [],
-          "timeout_seconds": 30,
-          "retries": 0,
-          "failure_policy": "MANUAL_REVIEW"
-        },
-        {
-          "capability_id": "transfer_invoice_date",
-          "kind": "RULE",
-          "version": "1.0",
-          "stage": "POST_COMPARE",
-          "input_facts": [],
-          "output_facts": [],
-          "required": true,
-          "dependencies": [],
-          "timeout_seconds": 30,
-          "retries": 0,
-          "failure_policy": "MANUAL_REVIEW"
-        },
-        {
-          "capability_id": "verify_invoice",
-          "kind": "RULE",
-          "version": "1.0",
-          "stage": "POST_COMPARE",
-          "input_facts": [],
-          "output_facts": [],
-          "required": true,
-          "dependencies": [],
-          "timeout_seconds": 30,
-          "retries": 0,
-          "failure_policy": "SAFE_DEGRADE"
-        }
-      ],
-      "bindings": [
-        {
-          "capability_id": "material_completeness",
-          "enabled": true,
-          "required": null,
-          "parameters": []
-        },
-        {
-          "capability_id": "transfer_invoice_date",
-          "enabled": true,
-          "required": null,
-          "parameters": []
-        },
-        {
-          "capability_id": "verify_invoice",
-          "enabled": true,
-          "required": false,
-          "parameters": []
-        }
-      ],
-      "material_policy": {
-        "mode": "enforce",
-        "materials": [
-          {
-            "document_type": "registration_certificate",
-            "business_scope": "transfer",
-            "minimum_count": 1,
-            "required_pages": [
-              1,
-              2,
-              3,
-              4
-            ],
-            "display_name": "机动车登记证书第 1、2、3、4 页",
-            "alternative_group": ""
-          },
-          {
-            "document_type": "used_car_invoice",
-            "business_scope": "transfer",
-            "minimum_count": 1,
-            "required_pages": [],
-            "display_name": "二手车销售统一发票",
-            "alternative_group": ""
-          }
-        ],
-        "field_sources": []
-      },
-      "field_check_bindings": [
-        [
-          "TRANSFER-INVOICE-DATE",
-          "transfer.invoice_date"
-        ]
-      ],
-      "page_actions": [
-        "fill_review_fields"
-      ],
-      "retry_policy": {
-        "semantic_retry_count": 1,
-        "confidence_threshold": 0.7,
-        "minimum_retry_window_seconds": 2.0,
-        "qr_web_retry_count": 1
-      },
-      "manifest": {
-        "business_type": "transfer",
-        "scopes": [
-          "transfer"
-        ],
-        "page_sections": [],
-        "page_groups": [
-          {
-            "label": "过户资料",
-            "scope": "transfer",
-            "title": "过户资料"
-          },
-          {
-            "label": "过户凭证",
-            "scope": "transfer",
-            "title": "过户凭证"
-          },
-          {
-            "label": "身份证正面",
-            "scope": "other",
-            "title": "身份证正面"
-          },
-          {
-            "label": "身份证反面",
-            "scope": "other",
-            "title": "身份证反面"
-          },
-          {
-            "label": "营业执照",
-            "scope": "other",
-            "title": "营业执照"
-          },
-          {
-            "label": "其他图片",
-            "scope": "other",
-            "title": "其他图片"
-          }
-        ],
-        "fields": [
-          {
-            "key": "transfer.plate_no",
-            "label": "车牌号",
-            "aliases": [
-              "车牌号"
-            ],
-            "section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1
-          },
-          {
-            "key": "transfer.vin",
-            "label": "识别车架号",
-            "aliases": [
-              "识别车架号"
-            ],
-            "section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1
-          },
-          {
-            "key": "transfer.invoice_date",
-            "label": "开票日期",
-            "aliases": [
-              "开票日期"
-            ],
-            "section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1
-          },
-          {
-            "key": "transfer.buyer_name",
-            "label": "过户发票买家名称",
-            "aliases": [
-              "过户发票买家名称"
-            ],
-            "section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1
-          },
-          {
-            "key": "transfer.buyer_id",
-            "label": "证件号",
-            "aliases": [
-              "证件号"
-            ],
-            "section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1
-          },
-          {
-            "key": "transfer.invoice_code",
-            "label": "发票代码",
-            "aliases": [
-              "发票代码"
-            ],
-            "section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1
-          },
-          {
-            "key": "transfer.invoice_no",
-            "label": "发票号码",
-            "aliases": [
-              "发票号码"
-            ],
-            "section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1
-          },
-          {
-            "key": "transfer.amount",
-            "label": "开票金额(含税)",
-            "aliases": [
-              "开票金额(含税)",
-              "开票金额（含税）"
-            ],
-            "section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1
-          },
-          {
-            "key": "transfer.seller_name",
-            "label": "卖方名称",
-            "aliases": [
-              "卖方名称"
-            ],
-            "section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1
-          },
-          {
-            "key": "transfer.seller_id",
-            "label": "卖方证件号",
-            "aliases": [
-              "卖方证件号"
-            ],
-            "section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1
-          },
-          {
-            "key": "transfer.model",
-            "label": "厂牌型号",
-            "aliases": [
-              "厂牌型号"
-            ],
-            "section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1
-          },
-          {
-            "key": "transfer.destination_authority",
-            "label": "转入地车管所",
-            "aliases": [
-              "转入地车管所"
-            ],
-            "section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1
-          },
-          {
-            "key": "transfer.market",
-            "label": "二手车市场",
-            "aliases": [
-              "二手车市场"
-            ],
-            "section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1
-          },
-          {
-            "key": "transfer.market_tax_no",
-            "label": "纳税人识别号",
-            "aliases": [
-              "纳税人识别号"
-            ],
-            "section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1
-          },
-          {
-            "key": "application.source_published_at",
-            "label": "车源发布时间",
-            "aliases": [
-              "车源发布时间"
-            ],
-            "section": "unknown",
-            "section_required": false,
-            "reviewable": false,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1
-          }
-        ],
-        "writable_fields": [
-          "transfer.plate_no",
-          "transfer.vin",
-          "transfer.invoice_date",
-          "transfer.buyer_name",
-          "transfer.buyer_id",
-          "transfer.invoice_code",
-          "transfer.invoice_no",
-          "transfer.amount",
-          "transfer.seller_name",
-          "transfer.seller_id",
-          "transfer.model",
-          "transfer.destination_authority",
-          "transfer.market",
-          "transfer.market_tax_no"
-        ],
-        "writable_control_kinds": [
-          "text",
-          "textarea",
-          "number",
-          "select",
-          "date"
-        ],
-        "identity_anchors": [
-          "transfer.vin",
-          "transfer.plate_no"
-        ],
-        "record_identity_fields": [
-          "transfer.vin"
-        ],
-        "materials": [
-          {
-            "document_type": "registration_certificate",
-            "label": "机动车登记证书",
-            "hints": [
-              "登记证书",
-              "机动车登记证",
-              "登记证",
-              "过户资料"
-            ],
-            "slots": []
-          },
-          {
-            "document_type": "used_car_invoice",
-            "label": "二手车销售统一发票",
-            "hints": [
-              "二手车发票",
-              "二手车销售统一发票",
-              "过户发票",
-              "过户资料"
-            ],
-            "slots": []
-          }
-        ]
-      },
-      "pack": {
-        "business_type": "transfer",
-        "title": "过户审核",
-        "scopes": [
-          "transfer"
-        ],
-        "sections": [
-          {
-            "key": "transfer",
-            "title": "过户信息"
-          }
-        ],
-        "fields": [
-          {
-            "key": "transfer.plate_no",
-            "label": "车牌号",
-            "section": "transfer",
-            "aliases": [
-              "车牌号"
-            ],
-            "page_section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "mode": "PARALLEL",
-            "sources": [
-              "registration_certificate",
-              "used_car_invoice"
-            ],
-            "allow_single_evidence": true,
-            "uncertain_requires_review": true,
-            "page_evidence_required": true,
-            "normalizer": "plate",
-            "authority": [],
-            "material_field": null,
-            "required": true,
-            "writable": true,
-            "max_age_days": null,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1,
-            "task_projector": ""
-          },
-          {
-            "key": "transfer.vin",
-            "label": "识别车架号",
-            "section": "transfer",
-            "aliases": [
-              "识别车架号"
-            ],
-            "page_section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "mode": "PARALLEL",
-            "sources": [
-              "registration_certificate",
-              "used_car_invoice"
-            ],
-            "allow_single_evidence": true,
-            "uncertain_requires_review": true,
-            "page_evidence_required": true,
-            "normalizer": "vin",
-            "authority": [],
-            "material_field": null,
-            "required": true,
-            "writable": true,
-            "max_age_days": null,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1,
-            "task_projector": ""
-          },
-          {
-            "key": "transfer.invoice_date",
-            "label": "开票日期",
-            "section": "transfer",
-            "aliases": [
-              "开票日期"
-            ],
-            "page_section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "mode": "SINGLE_SOURCE",
-            "sources": [
-              "used_car_invoice"
-            ],
-            "allow_single_evidence": true,
-            "uncertain_requires_review": true,
-            "page_evidence_required": true,
-            "normalizer": "date",
-            "authority": [],
-            "material_field": null,
-            "required": true,
-            "writable": true,
-            "max_age_days": null,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1,
-            "task_projector": ""
-          },
-          {
-            "key": "transfer.buyer_name",
-            "label": "过户发票买家名称",
-            "section": "transfer",
-            "aliases": [
-              "过户发票买家名称"
-            ],
-            "page_section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "mode": "PARALLEL",
-            "sources": [
-              "registration_certificate",
-              "used_car_invoice"
-            ],
-            "allow_single_evidence": false,
-            "uncertain_requires_review": true,
-            "page_evidence_required": true,
-            "normalizer": "party_name",
-            "authority": [],
-            "material_field": null,
-            "required": true,
-            "writable": true,
-            "max_age_days": null,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1,
-            "task_projector": ""
-          },
-          {
-            "key": "transfer.buyer_id",
-            "label": "证件号",
-            "section": "transfer",
-            "aliases": [
-              "证件号"
-            ],
-            "page_section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "mode": "PARALLEL",
-            "sources": [
-              "registration_certificate",
-              "used_car_invoice"
-            ],
-            "allow_single_evidence": false,
-            "uncertain_requires_review": true,
-            "page_evidence_required": true,
-            "normalizer": "identifier",
-            "authority": [],
-            "material_field": null,
-            "required": true,
-            "writable": true,
-            "max_age_days": null,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1,
-            "task_projector": ""
-          },
-          {
-            "key": "transfer.invoice_code",
-            "label": "发票代码",
-            "section": "transfer",
-            "aliases": [
-              "发票代码"
-            ],
-            "page_section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "mode": "SINGLE_SOURCE",
-            "sources": [
-              "used_car_invoice"
-            ],
-            "allow_single_evidence": true,
-            "uncertain_requires_review": true,
-            "page_evidence_required": true,
-            "normalizer": "invoice_number",
-            "authority": [],
-            "material_field": null,
-            "required": true,
-            "writable": true,
-            "max_age_days": null,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1,
-            "task_projector": ""
-          },
-          {
-            "key": "transfer.invoice_no",
-            "label": "发票号码",
-            "section": "transfer",
-            "aliases": [
-              "发票号码"
-            ],
-            "page_section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "mode": "SINGLE_SOURCE",
-            "sources": [
-              "used_car_invoice"
-            ],
-            "allow_single_evidence": true,
-            "uncertain_requires_review": true,
-            "page_evidence_required": true,
-            "normalizer": "invoice_number",
-            "authority": [],
-            "material_field": null,
-            "required": true,
-            "writable": true,
-            "max_age_days": null,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1,
-            "task_projector": ""
-          },
-          {
-            "key": "transfer.amount",
-            "label": "开票金额(含税)",
-            "section": "transfer",
-            "aliases": [
-              "开票金额(含税)",
-              "开票金额（含税）"
-            ],
-            "page_section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "mode": "SINGLE_SOURCE",
-            "sources": [
-              "used_car_invoice"
-            ],
-            "allow_single_evidence": true,
-            "uncertain_requires_review": true,
-            "page_evidence_required": true,
-            "normalizer": "amount",
-            "authority": [],
-            "material_field": null,
-            "required": true,
-            "writable": true,
-            "max_age_days": null,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1,
-            "task_projector": ""
-          },
-          {
-            "key": "transfer.seller_name",
-            "label": "卖方名称",
-            "section": "transfer",
-            "aliases": [
-              "卖方名称"
-            ],
-            "page_section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "mode": "SINGLE_SOURCE",
-            "sources": [
-              "used_car_invoice"
-            ],
-            "allow_single_evidence": true,
-            "uncertain_requires_review": true,
-            "page_evidence_required": true,
-            "normalizer": "party_name",
-            "authority": [],
-            "material_field": null,
-            "required": true,
-            "writable": true,
-            "max_age_days": null,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1,
-            "task_projector": ""
-          },
-          {
-            "key": "transfer.seller_id",
-            "label": "卖方证件号",
-            "section": "transfer",
-            "aliases": [
-              "卖方证件号"
-            ],
-            "page_section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "mode": "SINGLE_SOURCE",
-            "sources": [
-              "used_car_invoice"
-            ],
-            "allow_single_evidence": true,
-            "uncertain_requires_review": true,
-            "page_evidence_required": true,
-            "normalizer": "identifier",
-            "authority": [],
-            "material_field": null,
-            "required": true,
-            "writable": true,
-            "max_age_days": null,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1,
-            "task_projector": ""
-          },
-          {
-            "key": "transfer.model",
-            "label": "厂牌型号",
-            "section": "transfer",
-            "aliases": [
-              "厂牌型号"
-            ],
-            "page_section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "mode": "SINGLE_SOURCE",
-            "sources": [
-              "used_car_invoice"
-            ],
-            "allow_single_evidence": true,
-            "uncertain_requires_review": true,
-            "page_evidence_required": true,
-            "normalizer": "identifier",
-            "authority": [],
-            "material_field": null,
-            "required": true,
-            "writable": true,
-            "max_age_days": null,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1,
-            "task_projector": ""
-          },
-          {
-            "key": "transfer.destination_authority",
-            "label": "转入地车管所",
-            "section": "transfer",
-            "aliases": [
-              "转入地车管所"
-            ],
-            "page_section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "mode": "SINGLE_SOURCE",
-            "sources": [
-              "used_car_invoice"
-            ],
-            "allow_single_evidence": true,
-            "uncertain_requires_review": true,
-            "page_evidence_required": true,
-            "normalizer": "text",
-            "authority": [],
-            "material_field": null,
-            "required": true,
-            "writable": true,
-            "max_age_days": null,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1,
-            "task_projector": ""
-          },
-          {
-            "key": "transfer.market",
-            "label": "二手车市场",
-            "section": "transfer",
-            "aliases": [
-              "二手车市场"
-            ],
-            "page_section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "mode": "SINGLE_SOURCE",
-            "sources": [
-              "used_car_invoice"
-            ],
-            "allow_single_evidence": true,
-            "uncertain_requires_review": true,
-            "page_evidence_required": true,
-            "normalizer": "party_name",
-            "authority": [],
-            "material_field": null,
-            "required": true,
-            "writable": true,
-            "max_age_days": null,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1,
-            "task_projector": ""
-          },
-          {
-            "key": "transfer.market_tax_no",
-            "label": "纳税人识别号",
-            "section": "transfer",
-            "aliases": [
-              "纳税人识别号"
-            ],
-            "page_section": "unknown",
-            "section_required": false,
-            "reviewable": true,
-            "mode": "SINGLE_SOURCE",
-            "sources": [
-              "used_car_invoice"
-            ],
-            "allow_single_evidence": true,
-            "uncertain_requires_review": true,
-            "page_evidence_required": true,
-            "normalizer": "identifier",
-            "authority": [],
-            "material_field": null,
-            "required": true,
-            "writable": true,
-            "max_age_days": null,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1,
-            "task_projector": ""
-          },
-          {
-            "key": "application.source_published_at",
-            "label": "车源发布时间",
-            "section": "transfer",
-            "aliases": [
-              "车源发布时间"
-            ],
-            "page_section": "unknown",
-            "section_required": false,
-            "reviewable": false,
-            "mode": null,
-            "sources": [],
-            "allow_single_evidence": true,
-            "uncertain_requires_review": true,
-            "page_evidence_required": true,
-            "normalizer": "default",
-            "authority": [],
-            "material_field": null,
-            "required": false,
-            "writable": false,
-            "max_age_days": null,
-            "locator_name": "",
-            "locator_id": "",
-            "occurrence": 1,
-            "task_projector": ""
-          }
-        ],
-        "materials": [
-          {
-            "document_type": "registration_certificate",
-            "display_name": "机动车登记证书",
-            "fields": [
-              "transfer.plate_no",
-              "transfer.vin",
-              "transfer.buyer_name",
-              "transfer.buyer_id",
-              "registration.covered_pages"
-            ],
-            "guidance": "识别机动车登记证书第 1、2 页和第 3、4 页，读取车牌号、车辆识别代号、买方名称与证件号码，以及页脚实际印刷的页码。",
-            "scoped_fields": [
-              [
-                "transfer",
-                [
-                  "transfer.plate_no",
-                  "transfer.vin",
-                  "transfer.buyer_name",
-                  "transfer.buyer_id",
-                  "registration.covered_pages"
-                ]
-              ]
-            ],
-            "scoped_guidance": [
-              [
-                "transfer",
-                "读取机动车登记证书。**登记证书上有多次历史登记，一律取最近一次，不要取最早的那条。**transfer.plate_no 只读取第 1 页「转移登记摘要信息栏」里的机动车登记编号（最近一次转移登记后的号牌），不要读取同页上方「注册登记摘要信息栏」里第一次上牌时的登记编号。transfer.vin 读取第 2 页「注册登记机动车信息栏」第 9 项「车辆识别代号/车架号」，不要读取车辆型号、发动机号或发动机型号。transfer.buyer_name 和 transfer.buyer_id 只读取第 3、4 页「登记栏」的「转让登记」部分：一本登记证书上可能有多条转让登记，**只取转让登记日期最晚的那一条**（当前这一次过户的买方），更早的一条是本次交易的卖方，不要读它；transfer.buyer_id 读取该条「身份证明名称/号码」栏的号码本身，不要连「居民身份证」「统一社会信用代码」这些名称一起输出。第 1 页的「机动车所有人」是上一手车主，不是买家，不要写进 transfer.buyer_name。registration.covered_pages 只输出图片页脚实际印刷的页码数组（第 1、2 页那张图输出 [1,2]），不按上传顺序推测。"
-              ]
-            ],
-            "scoped_names": [],
-            "hints": [
-              "登记证书",
-              "机动车登记证",
-              "登记证",
-              "过户资料"
-            ],
-            "allowed_scopes": [],
-            "scope_independent": false,
-            "scoped_vehicle_fields": [],
-            "slots": [],
-            "derived_field": null
-          },
-          {
-            "document_type": "used_car_invoice",
-            "display_name": "二手车销售统一发票",
-            "fields": [
-              "transfer.invoice_date",
-              "transfer.invoice_no",
-              "transfer.amount",
-              "transfer.buyer_name",
-              "transfer.buyer_id",
-              "transfer.seller_name",
-              "transfer.seller_id",
-              "transfer.model",
-              "transfer.plate_no",
-              "transfer.vin",
-              "transfer.destination_authority",
-              "transfer.market",
-              "transfer.market_tax_no"
-            ],
-            "guidance": "识别二手车销售统一发票，读取发票号码、开票日期、买方与卖方名称及证件号码、车牌照号、车架号、厂牌型号、转入地车辆管理所名称、车价合计（小写）、二手车市场及其纳税人识别号。",
-            "scoped_fields": [
-              [
-                "transfer",
-                [
-                  "transfer.invoice_date",
-                  "transfer.invoice_no",
-                  "transfer.amount",
-                  "transfer.buyer_name",
-                  "transfer.buyer_id",
-                  "transfer.seller_name",
-                  "transfer.seller_id",
-                  "transfer.model",
-                  "transfer.plate_no",
-                  "transfer.vin",
-                  "transfer.destination_authority",
-                  "transfer.market",
-                  "transfer.market_tax_no"
-                ]
-              ]
-            ],
-            "scoped_guidance": [
-              [
-                "transfer",
-                "读取二手车销售统一发票（电子）。transfer.invoice_no 读取票面右上角「发票号码」后的完整号码；**不要输出 transfer.invoice_code**，票面没有「发票代码」这一栏，页面上那个值由系统从数电号码适配。transfer.invoice_date 只读取「开票日期」，不要使用备注或其他日期。transfer.buyer_name 读取「买方单位/个人」；transfer.buyer_id 读取「买方单位/个人」同行右侧的「单位代码/身份证号码」，只输出号码本身，不要连「居民身份证」「统一社会信用代码」一起输出。transfer.seller_name 读取「卖方单位/个人」，transfer.seller_id 读取同行右侧的「单位代码/身份证号码」。transfer.plate_no 读取「车牌照号」；transfer.vin 读取「车架号/车辆识别代号」，不要读取厂牌型号。transfer.model 读取「厂牌型号」栏的完整原文，品牌名和型号代码一起输出。transfer.destination_authority 读取「转入地车辆管理所名称」。transfer.amount 读取「车价合计」的**小写**金额，不要输出大写金额、不含税价或税额，也不要输出货币符号以外的文字。transfer.market 读取「二手车市场」栏的名称；transfer.market_tax_no 只读取「二手车市场」那一栏的纳税人识别号，不要读取「经营、拍卖单位」那一栏（通常为空）。"
-              ]
-            ],
-            "scoped_names": [
-              [
-                "transfer",
-                "二手车销售统一发票"
-              ]
-            ],
-            "hints": [
-              "二手车发票",
-              "二手车销售统一发票",
-              "过户发票",
-              "过户资料"
-            ],
-            "allowed_scopes": [],
-            "scope_independent": false,
-            "scoped_vehicle_fields": [],
-            "slots": [],
-            "derived_field": [
-              "transfer.invoice_no",
-              "transfer.invoice_code"
-            ]
-          }
-        ],
-        "material_extraction_seeds": null,
-        "page_groups": [
-          {
-            "label": "过户资料",
-            "scope": "transfer",
-            "title": "过户资料",
-            "occurrence": 0
-          },
-          {
-            "label": "过户凭证",
-            "scope": "transfer",
-            "title": "过户凭证",
-            "occurrence": 0
-          },
-          {
-            "label": "身份证正面",
-            "scope": "other",
-            "title": "身份证正面",
-            "occurrence": 0
-          },
-          {
-            "label": "身份证反面",
-            "scope": "other",
-            "title": "身份证反面",
-            "occurrence": 0
-          },
-          {
-            "label": "营业执照",
-            "scope": "other",
-            "title": "营业执照",
-            "occurrence": 0
-          },
-          {
-            "label": "其他图片",
-            "scope": "other",
-            "title": "其他图片",
-            "occurrence": 0
-          }
-        ],
-        "routes": [
-          {
-            "document_type": "registration_certificate",
-            "source_field": "transfer.plate_no",
-            "targets": [
-              "transfer.plate_no"
-            ],
-            "scope": "transfer",
-            "group_order": null
-          },
-          {
-            "document_type": "registration_certificate",
-            "source_field": "transfer.vin",
-            "targets": [
-              "transfer.vin"
-            ],
-            "scope": "transfer",
-            "group_order": null
-          },
-          {
-            "document_type": "registration_certificate",
-            "source_field": "transfer.buyer_name",
-            "targets": [
-              "transfer.buyer_name"
-            ],
-            "scope": "transfer",
-            "group_order": null
-          },
-          {
-            "document_type": "registration_certificate",
-            "source_field": "transfer.buyer_id",
-            "targets": [
-              "transfer.buyer_id"
-            ],
-            "scope": "transfer",
-            "group_order": null
-          },
-          {
-            "document_type": "used_car_invoice",
-            "source_field": "transfer.invoice_date",
-            "targets": [
-              "transfer.invoice_date"
-            ],
-            "scope": "transfer",
-            "group_order": null
-          },
-          {
-            "document_type": "used_car_invoice",
-            "source_field": "transfer.invoice_no",
-            "targets": [
-              "transfer.invoice_no"
-            ],
-            "scope": "transfer",
-            "group_order": null
-          },
-          {
-            "document_type": "used_car_invoice",
-            "source_field": "transfer.amount",
-            "targets": [
-              "transfer.amount"
-            ],
-            "scope": "transfer",
-            "group_order": null
-          },
-          {
-            "document_type": "used_car_invoice",
-            "source_field": "transfer.buyer_name",
-            "targets": [
-              "transfer.buyer_name"
-            ],
-            "scope": "transfer",
-            "group_order": null
-          },
-          {
-            "document_type": "used_car_invoice",
-            "source_field": "transfer.buyer_id",
-            "targets": [
-              "transfer.buyer_id"
-            ],
-            "scope": "transfer",
-            "group_order": null
-          },
-          {
-            "document_type": "used_car_invoice",
-            "source_field": "transfer.seller_name",
-            "targets": [
-              "transfer.seller_name"
-            ],
-            "scope": "transfer",
-            "group_order": null
-          },
-          {
-            "document_type": "used_car_invoice",
-            "source_field": "transfer.seller_id",
-            "targets": [
-              "transfer.seller_id"
-            ],
-            "scope": "transfer",
-            "group_order": null
-          },
-          {
-            "document_type": "used_car_invoice",
-            "source_field": "transfer.model",
-            "targets": [
-              "transfer.model"
-            ],
-            "scope": "transfer",
-            "group_order": null
-          },
-          {
-            "document_type": "used_car_invoice",
-            "source_field": "transfer.plate_no",
-            "targets": [
-              "transfer.plate_no"
-            ],
-            "scope": "transfer",
-            "group_order": null
-          },
-          {
-            "document_type": "used_car_invoice",
-            "source_field": "transfer.vin",
-            "targets": [
-              "transfer.vin"
-            ],
-            "scope": "transfer",
-            "group_order": null
-          },
-          {
-            "document_type": "used_car_invoice",
-            "source_field": "transfer.destination_authority",
-            "targets": [
-              "transfer.destination_authority"
-            ],
-            "scope": "transfer",
-            "group_order": null
-          },
-          {
-            "document_type": "used_car_invoice",
-            "source_field": "transfer.market",
-            "targets": [
-              "transfer.market"
-            ],
-            "scope": "transfer",
-            "group_order": null
-          },
-          {
-            "document_type": "used_car_invoice",
-            "source_field": "transfer.market_tax_no",
-            "targets": [
-              "transfer.market_tax_no"
-            ],
-            "scope": "transfer",
+            "scope": "",
             "group_order": null
           }
         ],
@@ -7952,28 +7108,15 @@
               "/consistency-changchun"
             ],
             "page_anchors": [
-              "审核过户凭证",
-              "过户发票买家名称",
-              "转入地车管所"
-            ]
+              "行驶证信息",
+              "规格参数"
+            ],
+            "review_tab": "车源审核"
           }
         ],
         "capability_specs": [
           {
-            "capability_id": "material_completeness",
-            "kind": "MATERIAL",
-            "version": "1.0",
-            "stage": "EVIDENCE_VALIDATION",
-            "input_facts": [],
-            "output_facts": [],
-            "required": true,
-            "dependencies": [],
-            "timeout_seconds": 30,
-            "retries": 0,
-            "failure_policy": "MANUAL_REVIEW"
-          },
-          {
-            "capability_id": "transfer_invoice_date",
+            "capability_id": "vehicle_source_model",
             "kind": "RULE",
             "version": "1.0",
             "stage": "POST_COMPARE",
@@ -7984,41 +7127,9 @@
             "timeout_seconds": 30,
             "retries": 0,
             "failure_policy": "MANUAL_REVIEW"
-          },
-          {
-            "capability_id": "verify_invoice",
-            "kind": "RULE",
-            "version": "1.0",
-            "stage": "POST_COMPARE",
-            "input_facts": [],
-            "output_facts": [],
-            "required": true,
-            "dependencies": [],
-            "timeout_seconds": 30,
-            "retries": 0,
-            "failure_policy": "SAFE_DEGRADE"
           }
         ],
-        "binding_declarations": [
-          {
-            "capability_id": "material_completeness",
-            "enabled": true,
-            "required": null,
-            "parameters": []
-          },
-          {
-            "capability_id": "transfer_invoice_date",
-            "enabled": true,
-            "required": null,
-            "parameters": []
-          },
-          {
-            "capability_id": "verify_invoice",
-            "enabled": true,
-            "required": false,
-            "parameters": []
-          }
-        ],
+        "binding_declarations": [],
         "page_action_ids": [
           "fill_review_fields"
         ],
@@ -8027,62 +7138,122 @@
           "text",
           "textarea",
           "number",
-          "select",
-          "date"
+          "date",
+          "select"
         ],
         "identity_anchors": [
-          "transfer.vin",
-          "transfer.plate_no"
+          "vehicle.vin",
+          "vehicle.plate_no",
+          "vehicle.owner"
         ],
         "record_identity_fields": [
-          "transfer.vin"
+          "vehicle.vin"
         ],
         "field_check_bindings": [
           [
-            "TRANSFER-INVOICE-DATE",
-            "transfer.invoice_date"
+            "VEHICLE-SOURCE-BRAND-MODEL",
+            "vehicle.brand_model"
+          ],
+          [
+            "VEHICLE-SOURCE-MODEL",
+            "vehicle.model"
           ]
         ],
         "qr_field_bindings": [],
-        "page_field_composites": [
-          {
-            "check_id": "FIELD-TRANSFER-INVOICE-CODE-NO",
-            "label": "发票代码/号码",
-            "primary_field": "transfer.invoice_code",
-            "secondary_field": "transfer.invoice_no",
-            "material_field": "transfer.invoice_no",
-            "primary_label": "发票代码",
-            "secondary_label": "发票号码"
-          }
-        ],
-        "invoice_verification_field": "transfer.invoice_no",
+        "page_field_composites": [],
+        "invoice_verification_field": null,
         "review_declared_fields_only": true,
         "material_policy": {
-          "mode": "enforce",
+          "mode": "observe",
           "materials": [
             {
+              "document_type": "vehicle_license",
+              "business_scope": "vehicle",
+              "minimum_count": 1,
+              "required_pages": [],
+              "display_name": "行驶证正面",
+              "alternative_group": "",
+              "identity_side": null,
+              "presence_name": ""
+            },
+            {
               "document_type": "registration_certificate",
-              "business_scope": "transfer",
+              "business_scope": "vehicle",
               "minimum_count": 1,
               "required_pages": [
                 1,
-                2,
-                3,
-                4
+                2
               ],
-              "display_name": "机动车登记证书第 1、2、3、4 页",
-              "alternative_group": ""
+              "display_name": "登记证书1、2页",
+              "alternative_group": "model_evidence",
+              "identity_side": null,
+              "presence_name": ""
             },
             {
-              "document_type": "used_car_invoice",
-              "business_scope": "transfer",
+              "document_type": "vehicle_nameplate",
+              "business_scope": "vehicle",
               "minimum_count": 1,
               "required_pages": [],
-              "display_name": "二手车销售统一发票",
-              "alternative_group": ""
+              "display_name": "铭牌",
+              "alternative_group": "model_evidence",
+              "identity_side": null,
+              "presence_name": ""
             }
           ],
-          "field_sources": []
+          "field_sources": [],
+          "presence_groups": [
+            {
+              "key": "license",
+              "display_name": "行驶证正面",
+              "alternatives": [
+                [
+                  {
+                    "document_type": "vehicle_license",
+                    "business_scope": "vehicle",
+                    "minimum_count": 1,
+                    "required_pages": [],
+                    "display_name": "行驶证正面",
+                    "alternative_group": "",
+                    "identity_side": null,
+                    "presence_name": ""
+                  }
+                ]
+              ]
+            },
+            {
+              "key": "model_evidence",
+              "display_name": "车型辅助材料",
+              "alternatives": [
+                [
+                  {
+                    "document_type": "registration_certificate",
+                    "business_scope": "vehicle",
+                    "minimum_count": 1,
+                    "required_pages": [
+                      1,
+                      2
+                    ],
+                    "display_name": "登记证书1、2页",
+                    "alternative_group": "model_evidence",
+                    "identity_side": null,
+                    "presence_name": ""
+                  }
+                ],
+                [
+                  {
+                    "document_type": "vehicle_nameplate",
+                    "business_scope": "vehicle",
+                    "minimum_count": 1,
+                    "required_pages": [],
+                    "display_name": "铭牌",
+                    "alternative_group": "model_evidence",
+                    "identity_side": null,
+                    "presence_name": ""
+                  }
+                ]
+              ]
+            }
+          ]
         },
         "retry_policy": {
           "semantic_retry_count": 1,
@@ -8105,6 +7276,28 @@
       "active": true,
       "configured": false,
       "unconfigured_message": "一致性审核规则尚未配置，请人工复核",
+      "page_interaction": false,
+      "required_fields": [],
+      "capabilities": [],
+      "bindings": [],
+      "material_policy": null,
+      "field_check_bindings": [],
+      "page_actions": [],
+      "retry_policy": {
+        "semantic_retry_count": 1,
+        "confidence_threshold": 0.7,
+        "minimum_retry_window_seconds": 2.0,
+        "qr_web_retry_count": 1
+      }
+    },
+    {
+      "business_type": "transfer",
+      "region": "default",
+      "version": "1.0",
+      "page_id": "transfer:default",
+      "active": true,
+      "configured": false,
+      "unconfigured_message": "过户审核配置已清除，待重新规划，请人工复核",
       "page_interaction": false,
       "required_fields": [],
       "capabilities": [],
@@ -8274,6 +7467,17 @@
               "default": "unknown",
               "title": "Document Type Hint",
               "type": "string"
+            },
+            "identity_sides_hint": {
+              "items": {
+                "enum": [
+                  "FRONT",
+                  "BACK"
+                ],
+                "type": "string"
+              },
+              "title": "Identity Sides Hint",
+              "type": "array"
             },
             "collection_error": {
               "anyOf": [
@@ -9592,6 +8796,17 @@
               },
               "title": "Checklist",
               "type": "array"
+            },
+            "presence": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MaterialPresenceReport"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
             }
           },
           "required": [
@@ -9650,6 +8865,76 @@
             "material_name"
           ],
           "title": "MaterialFieldDetail",
+          "type": "object"
+        },
+        "MaterialPresenceGroupResult": {
+          "properties": {
+            "key": {
+              "title": "Key",
+              "type": "string"
+            },
+            "display_name": {
+              "title": "Display Name",
+              "type": "string"
+            },
+            "status": {
+              "enum": [
+                "PRESENT",
+                "MISSING",
+                "UNCERTAIN"
+              ],
+              "title": "Status",
+              "type": "string"
+            },
+            "alternatives": {
+              "items": {
+                "items": {
+                  "$ref": "#/$defs/MaterialChecklistItem"
+                },
+                "type": "array"
+              },
+              "title": "Alternatives",
+              "type": "array"
+            }
+          },
+          "required": [
+            "key",
+            "display_name",
+            "status"
+          ],
+          "title": "MaterialPresenceGroupResult",
+          "type": "object"
+        },
+        "MaterialPresenceReport": {
+          "properties": {
+            "status": {
+              "enum": [
+                "COMPLETE",
+                "INCOMPLETE",
+                "UNCERTAIN"
+              ],
+              "title": "Status",
+              "type": "string"
+            },
+            "groups": {
+              "items": {
+                "$ref": "#/$defs/MaterialPresenceGroupResult"
+              },
+              "title": "Groups",
+              "type": "array"
+            },
+            "notices": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Notices",
+              "type": "array"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "title": "MaterialPresenceReport",
           "type": "object"
         },
         "PageActionIntent": {
@@ -13103,6 +12388,19 @@
         "title": "Anchors",
         "type": "array"
       },
+      "review_tab": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Review Tab"
+      },
       "extends": {
         "anyOf": [
           {
@@ -13269,6 +12567,17 @@
           "default": "",
           "title": "Reason",
           "type": "string"
+        },
+        "identity_sides": {
+          "items": {
+            "enum": [
+              "FRONT",
+              "BACK"
+            ],
+            "type": "string"
+          },
+          "title": "Identity Sides",
+          "type": "array"
         }
       },
       "required": [
@@ -13367,6 +12676,41 @@
     },
     "AgentBatchResult": {
       "$defs": {
+        "DocumentClassification": {
+          "description": "已确认的材料类型，独立于后续字段提取的成败。",
+          "properties": {
+            "target_id": {
+              "title": "Target Id",
+              "type": "string"
+            },
+            "document_type": {
+              "title": "Document Type",
+              "type": "string"
+            },
+            "business_scope": {
+              "default": "unknown",
+              "title": "Business Scope",
+              "type": "string"
+            },
+            "identity_sides": {
+              "items": {
+                "enum": [
+                  "FRONT",
+                  "BACK"
+                ],
+                "type": "string"
+              },
+              "title": "Identity Sides",
+              "type": "array"
+            }
+          },
+          "required": [
+            "target_id",
+            "document_type"
+          ],
+          "title": "DocumentClassification",
+          "type": "object"
+        },
         "FieldObservation": {
           "description": "One independently observed value and its review-document source.",
           "properties": {
@@ -13765,6 +13109,17 @@
               },
               "title": "Checklist",
               "type": "array"
+            },
+            "presence": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MaterialPresenceReport"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
             }
           },
           "required": [
@@ -13823,6 +13178,76 @@
             "material_name"
           ],
           "title": "MaterialFieldDetail",
+          "type": "object"
+        },
+        "MaterialPresenceGroupResult": {
+          "properties": {
+            "key": {
+              "title": "Key",
+              "type": "string"
+            },
+            "display_name": {
+              "title": "Display Name",
+              "type": "string"
+            },
+            "status": {
+              "enum": [
+                "PRESENT",
+                "MISSING",
+                "UNCERTAIN"
+              ],
+              "title": "Status",
+              "type": "string"
+            },
+            "alternatives": {
+              "items": {
+                "items": {
+                  "$ref": "#/$defs/MaterialChecklistItem"
+                },
+                "type": "array"
+              },
+              "title": "Alternatives",
+              "type": "array"
+            }
+          },
+          "required": [
+            "key",
+            "display_name",
+            "status"
+          ],
+          "title": "MaterialPresenceGroupResult",
+          "type": "object"
+        },
+        "MaterialPresenceReport": {
+          "properties": {
+            "status": {
+              "enum": [
+                "COMPLETE",
+                "INCOMPLETE",
+                "UNCERTAIN"
+              ],
+              "title": "Status",
+              "type": "string"
+            },
+            "groups": {
+              "items": {
+                "$ref": "#/$defs/MaterialPresenceGroupResult"
+              },
+              "title": "Groups",
+              "type": "array"
+            },
+            "notices": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Notices",
+              "type": "array"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "title": "MaterialPresenceReport",
           "type": "object"
         },
         "RecognizedDocument": {
@@ -14023,6 +13448,13 @@
             "$ref": "#/$defs/RecognizedDocument"
           },
           "title": "Recognized Documents",
+          "type": "array"
+        },
+        "document_classifications": {
+          "items": {
+            "$ref": "#/$defs/DocumentClassification"
+          },
+          "title": "Document Classifications",
           "type": "array"
         },
         "material_completeness": {

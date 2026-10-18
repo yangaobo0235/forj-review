@@ -7,6 +7,7 @@
  * DOM 定位留在浏览器平台，目录只声明页签名称，不包含选择器或节点。
  */
 import { pagePath } from "../adapters/selection.ts";
+import { bundledPageCatalog } from "./bundled-page-catalog.ts";
 import type { BusinessSelection, BusinessType, Region } from "../../../shared/contracts/review";
 
 export interface PageIdentityDeclaration {
@@ -64,6 +65,11 @@ export function applyPageCatalog(catalog: PageCatalog | null | undefined): void 
 /** 当前生效的页面识别清单；不可用时返回 null。 */
 export function appliedPageCatalog(): PageCatalog | null {
   return applied;
+}
+
+/** 服务不可达时保留同一份声明生成的识别规则；不替代审核字段或判定配置。 */
+export function effectivePageCatalog(): PageCatalog {
+  return applied ?? bundledPageCatalog;
 }
 
 export async function fetchPageCatalog(

@@ -54,6 +54,52 @@ def test_url_job_schedules_each_image_once_and_reuses_batch():
     assert snapshot.result.summary == "全部完成"
 
 
+def test_presence_survives_partial_image_merge_and_is_visible_before_finalization():
+    from forj_review_assistant.businesses.completeness import evaluate_extracted
+    from forj_review_assistant.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
+    from forj_review_assistant.contracts.recognition import DocumentClassification
+
+    started = threading.Event()
+    release = threading.Event()
+
+    class PartialService(UrlService):
+        async def extract_image_async(self, request, image):
+            image_id = str(image.image_id)
+            if image.index == 1:
+                return AgentBatchResult(total_count=1, timed_out_count=1, timed_out_image_ids=[image_id])
+            return AgentBatchResult(total_count=1, failed_count=1, failed_image_ids=[image_id], document_classifications=[
+                DocumentClassification(target_id=image_id, document_type="vehicle_license", business_scope="old_vehicle"),
+            ])
+
+        async def assist_with_batch_async(self, request, initial_batch):
+            started.set()
+            while not release.is_set():
+                await asyncio.sleep(0.005)
+            result = evaluate_extracted(request, SCRAP_REPLACEMENT_QINGDAO, initial_batch)
+            initial_batch.material_completeness = result
+            return ReviewResponse(recommendation="REVIEW_REQUIRED", risk_level="MEDIUM", summary="synthetic",
+                                  material_completeness=result), initial_batch
+
+    manager = ReviewJobManager(PartialService())
+    try:
+        created = manager.create(request(2))
+        assert started.wait(2)
+        snapshot = manager.get(created.job_id)
+        assert snapshot.status == JobStatus.RUNNING
+        presence = snapshot.material_completeness.presence
+        assert presence.groups[0].alternatives[0][0].status == "PRESENT"
+        assert presence.groups[1].status == "UNCERTAIN"
+        release.set()
+        assert manager.wait(created.job_id, 2)
+        final = manager.get(created.job_id)
+        assert final.status == JobStatus.PARTIAL
+        assert final.material_completeness.presence == presence
+        assert final.result.material_completeness.presence == presence
+    finally:
+        release.set()
+        manager.close()
+
+
 @pytest.mark.parametrize("src", ["", "blob:https://example.test/id", "data:image/jpeg;base64,AA==", "file:///tmp/image.png"])
 def test_invalid_urls_are_rejected_before_job_creation(src):
     manager = ReviewJobManager(UrlService())

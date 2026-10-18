@@ -80,9 +80,12 @@ class DocumentPolicy:
     scoped_names: tuple[tuple[str, str], ...] = ()
     # 票面只有一个号码的材料：`(号码字段, 派生字段)`，见 `MaterialDeclaration`。
     derived_field: tuple[str, str] | None = None
+    allowed_scopes: tuple[str, ...] = ()
 
     def fields_for_scope(self, business_scope: str = "unknown") -> tuple[str, ...]:
         """返回当前业务范围允许提取的字段，未知业务使用材料默认白名单。"""
+        if self.allowed_scopes and business_scope != "unknown" and business_scope not in self.allowed_scopes:
+            return ()
         for key, fields in self.scoped_fields:
             if key == business_scope:
                 return fields
@@ -171,10 +174,17 @@ def _merge_material(
         display_name=declaration.display_name,
         fields=declaration.fields,
         field_guidance=declaration.guidance,
-        scoped_fields=declaration.scoped_fields,
-        scoped_guidance=declaration.scoped_guidance,
-        scoped_names=declaration.scoped_names,
+        scoped_fields=declaration.scoped_fields or tuple(
+            (scope, declaration.fields) for scope in declaration.allowed_scopes
+        ),
+        scoped_guidance=declaration.scoped_guidance or tuple(
+            (scope, declaration.guidance) for scope in declaration.allowed_scopes
+        ),
+        scoped_names=declaration.scoped_names or tuple(
+            (scope, declaration.display_name) for scope in declaration.allowed_scopes
+        ),
         derived_field=declaration.derived_field,
+        allowed_scopes=declaration.allowed_scopes,
     )
     if current is None:
         return projected
@@ -198,6 +208,8 @@ def _merge_material(
         # 派生关系不属于任何分区：同一份材料在哪个业务分区里都是同一个票面号码。
         # 先声明的生效，两个业务对同一材料给出不同派生关系是配置错误。
         derived_field=current.derived_field or projected.derived_field,
+        allowed_scopes=tuple(dict.fromkeys((*current.allowed_scopes, *projected.allowed_scopes)))
+        if current.allowed_scopes and projected.allowed_scopes else (),
     )
 
 
@@ -237,7 +249,9 @@ def build_classification_prompt() -> str:
     return (
         f"只判断这张图片的资料类型。document_type 只能是 {document_type_choices()}。"
         "不要提取业务字段，不要输出身份证号码等敏感信息，不要给出审核结论。"
-        "只输出 JSON 对象，包含 document_type、confidence、reason；confidence 取值为 0 到 1。"
+        "只输出 JSON 对象，包含 document_type、confidence、reason、identity_sides；confidence 取值为 0 到 1。"
+        "身份证另外判断可确认的面别：人像面为 FRONT、国徽面为 BACK，identity_sides 为对应值的数组。"
+        "同图清楚展示两面时可同时填写；面别看不清或非身份证时填写 []，禁止猜测。"
     )
 
 
@@ -256,6 +270,7 @@ def build_unknown_extraction_prompt(
             "guidance": policy.guidance_for_scope(business_scope),
         }
         for key, policy in DOCUMENT_POLICIES.items()
+        if policy.fields_for_scope(business_scope)
     }
     prompt = (
         f"请判断资料类型并提取图片中明确可见的审核字段。{LAYOUT_INSTRUCTION}"

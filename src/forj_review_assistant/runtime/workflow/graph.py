@@ -8,11 +8,10 @@ import asyncio
 import inspect
 import logging
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import replace
 from functools import partial
 from itertools import pairwise
 from time import perf_counter
-from typing import Any, Required, TypedDict
+from typing import Any
 from uuid import uuid4
 
 from langgraph.graph import END, START, StateGraph
@@ -28,32 +27,20 @@ from forj_review_assistant.businesses.profiles import BusinessProfile
 from forj_review_assistant.capabilities.page_actions import PageActionHandler
 from forj_review_assistant.capabilities.specs import (
     BusinessRuleHandler,
-    CapabilityResult,
     ExternalCheckHandler,
-    ReviewExecutionContext,
 )
-from forj_review_assistant.contracts.evidence import EvidenceFact, FieldObservation
 from forj_review_assistant.contracts.recognition import (
-    AgentAdvice,
     AgentBatchResult,
-    CheckResult,
-    MaterialCompletenessReport,
 )
 from forj_review_assistant.contracts.review import (
     CapabilityPlanEntry,
-    FieldComparison,
-    PageActionIntent,
-    PageFillAction,
-    QrCheck,
     Recommendation,
     Region,
     ReviewRequest,
     ReviewResponse,
-    ReviewTask,
 )
 from forj_review_assistant.evidence.collection import (
     assemble_evidence_facts,
-    collect_observations,
     collection_issues,
 )
 from forj_review_assistant.evidence.comparison.check_results import (
@@ -69,10 +56,13 @@ from forj_review_assistant.presentation.advice import build_final_advice
 from forj_review_assistant.presentation.response import _log_decision, response_from_results
 from forj_review_assistant.presentation.routing import build_review_tasks
 from forj_review_assistant.runtime.workflow.capability_assembly import WorkflowCapabilities
-from forj_review_assistant.runtime.workflow.planner import (
-    CapabilityPlanItem,
-    plan_capabilities,
+from forj_review_assistant.runtime.workflow.capability_execution import (
+    execute_stage,
+    observations,
+    plan_input_capabilities,
+    plan_remaining_capabilities,
 )
+from forj_review_assistant.runtime.workflow.state import ReviewState
 
 logger = logging.getLogger(__name__)
 
@@ -108,34 +98,6 @@ WORKFLOW_NODE_ORDER = (
 )
 
 
-class ReviewState(TypedDict, total=False):
-    """工作流节点共享状态；Required 字段由入口保证，其余字段按节点顺序产生。"""
-
-    request: Required[ReviewRequest]
-    profile: Required[BusinessProfile]
-    batch_callback: Callable[[AgentBatchResult], Any] | None
-    batch: AgentBatchResult
-    qr_checks: list[QrCheck]
-    external_results: list[CheckResult]
-    response: ReviewResponse  # Produced only by final/error rendering nodes.
-    observations: list[FieldObservation]
-    comparisons: list[FieldComparison]
-    issues: list[str]
-    cross_checks: list[CheckResult]
-    composite_checks: list[CheckResult]
-    page_fill_intent: list[PageFillAction]
-    page_action_intents: list[PageActionIntent]
-    recommendation: str
-    advice: AgentAdvice
-    material_completeness: MaterialCompletenessReport
-    review_tasks: list[ReviewTask]
-    capability_plan: tuple[CapabilityPlanItem, ...]
-    capability_results: list[CapabilityResult]
-    evidence_facts: list[EvidenceFact]
-    validation_error: str
-    coverage_status: str
-    degradation_reasons: list[str]
-    trace_id: str
 
 
 class ReviewWorkflow:
@@ -165,10 +127,10 @@ class ReviewWorkflow:
             "resolve_context": self._resolve_context,
             "validate_input": self._validate_input,
             "assess_coverage": self._assess_collected_materials,
-            "plan_input_capabilities": self._plan_input_capabilities,
+            "plan_input_capabilities": plan_input_capabilities,
             "extract_evidence": self._extract_documents,
             "assess_evidence_quality": self._assess_extracted_evidence,
-            "plan_capabilities": self._plan_capabilities,
+            "plan_capabilities": plan_remaining_capabilities,
             "compare_fields": self._compare_same_fields,
             "assemble_facts": self._assemble_facts,
             "record_degradation": self._record_degradation,
@@ -176,7 +138,7 @@ class ReviewWorkflow:
             "derive_recommendation": self._derive_recommendation,
             "build_response": self._build_final_response,
             **{
-                name: partial(self._execute_stage, stages={stage})
+                name: partial(execute_stage, self.capabilities, stages={stage})
                 for name, stage in CAPABILITY_STAGE_NODES.items()
             },
         }
@@ -345,176 +307,14 @@ class ReviewWorkflow:
         return {"degradation_reasons": reasons}
 
     @staticmethod
-    def _observations(state: ReviewState):
-        return collect_observations(
-            state["request"],
-            state["profile"],
-            state.get("batch", AgentBatchResult()),
-            state.get("capability_results", ()),
-            state.get("qr_checks", ()),
-        )
-
-    @classmethod
-    def _available_facts(cls, state: ReviewState) -> set[str]:
-        images = [image for image in state["request"].images if not image.collection_error]
-        available = {image.business_scope for image in images}
-        available.update(image.category_hint for image in images)
-        batch = state.get("batch", AgentBatchResult())
-        available.update(document.business_scope for document in batch.recognized_documents)
-        pack = state["profile"].pack_declaration
-        if pack:
-            for image in images:
-                if image.business_scope not in {"unknown", ""}:
-                    continue
-                material = pack.material(image.document_type_hint) or pack.material(
-                    image.category_hint
-                )
-                if material and len(material.allowed_scopes) == 1:
-                    available.add(material.allowed_scopes[0])
-        observations, _ = cls._observations(state)
-        available.update(
-            item.field
-            for item in observations
-            if item.value not in (None, "") and not item.uncertain
-        )
-        return available
-
-    @classmethod
-    def _plan_input_capabilities(cls, state: ReviewState) -> dict[str, Any]:
-        plan = plan_capabilities(state["profile"], cls._available_facts(state))
-        return {
-            "capability_plan": tuple(item for item in plan if item.stage == "INPUT_COVERAGE"),
-            "capability_results": [],
-        }
-
-    @classmethod
-    def _plan_capabilities(cls, state: ReviewState) -> dict[str, Any]:
-        plan = plan_capabilities(state["profile"], cls._available_facts(state))
-        executed = {result.capability_id for result in state.get("capability_results", ())}
-        previous = {item.capability_id: item for item in state.get("capability_plan", ())}
-        return {
-            "capability_plan": tuple(
-                previous[item.capability_id] if item.capability_id in executed else item
-                for item in plan
-            ),
-            "capability_results": list(state.get("capability_results", ())),
-        }
-
-    def _execution_context(self, state: ReviewState) -> ReviewExecutionContext:
-        observations, qr = self._observations(state)
-        return ReviewExecutionContext(
-            request=state["request"],
-            profile=state["profile"],
-            batch=state.get("batch", AgentBatchResult()),
-            observations=tuple(observations),
-            comparisons=tuple(state.get("comparisons", ())),
-            qr_checks=tuple(qr),
-            checks=tuple(
-                unique_checks([*state.get("external_results", ()), *state.get("cross_checks", ())])
-            ),
-            material_completeness=state.get("material_completeness"),
-        )
-
-    async def _execute_stage(
-        self,
-        state: ReviewState,
-        stages: set[str],
-    ) -> dict[str, Any]:
-        """Execute all Profile capabilities for the requested lifecycle stages."""
-        context = self._execution_context(state)
-        capability_plan = state.get("capability_plan")
-        if capability_plan is None:
-            capability_plan = plan_capabilities(state["profile"], self._available_facts(state))
-        plans = {item.capability_id: item for item in capability_plan}
-        bindings = {binding.capability_id: binding for binding in context.profile.bindings}
-        specs = {spec.capability_id: spec for spec in context.profile.capabilities}
-        results = list(state.get("capability_results", ()))
-        executed = {result.capability_id for result in results}
-        for item in capability_plan:
-            spec = specs.get(item.capability_id)
-            if spec is None or spec.stage not in stages or spec.capability_id in executed:
-                continue
-            binding = bindings.get(spec.capability_id)
-            if binding is not None and binding.required is not None:
-                spec = replace(spec, required=binding.required)
-            actual_facts = {
-                observation.field
-                for observation in context.observations
-                if observation.value is not None
-                and observation.value != ""
-                and not observation.uncertain
-            }
-            missing = set(spec.input_facts) - actual_facts
-            if item.status == "READY" and missing:
-                item = replace(
-                    item,
-                    status="BLOCKED" if spec.required else "SKIPPED",
-                    reason="依赖事实未实际产出：" + "、".join(sorted(missing)),
-                    missing_dependencies=tuple(sorted(missing)),
-                )
-                plans[spec.capability_id] = item
-            result = await self.capabilities.execute(spec, item, context)
-            results.append(result)
-            observations, qr_checks = collect_observations(
-                state["request"],
-                state["profile"],
-                context.batch,
-                results,
-                (*context.qr_checks, *result.qr_checks),
-            )
-            context = replace(
-                context,
-                observations=tuple(observations),
-                qr_checks=tuple(qr_checks),
-                checks=tuple(unique_checks([*context.checks, *result.checks])),
-            )
-        observations, qr_checks = collect_observations(
-            state["request"],
-            state["profile"],
-            context.batch,
-            results,
-            context.qr_checks,
-        )
-        external_ids = {spec.capability_id for spec in specs.values() if spec.kind == "EXTERNAL"}
-        return {
-            "capability_plan": tuple(plans[item.capability_id] for item in capability_plan),
-            "capability_results": results,
-            "qr_checks": qr_checks,
-            "observations": observations,
-            "external_results": unique_checks(
-                [
-                    *(
-                        check
-                        for item in results
-                        if item.capability_id in external_ids
-                        for check in item.checks
-                    ),
-                    *qr_review_checks(qr_checks, state["request"].images),
-                ]
-            ),
-            "cross_checks": [
-                *state.get("composite_checks", ()),
-                *(
-                    check
-                    for item in results
-                    for check in item.checks
-                    if item.capability_id not in external_ids
-                ),
-            ],
-            "page_fill_intent": [action for item in results for action in item.page_actions],
-            "page_action_intents": [
-                intent for item in results for intent in item.page_action_intents
-            ],
-        }
-
-    def _compare_same_fields(self, state: ReviewState) -> dict[str, Any]:
-        observations, qr = self._observations(state)
-        comparisons = build_field_comparisons(state["request"], state["profile"], observations)
+    def _compare_same_fields(state: ReviewState) -> dict[str, Any]:
+        collected, qr = observations(state)
+        comparisons = build_field_comparisons(state["request"], state["profile"], collected)
         composites = build_page_composite_checks(
             state["request"], {item.field: item for item in comparisons}
         )
         return {
-            "observations": observations,
+            "observations": collected,
             "comparisons": comparisons,
             "qr_checks": qr,
             "issues": collection_issues(state["request"], state["profile"]),
@@ -525,13 +325,13 @@ class ReviewWorkflow:
             "cross_checks": unique_checks([*state.get("cross_checks", ()), *composites]),
         }
 
-    @classmethod
-    def _assemble_facts(cls, state: ReviewState) -> dict[str, Any]:
-        observations, qr = cls._observations(state)
+    @staticmethod
+    def _assemble_facts(state: ReviewState) -> dict[str, Any]:
+        collected, qr = observations(state)
         return {
-            "observations": observations,
+            "observations": collected,
             "qr_checks": qr,
-            "evidence_facts": assemble_evidence_facts(observations, state.get("comparisons", ())),
+            "evidence_facts": assemble_evidence_facts(collected, state.get("comparisons", ())),
         }
 
     @staticmethod

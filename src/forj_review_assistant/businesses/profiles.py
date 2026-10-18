@@ -14,9 +14,10 @@ from forj_review_assistant.businesses.material_policies import (
 from forj_review_assistant.businesses.packs import (
     BUSINESS_PACKS,
     SCRAP_REPLACEMENT_PACK,
-    TRANSFER_PACK,
-    VEHICLE_SOURCE_PACK,
 )
+from forj_review_assistant.businesses.packs.model import BusinessExtensionPack
+from forj_review_assistant.businesses.packs.transfer import TRANSFER_PACK
+from forj_review_assistant.businesses.packs.vehicle_source import VEHICLE_SOURCE_PACK
 from forj_review_assistant.businesses.replacement_policies import ReplacementPolicy
 from forj_review_assistant.capabilities.specs import (
     CapabilityBinding,
@@ -66,7 +67,7 @@ class BusinessProfile:
     invoice_verification_field: str | None = None
     # 审核字段就是声明的字段；页面上其他控件不进审核目录。
     review_declared_fields_only: bool = False
-    pack_declaration: object | None = None
+    pack_declaration: BusinessExtensionPack | None = None
     page_id: str = ""
 
     @property
@@ -170,6 +171,8 @@ class BusinessProfile:
         类型——写回器对下拉、日期这类复合控件的验证程度和文本框不同，没验证
         过的一律交人工填写，而不是先写进去再看回读结果。
         """
+        if not self.rules_configured:
+            return False
         if not self.writable_control_kinds:
             return True
         return str(control_type or "").strip().lower() in self.writable_control_kinds
@@ -178,11 +181,11 @@ class BusinessProfile:
 
 
 
-def build_profile(pack, region: RegionId, *, page_id: str | None = None) -> BusinessProfile:
+def build_profile(pack: BusinessExtensionPack, region: RegionId, *, page_id: str | None = None) -> BusinessProfile:
     """从业务声明生成某个地区的 Profile。
 
     字段、材料、能力和页面动作在地区之间共用，只有地区政策不同。地区政策为
-    空时（如车源审核）不推导地区政策能力，`capabilities_for` 只返回共用部分。
+    空时不推导地区政策能力，`capabilities_for` 只返回共用部分。
     """
     declaration = pack.region(region)
     if declaration is None:
@@ -221,11 +224,11 @@ def build_scrap_profile(region: Region) -> BusinessProfile:
 
 SCRAP_REPLACEMENT_QINGDAO = build_scrap_profile(Region.QINGDAO)
 
-# 车源审核不分地区，页面地址是 /vehicle-source，配置取默认地区。
+# 新版车源配置；页面身份与字段、材料和审核规则分别声明。
 VEHICLE_SOURCE_DEFAULT = build_profile(VEHICLE_SOURCE_PACK, Region.DEFAULT)
 
 # 一致性审核不分地区：青岛与长春两个页面地址（/consistency-qingdao、
-# /consistency-changchun）用的是同一套规则，因此和车源审核一样取默认地区，
+# /consistency-changchun）使用默认地区，
 # 由页面识别声明把两个地址都挂到这一条上。规则尚未配置，先立座位。
 CONSISTENCY_DEFAULT = BusinessProfile(
     business_type=BusinessType.CONSISTENCY,
@@ -242,8 +245,6 @@ CONSISTENCY_DEFAULT = BusinessProfile(
 
 SCRAP_REPLACEMENT_CHANGCHUN = build_scrap_profile(Region.CHANGCHUN)
 
-# 过户审核与一致性审核同址（两个地址都一样），靠列表页状态筛选进到各自的页面。
-# 同样不分地区，因此和车源审核一样取默认地区。
 TRANSFER_DEFAULT = build_profile(TRANSFER_PACK, Region.DEFAULT)
 
 BUSINESS_PROFILES = (

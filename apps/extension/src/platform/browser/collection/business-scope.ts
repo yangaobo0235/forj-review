@@ -42,14 +42,6 @@ import {
     ["id_card", "identity_card"],
     ["identity_card", "identity_card"],
   ]);
-  const slotDocumentTypes = new Map([
-    ["old_vehicle:1", "vehicle_license"],
-    ["old_vehicle:2", "registration_certificate"],
-    ["old_vehicle:3", "scrap_certificate"],
-    ["new_vehicle:1", "vehicle_license"],
-    ["new_vehicle:2", "registration_certificate"],
-    ["new_vehicle:3", "invoice"],
-  ]);
 
   /**
    * 页面分组标题表：后端下发了采集清单就用清单，否则用内置表兜底。
@@ -64,10 +56,10 @@ import {
 
   const scopeForLabel = (text: string) => groupLabels().get(normalize(text)) || null;
 
-  /** 上传槽位表：后端下发了清单就用清单，否则用内置表兜底。 */
+  /** 仅使用后端显式声明的槽位；清单缺失时保留未知类型。 */
   const slotsFor = () => {
     const entries = manifestSlotEntries();
-    return entries ? new Map(entries) : slotDocumentTypes;
+    return new Map(entries ?? []);
   };
 
   const documentTypeFor = (businessScope: string, groupOrder: number, categoryHint: string) =>

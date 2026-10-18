@@ -1,7 +1,24 @@
+from dataclasses import replace
+
+import pytest
+
+from forj_review_assistant.businesses.context import business_context
+from forj_review_assistant.businesses.packs.model import FieldDeclaration
+from forj_review_assistant.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
 from forj_review_assistant.contracts.review import FieldObservation, FieldStatus
 from forj_review_assistant.evidence.comparison.aggregate import aggregate_field
 from forj_review_assistant.evidence.fields.differences import value_differences
 from forj_review_assistant.evidence.fields.normalize import normalize_value
+
+
+@pytest.fixture
+def engine_model_policy():
+    profile = replace(SCRAP_REPLACEMENT_QINGDAO, pack_declaration=replace(
+        SCRAP_REPLACEMENT_QINGDAO.pack_declaration,
+        fields=(FieldDeclaration("sample.engine_model", "发动机型号", normalizer="engine_model", mode="PARALLEL"),),
+    ))
+    with business_context(profile):
+        yield
 
 
 def test_detailed_tractor_type_matches_page_business_category() -> None:
@@ -14,34 +31,34 @@ def test_detailed_cargo_type_matches_page_business_category() -> None:
     assert normalize_value("old_vehicle.type", "载货汽车") == "载货汽车"
 
 
-def test_engine_model_compares_only_the_model_itself() -> None:
+def test_engine_model_compares_only_the_model_itself(engine_model_policy) -> None:
     """证件写“潍柴WP10.5H430E62”，页面可能只写型号；品牌不参与比较。
 
     品牌和型号是两件事，页面与材料各写各的；带不带品牌都算同一型号。
     """
-    assert normalize_value("vehicle.engine_model", "潍柴WP10.5H430E62") == "WP10.5H430E62"
-    assert normalize_value("vehicle.engine_model", "潍柴 WP10.5H430E62") == "WP10.5H430E62"
-    assert normalize_value("vehicle.engine_model", "潍柴WP10.5H430E62") == normalize_value(
-        "vehicle.engine_model", "WP10.5H430E62"
+    assert normalize_value("sample.engine_model", "潍柴WP10.5H430E62") == "WP10.5H430E62"
+    assert normalize_value("sample.engine_model", "潍柴 WP10.5H430E62") == "WP10.5H430E62"
+    assert normalize_value("sample.engine_model", "潍柴WP10.5H430E62") == normalize_value(
+        "sample.engine_model", "WP10.5H430E62"
     )
     # 型号本身不同时仍然是冲突，不能被品牌归一化抹平。
-    assert normalize_value("vehicle.engine_model", "潍柴WP10.5H430E62") != normalize_value(
-        "vehicle.engine_model", "WP13NG480E61"
+    assert normalize_value("sample.engine_model", "潍柴WP10.5H430E62") != normalize_value(
+        "sample.engine_model", "WP13NG480E61"
     )
 
 
-def test_engine_model_comparison_ignores_the_brand_prefix() -> None:
+def test_engine_model_comparison_ignores_the_brand_prefix(engine_model_policy) -> None:
     result = aggregate_field(
-        "vehicle.engine_model",
+        "sample.engine_model",
         [
             FieldObservation(
-                field="vehicle.engine_model",
+                field="sample.engine_model",
                 source_type="page",
                 source_id="review_page",
                 value="潍柴WP13NG480E61",
             ),
             FieldObservation(
-                field="vehicle.engine_model",
+                field="sample.engine_model",
                 source_type="image",
                 source_id="img-1",
                 value="WP13NG480E61",
@@ -51,12 +68,12 @@ def test_engine_model_comparison_ignores_the_brand_prefix() -> None:
     assert result.status is FieldStatus.MATCH
 
 
-def test_engine_model_highlight_stays_on_the_model_not_the_brand() -> None:
+def test_engine_model_highlight_stays_on_the_model_not_the_brand(engine_model_policy) -> None:
     """品牌不参与比较，高亮也不能标出「缺少 潍柴」。"""
-    assert value_differences("vehicle.engine_model", "潍柴WP13NG480E61", "WP13NG480E61") == []
+    assert value_differences("sample.engine_model", "潍柴WP13NG480E61", "WP13NG480E61") == []
 
-    branded = value_differences("vehicle.engine_model", "潍柴WP10.5H430E62", "WP13NG480E61")
-    plain = value_differences("vehicle.engine_model", "WP10.5H430E62", "WP13NG480E61")
+    branded = value_differences("sample.engine_model", "潍柴WP10.5H430E62", "WP13NG480E61")
+    plain = value_differences("sample.engine_model", "WP10.5H430E62", "WP13NG480E61")
 
     assert branded
     assert all("潍柴" not in item.page_text for item in branded)

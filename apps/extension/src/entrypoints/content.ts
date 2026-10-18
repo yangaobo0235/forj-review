@@ -1,20 +1,22 @@
+import { imageAssetMetadata } from "../platform/browser/collection/image-assets.ts";
 import { collectImageCandidates } from "../platform/browser/collection/collect-image-candidates.ts";
 import { applyCollectManifest, manifestIdentityAnchors, manifestRecordIdentityFields, manifestWritableControlKinds, manifestWritableFields } from "../platform/browser/catalog/collect-manifest.ts";
 import type { CollectManifest } from "../platform/browser/catalog/collect-manifest.ts";
-import { appliedPageCatalog, applyPageCatalog, explainPageIdentity, reviewTabLabels } from "../platform/browser/catalog/page-catalog.ts";
+import { appliedPageCatalog, effectivePageCatalog, applyPageCatalog, explainPageIdentity, reviewTabLabels } from "../platform/browser/catalog/page-catalog.ts";
 import type { PageCatalog } from "../platform/browser/catalog/page-catalog.ts";
 import { ReviewBusinessDetector } from "../platform/browser/identity/business-detector.ts";
-import { guardActiveReviewTab, readActiveReviewTab } from "../platform/browser/identity/active-review-tab.ts";
+import { guardActiveReviewTab, readActiveReviewTab, reviewTabCollectionRoot } from "../platform/browser/identity/active-review-tab.ts";
 import { ReviewImageCandidates } from "../platform/browser/collection/image-candidates.ts";
 import { ReviewImageFocus } from "../platform/browser/actions/image-focus.ts";
-import { classifyImage, imageDocumentType } from "../platform/browser/collection/material-hints.ts";
+import { classifyImage } from "../platform/browser/collection/material-hints.ts";
 import { ReviewPageFieldCollector } from "../platform/browser/collection/page-field-collector.ts";
 import { ReviewPageFieldWriter } from "../platform/browser/actions/page-field-writer.ts";
 import { BUILTIN_IDENTITY_ANCHORS, buildPageFingerprint, createPageInstanceId, sameRecordExceptFields } from "../platform/browser/identity/page-identity.ts";
-import type { BusinessSelection, PageImage, PageWriteGroupAction } from "../shared/contracts/review.ts";
+import type { BusinessSelection, PageWriteGroupAction } from "../shared/contracts/review.ts";
 import { logDiagnostic } from "../shared/diagnostics.ts";
 import { captureConfigurationPage, trialConfigurationPage } from "../platform/browser/collection/configuration-discovery";
 import type { ConfigurationPending } from "../shared/contracts/configuration";
+import { createVehicleModelFiller } from "../platform/browser/actions/vehicle-model-fill.ts";
 /**
  * 功能：协调页面字段、图片地址采集和原图定位消息。
  * 职责边界：复杂识别逻辑委托给独立公共脚本；DOM 元素不跨消息传输。
@@ -36,7 +38,8 @@ let activeCollectionId = "";
 let latestCollectionId = "";
 let collectionSequence = 0;
 let reviewTabGuard: ReturnType<typeof guardActiveReviewTab> | null = null;
-let activeReviewPanel: HTMLElement | null = null;
+let activeReviewRoot: HTMLElement | null = null;
+let activeCollectionBusiness = "";
 const sameReviewStep = () => reviewTabGuard?.isCurrent() ?? true;
 const nextCollectionId = () => `${pageInstanceId}:${++collectionSequence}`;
 // 指纹锚点来自本次业务的采集清单；没有清单时退回内置表。
@@ -56,34 +59,6 @@ type ReviewMessage = {
   [key: string]: unknown;
 };
 type CollectionSnapshot = { pageFields?: Record<string, string>; fieldTargets?: Array<{ field: string; element: Element }> };
-type ImageSelection = { image: HTMLImageElement; index: number; imageId?: string; businessScope: string; groupOrder?: number; categoryHint?: string; groupTitle?: string; labelHint?: string };
-
-const imageAssetMetadata = (candidate: ImageSelection): PageImage => {
-  const { image, index } = candidate;
-  const src = image.currentSrc || image.src;
-  const hint = candidate.labelHint || image.closest("section, article, li, div")?.textContent?.slice(0, 160) || image.alt || "";
-  const categoryHint = classifyImage(hint);
-  return {
-    imageId: candidate.imageId,
-    index,
-    src,
-    alt: image.alt || "",
-    group: hint.slice(0, 80) || "未分类",
-    categoryHint,
-    // Use the image's own card label before positional slot fallback. This lets
-    // multi-material sections such as transfer and vehicle-source bypass model
-    // classification when their per-image labels are explicit.
-    documentTypeHint: imageDocumentType({ ...candidate, categoryHint }),
-    businessScope: candidate.businessScope,
-    groupTitle: candidate.groupTitle,
-    groupOrder: candidate.groupOrder,
-    pagePosition: `${Math.round(image.getBoundingClientRect().left)},${Math.round(image.getBoundingClientRect().top)}`,
-    naturalWidth: image.naturalWidth || 0,
-    naturalHeight: image.naturalHeight || 0,
-    collectionError: /^https?:\/\//i.test(src) ? null : "这份材料暂时无法读取，请刷新原页面后重新审核；仍失败请查看原图人工核对",
-  };
-};
-
 // 采集清单不可用时的兜底白名单。清单一旦应用就以清单为准：允许写回哪些
 // 字段、哪些控件类型都是业务声明，不在浏览器里再维护一份。
 /** 本次清单允许写回的字段；没有清单时退回内置白名单。 */
@@ -102,21 +77,20 @@ const controlFields = (collection: CollectionSnapshot) => {
 };
 
 const readIdentityFields = () => controlFields(ReviewPageFieldCollector.collectIdentity(
-  activeReviewPanel ?? document, manifestIdentityAnchors() ?? BUILTIN_IDENTITY_ANCHORS,
+  activeReviewRoot ?? document, manifestIdentityAnchors() ?? BUILTIN_IDENTITY_ANCHORS,
 ));
+
+const originalIdentityFields = (fields: Record<string, unknown>) => {
+  const original = { ...fields };
+  for (const [field, write] of verifiedFieldWrites) {
+    if (original[field] === write.value) original[field] = write.original;
+  }
+  return original;
+};
 
 const sameCollectedRecord = (message: ReviewMessage, fields?: Record<string, unknown>) => {
   if (!sameReviewStep() || message.expectedPageUrl !== window.location.href || message.expectedPageInstanceId !== pageInstanceId || !message.expectedPageFingerprint) return false;
-  const currentFields = { ...(fields ?? readIdentityFields()) };
-  for (const [field, write] of verifiedFieldWrites) {
-    if (currentFields[field] === write.value) currentFields[field] = write.original;
-  }
-  return (
-    message.expectedPageUrl === window.location.href &&
-    message.expectedPageInstanceId === pageInstanceId &&
-    Boolean(message.expectedPageFingerprint) &&
-    message.expectedPageFingerprint === pageFingerprint(currentFields)
-  );
+  return message.expectedPageFingerprint === pageFingerprint(originalIdentityFields(fields ?? readIdentityFields()));
 };
 
 const sameActiveCollection = (message: ReviewMessage) =>
@@ -168,7 +142,21 @@ const isCollectionMessage = (message: ReviewMessage) =>
   message?.type === MESSAGE_TYPES.collectPageData
   || message?.type === MESSAGE_TYPES.collectPageManifest;
 
+const modelFiller = createVehicleModelFiller({
+  root: document,
+  isCurrent: message => activeCollectionBusiness === "vehicle_source" && sameReviewIdentity(message),
+  collectionId: () => activeCollectionId,
+  fields: reviewFieldElements,
+  collect: fields => ReviewPageFieldCollector.collect(activeReviewRoot ?? document, new Set(fields)),
+  writableFields,
+  controlKinds: writableControlKinds,
+});
+
 chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendResponse) => {
+  if (message.type === "APPLY_VEHICLE_MODEL") {
+    void modelFiller.fill(message).then(sendResponse);
+    return true;
+  }
   if (message.type === "DISCOVER_CONFIGURATION_PAGE" || message.type === "TRIAL_CONFIGURATION_PAGE") {
     const task = message.type === "DISCOVER_CONFIGURATION_PAGE" ? captureConfigurationPage()
       : trialConfigurationPage(message.task as ConfigurationPending);
@@ -237,10 +225,7 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
       // page fingerprint. Validate all other anchors and the expected value,
       // while substituting the value we just wrote for that one field.
       if (String(currentFields[action.field!] ?? "").trim() !== action.value!.trim()) return false;
-      const expectedFields: Record<string, unknown> = { ...currentFields };
-      for (const [field, write] of verifiedFieldWrites) {
-        if (expectedFields[field] === write.value) expectedFields[field] = write.original;
-      }
+      const expectedFields = originalIdentityFields(currentFields);
       const previousWrite = verifiedFieldWrites.get(action.field!);
       expectedFields[action.field!] = previousWrite ? previousWrite.original : action.expectedValue;
       return message.expectedPageUrl === window.location.href
@@ -342,6 +327,7 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
   }
 
   const collectionId = nextCollectionId();
+  modelFiller.invalidate();
   latestCollectionId = collectionId;
 
   const log = (event: string, details: Record<string, unknown> = {}) => {
@@ -354,7 +340,7 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
   // 就不知道该取哪份清单。清单不可用时识别退回内置表，对共享地址只报
   // 「认不出来」，不猜。
   applyPageCatalog(message.pageCatalog as PageCatalog | null | undefined);
-  const tabLabels = reviewTabLabels(appliedPageCatalog(), window.location.href);
+  const tabLabels = reviewTabLabels(effectivePageCatalog(), window.location.href);
   const reviewTab = readActiveReviewTab(document, tabLabels);
   const businessResolution = ReviewBusinessDetector.resolve(
     window.location.href,
@@ -366,14 +352,14 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
   // 替换采集时断开旧监听；报废置换没有页签声明，继续使用原有路径及身份守卫。
   if (reviewTabGuard) activeCollectionId = "";
   reviewTabGuard?.disconnect();
-  activeReviewPanel = business && reviewTab.panelReady ? reviewTab.panel : null;
-  const collectionStepGuard = activeReviewPanel ? guardActiveReviewTab(document, tabLabels, reviewTab, () => {
+  activeReviewRoot = business ? reviewTabCollectionRoot(reviewTab) : null;
+  const collectionStepGuard = activeReviewRoot ? guardActiveReviewTab(document, tabLabels, reviewTab, () => {
     if (activeCollectionId === collectionId) activeCollectionId = "";
     if (latestCollectionId === collectionId) latestCollectionId = "";
   }) : null;
   reviewTabGuard = collectionStepGuard;
   // Record identity resolution counts, without page paths or page text.
-  const diagnostics = explainPageIdentity(appliedPageCatalog(), window.location.href, allText, reviewTab);
+  const diagnostics = explainPageIdentity(effectivePageCatalog(), window.location.href, allText, reviewTab);
   log("business", {
     business: business?.businessType ?? null,
     region: business?.region ?? null,
@@ -390,10 +376,7 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
         (!item.page_id || item.page_id === business?.pageId) &&
         (!item.region || item.region === business?.region) && (!item.profile_version || item.profile_version === business?.profileVersion)),
   );
-  const fieldCollection = ReviewPageFieldCollector.collect(
-    activeReviewPanel ?? document,
-    business?.businessType ?? null,
-  );
+  const fieldCollection = ReviewPageFieldCollector.collect(activeReviewRoot ?? document);
   const pageFields = controlFields(fieldCollection);
   const controlSnapshots = new Map(fieldCollection.fieldTargets.map(({ field, element }) =>
     [field, ReviewPageFieldWriter?.captureValue?.(element) ?? null]));
@@ -425,23 +408,27 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
     unknownTypeCount: selection.selected.filter((candidate) => candidate.categoryHint === "unknown").length,
   });
   const images = selection.selected;
-  Promise.resolve(images.map(imageAssetMetadata))
+  const pageSnapshot = {
+    ...(business || {}), pageUrl: window.location.href, pageId: business?.pageId,
+    pageInstanceId, pageFingerprint: pageFingerprint(pageFields), collectionId,
+    pageTitle: document.title, pageFields, reviewFields,
+    businessDetectionError: businessResolution.error,
+  };
+  const fieldDiagnostics = {
+    scannedControls: fieldCollection.scannedControls, matchedFields: Object.keys(pageFields).length,
+    reviewFieldCount: reviewFields.length, unmatchedLabels,
+    candidateCount: fieldCollection.candidateCount, ambiguousFields: fieldCollection.ambiguousFields,
+  };
+  const collectionIssues = selection.overflow
+    ? [`候选资料超过 ${MAX_REVIEW_IMAGES} 张，请确认是否漏审`] : [];
+  const collectionPayload = {writableTargets, fieldTargets, pageText: allText};
+  Promise.resolve().then(() => images.map(imageAssetMetadata))
     .then((imageAssets) => {
       collectionStepGuard?.isCurrent();
       if (latestCollectionId !== collectionId) {
         // 被取代的采集也要带回业务识别结果和真实原因，面板不得退化为“无法识别业务”。
         sendResponse({
-          ...(business || {}),
-          pageUrl: window.location.href,
-          pageId: business?.pageId,
-          pageInstanceId,
-          pageFingerprint: pageFingerprint(pageFields),
-          collectionId,
-          pageFields,
-          reviewFields,
-          images: [],
-          staleCollection: true,
-          businessDetectionError: businessResolution.error,
+          ...pageSnapshot, images: [], staleCollection: true,
           collectionIssues: ["页面采集已过期，请重新采集"],
           collectionDiagnostics: { imageSuccessCount: 0, imageFailureCount: 0 },
         });
@@ -460,22 +447,16 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
           controlSnapshot: controlSnapshots.get(field) ?? null });
       }
       activeCollectionId = collectionId;
+      activeCollectionBusiness = business?.businessType || "";
       const imageFailureCount = imageAssets.filter((image) => image.collectionError).length;
       const collectionDiagnostics = {
-        scannedControls: fieldCollection.scannedControls,
-        matchedFields: Object.keys(pageFields).length,
-        reviewFieldCount: reviewFields.length,
-        unmatchedLabels,
-        candidateCount: fieldCollection.candidateCount,
-        ambiguousFields: fieldCollection.ambiguousFields,
+        ...fieldDiagnostics,
         imageSuccessCount: imageAssets.length - imageFailureCount,
         imageFailureCount,
         scannedImages: selection.scannedCount,
         selectedImages: imageAssets.length,
         imageOverflow: selection.overflow,
-        collectionIssues: selection.overflow
-          ? [`候选资料超过 ${MAX_REVIEW_IMAGES} 张，请确认是否漏审`]
-          : []
+        collectionIssues
       };
       log("complete", {
         imageCount: imageAssets.length,
@@ -486,53 +467,16 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
         imageOverflow: selection.overflow
       });
       sendResponse({
-      ...(business || {}),
-      pageUrl: window.location.href,
-      pageId: business?.pageId,
-      pageInstanceId,
-      pageFingerprint: pageFingerprint(pageFields),
-      collectionId,
-      pageTitle: document.title,
-      pageFields,
-      reviewFields,
-      writableTargets,
-      fieldTargets,
-      pageText: allText,
-      images: imageAssets,
-      businessDetectionError: businessResolution.error,
-      collectionIssues: selection.overflow
-        ? [`候选资料超过 ${MAX_REVIEW_IMAGES} 张，请确认是否漏审`]
-        : [],
-      collectionDiagnostics
+        ...pageSnapshot, ...collectionPayload, images: imageAssets,
+        collectionIssues, collectionDiagnostics,
       });
     })
     .catch((error) => {
       log("failed", { errorType: error instanceof Error ? error.name : "unknown" });
       sendResponse({
-      ...(business || {}),
-      pageUrl: window.location.href,
-      pageInstanceId,
-      pageFingerprint: pageFingerprint(pageFields),
-      collectionId,
-      pageTitle: document.title,
-      pageFields,
-      reviewFields,
-      writableTargets,
-      fieldTargets,
-      pageText: allText,
-      images: [],
-      businessDetectionError: businessResolution.error,
-      collectionIssues: [error instanceof Error ? error.message : "图片采集失败"],
-      collectionDiagnostics: {
-        scannedControls: fieldCollection.scannedControls,
-        matchedFields: Object.keys(pageFields).length,
-        reviewFieldCount: reviewFields.length,
-        unmatchedLabels,
-        candidateCount: fieldCollection.candidateCount,
-        ambiguousFields: fieldCollection.ambiguousFields,
-        imageSuccessCount: 0,
-        imageFailureCount: 0
-      }
+        ...pageSnapshot, ...collectionPayload, images: [],
+        collectionIssues: [error instanceof Error ? error.message : "图片采集失败"],
+        collectionDiagnostics: {...fieldDiagnostics, imageSuccessCount: 0, imageFailureCount: 0},
       });
     });
   return true;

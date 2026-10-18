@@ -3,12 +3,18 @@ class Element {
   constructor(tag, attributes = {}, text = "") {
     this.tagName = tag.toUpperCase();
     this.attributes = new Map(Object.entries(attributes));
-    this.textContent = text;
+    this.ownText = text;
     this.children = [];
     this.parentElement = null;
     this.style = { display: "block", visibility: "visible" };
     this.hidden = false;
   }
+  get textContent() { return [this.ownText, ...this.children.map(child => child.textContent)].filter(Boolean).join(" "); }
+  set textContent(value) { this.ownText = value; }
+  get innerText() { return this.textContent; }
+  set innerText(value) { this.ownText = value; }
+  get childNodes() { return [...(this.ownText ? [{nodeType: 3, textContent: this.ownText}] : []), ...this.children]; }
+  get classList() { return {contains: name => (this.getAttribute("class") || "").split(/\s+/).includes(name)}; }
   get id() { return this.getAttribute("id") || ""; }
   getAttribute(name) { return this.attributes.get(name) ?? null; }
   setAttribute(name, value) { this.attributes.set(name, value); }
@@ -18,20 +24,31 @@ class Element {
   contains(node) { return node === this || this.children.some(child => child.contains(node)); }
   closest(selector) { for (let node = this; node; node = node.parentElement) if (node.matches(selector)) return node; return null; }
   matches(selector) {
-    if (selector === "form") return this.tagName === "FORM";
-    const attrs = [...selector.matchAll(/\[([^=]+)="([^"]*)"\]/g)];
-    return attrs.length > 0 && attrs.every(([, name, value]) => this.getAttribute(name) === value);
+    return selector.split(",").some(part => {
+      part = part.trim();
+      if (part === "*") return true;
+      if (part === "[contenteditable]:not([contenteditable='false'])") return this.getAttribute("contenteditable") === "true";
+      const tag = part.match(/^[a-z][a-z0-9-]*/i)?.[0];
+      const classes = [...part.matchAll(/\.([\w-]+)/g)].map(match => match[1]);
+      const attrs = [...part.matchAll(/\[([^=\]]+)(?:=['"]([^'"]*)['"])?\]/g)];
+      return Boolean(tag || classes.length || attrs.length)
+        && (!tag || this.tagName === tag.toUpperCase())
+        && classes.every(name => this.classList.contains(name))
+        && attrs.every(([, name, value]) => value === undefined ? this.getAttribute(name) !== null : this.getAttribute(name) === value);
+    });
   }
+  querySelector(selector) { return this.querySelectorAll(selector)[0] ?? null; }
   querySelectorAll(selector) {
-    const parts = selector.split(" ");
-    return this.children.flatMap(child => [child, ...child.descendants()]).filter(node =>
-      node.matches(parts.at(-1)) && (parts.length === 1 || node.parentElement?.closest(parts[0])));
+    return this.descendants().filter(node => selector.split(",").some(part => {
+      const parts = part.trim().split(/\s+/);
+      return node.matches(parts.at(-1)) && (parts.length === 1 || node.parentElement?.closest(parts[0]));
+    }));
   }
   descendants() { return this.children.flatMap(child => [child, ...child.descendants()]); }
   getClientRects() { return this.hidden || this.style.display === "none" ? [] : [{}]; }
 }
 
-export function reviewTabs(labels = ["车源审核", "过户审核"], selected = 0) {
+export function reviewTabs(labels = ["初审", "复审"], selected = 0) {
   const observers = [];
   const document = {
     title: "Synthetic review tabs", images: [],

@@ -14,8 +14,8 @@ from forj_review_assistant.contracts.review import FieldStatus, PageActionIntent
 def run_verify_invoice(context: ReviewExecutionContext) -> RuleExecutionResult:
     """发票号码与页面一致时提出 `verify_invoice` 动作。
 
-    触发字段由业务声明：报废置换是 `invoice.invoice_no`，过户是
-    `transfer.invoice_no`。写死一个业务的名字会让另一个业务永远不验真，
+    触发字段由业务声明，例如报废置换的 `invoice.invoice_no`。
+    写死一个业务的名字会让另一个业务永远不验真，
     而且不报错——只是那个按钮从来不亮。
 
     前端会在审核完成后自动点击它，因此显式声明不需要逐项授权；

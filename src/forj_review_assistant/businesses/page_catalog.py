@@ -1,7 +1,7 @@
 """页面识别声明：管理端审核页 → 业务与地区。
 
-报废置换沿用路径识别。车源、过户、一致性审核共用一致性入口，浏览器按
-声明的 review_tab 核对当前激活页签和对应面板，不能用整页文字推断步骤。
+报废置换沿用路径识别；车源、过户、一致性使用激活页签与关联面板。
+页面身份独立于审核规则，清空规则不会移除页面识别。
 
 这里的声明是浏览器识别表的唯一来源（另有扩展包里的 `admin_paths` 与
 `page_anchors`、`review_tab` 会一并汇总进来）。浏览器不再自己维护路径表：路径表写死在
@@ -23,7 +23,7 @@ from forj_review_assistant.contracts.review import (
 # 保留历史特征元数据；声明 review_tab 后浏览器不再使用整页文字判定步骤。
 CONSISTENCY_ANCHORS = ("新车信息", "车辆所有人类型", "新车挂靠")
 
-# 车源和过户已有扩展包，地址与审核页签从活动 Profile 的地区声明汇总。
+# 已配置页面的地址与审核页签从活动 Profile 的地区声明汇总。
 
 
 @dataclass(frozen=True)
@@ -40,18 +40,15 @@ class PageIdentity:
     review_tab: str = ""
 
 
-# 车源、过户、一致性共用的入口地址。青岛和长春两套页面使用同一套规则，
-# 业务本身不分地区，所以两个地址挂在同一条声明上、取默认地区——和车源审核
-# 同一个口径。地区维度只在报废置换里有意义（两地政策不同）。
-CONSISTENCY_TRANSFER_PATHS = ("/consistency-qingdao", "/consistency-changchun")
+# 一致性审核不分地区；两个城市入口使用同一份页面身份。
+CONSISTENCY_PATHS = ("/consistency-qingdao", "/consistency-changchun")
 
-# 尚未声明扩展包的业务保留显式声明（和 `profiles.py` 里的未配置 Profile 对应）。
-# 过户审核已有扩展包，它的地址和特征由 `TRANSFER_PACK` 声明，不在这里重复。
+# 尚无扩展包的审核步骤仍保留页面身份，不恢复其旧字段、材料或规则。
 _DECLARED_IDENTITIES: tuple[PageIdentity, ...] = (
     PageIdentity(
         BusinessType.CONSISTENCY,
         Region.DEFAULT,
-        paths=CONSISTENCY_TRANSFER_PATHS,
+        paths=CONSISTENCY_PATHS,
         anchors=CONSISTENCY_ANCHORS,
         review_tab="一致性审核",
     ),
@@ -96,8 +93,8 @@ def path_matches(path: str, prefix: str) -> bool:
 def identities_for_path(path: str, profiles=None) -> tuple[PageIdentity, ...]:
     """该地址可能属于哪些业务。地址唯一时不返回多条，地址共享时返回全部候选。
 
-    审核请求校验业务、地区及 page_id 属于路径候选。共享一致性入口的三个业务
-    都使用 default 地区，当前步骤由浏览器确认；报废置换仍校验对应地区。
+    审核请求校验业务、地区及 page_id 属于路径候选。
+    一致性审核的当前步骤由浏览器确认；报废置换仍校验对应地区。
     """
     return tuple(
         item
@@ -109,8 +106,8 @@ def identities_for_path(path: str, profiles=None) -> tuple[PageIdentity, ...]:
 def page_catalog(profiles=None) -> dict[str, object]:
     """下发给浏览器的页面识别清单。
 
-    浏览器据此判定当前页面是哪个业务；清单不可用时浏览器退回内置表，但内置表
-    对共享地址只返回「认不出来」，要求人工选择，不会猜。
+    浏览器据此判定当前页面是哪个业务；清单不可用时使用同一声明生成的随包目录，
+    共享地址仍按激活审核页签及对应面板确认，不按地址猜步骤。
     """
     return {
         "version": "1.0",

@@ -31,7 +31,7 @@ class QwenConfig:
 
 # Bind local settings to this backend package, independently of the launch directory.
 DEFAULT_ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
-PATH_SETTINGS = {"REVIEW_PAGES_DIR", "REVIEW_LOG_DIR"}
+PATH_SETTINGS = {"REVIEW_PAGES_DIR", "REVIEW_LOG_DIR", "REVIEW_MODEL_CATALOG_PATH"}
 
 
 def load_dotenv(env_file: Path | None = None) -> None:

@@ -42,8 +42,8 @@ def scope_hint_types(pack: BusinessExtensionPack, scope: str) -> frozenset[str]:
     类型是否属于该分区」反查——行驶证两个分区都有，那样查会让 `new_vehicle` 也
     落进旧车集合。
 
-    该分区**没有声明任何材料**时返回空集：此时角色别名指向的是别的分区的材料
-    （例如拿车源审核去问旧车分区），带上别名只会凭空多出一个并不存在的候选。
+    该分区**没有声明任何材料**时返回空集：此时角色别名指向的是别的分区的材料，
+    带上别名只会凭空多出一个并不存在的候选。
     """
     declared = material_types_for_scope(pack, scope)
     if not declared:
@@ -131,7 +131,7 @@ def route_fields(
 
     # 数电发票票面只有一个号码。模型只提取一次，另一个字段由确定性兼容层
     # 派生，避免模型分别生成两个可能冲突的值。派生关系由材料声明给出——
-    # 报废置换的机动车销售发票和过户的二手车销售统一发票字段键并不相同。
+    # 各业务使用的字段键可以不同。
     if material is not None and material.derived_field is not None:
         number_field, derived_field = material.derived_field
         if number_field in routed:

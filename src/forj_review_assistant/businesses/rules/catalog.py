@@ -11,16 +11,8 @@ from forj_review_assistant.businesses.rules.owner_consistency import (
     run_owner_consistency,
 )
 from forj_review_assistant.businesses.rules.replacement_policy import run_replacement_policy
-from forj_review_assistant.businesses.rules.transfer_invoice_date import (
-    CHECK_ID as TRANSFER_DATE_CHECK_ID,
-)
-from forj_review_assistant.businesses.rules.transfer_invoice_date import run_transfer_invoice_date
-from forj_review_assistant.businesses.rules.vehicle_model import (
-    EMISSION_CHECK_ID,
-    MODEL_CODE_CHECK_ID,
-    POWER_CHECK_ID,
-    run_vehicle_model,
-)
+from forj_review_assistant.businesses.rules.transfer_documents import run_transfer_documents
+from forj_review_assistant.businesses.rules.vehicle_source_model import run_vehicle_source_model
 from forj_review_assistant.businesses.rules.vehicle_type_light_duty import (
     VEHICLE_TYPE_LIGHT_DUTY_CHECK_ID,
     run_vehicle_type_light_duty,
@@ -40,16 +32,15 @@ class RuleDefinition:
 # verify_invoice reads the pack's invoice_verification_field, validated separately.
 RULE_DEFINITIONS = MappingProxyType(
     {
-        "vehicle_model_consistency": RuleDefinition(
-            run_vehicle_model,
-            (
-                "vehicle.model",
-                "vehicle.engine_model",
-                "vehicle.model_code",
-                "vehicle.power_kw",
-                "vehicle.emission_standard",
-            ),
-            (POWER_CHECK_ID, MODEL_CODE_CHECK_ID, EMISSION_CHECK_ID),
+        "transfer_documents": RuleDefinition(
+            run_transfer_documents,
+            ("transfer_invoice.vin", "transfer_registration.vin"),
+            ("TRANSFER-OLD-VIN",),
+        ),
+        "vehicle_source_model": RuleDefinition(
+            run_vehicle_source_model,
+            ("vehicle.brand_model", "vehicle.announcement_model", "vehicle.engine_model", "vehicle.vin"),
+            ("VEHICLE-SOURCE-BRAND-MODEL", "VEHICLE-SOURCE-MODEL"),
         ),
         "owner_consistency": RuleDefinition(
             run_owner_consistency,
@@ -58,11 +49,6 @@ RULE_DEFINITIONS = MappingProxyType(
         ),
         "vehicle_type_light_duty": RuleDefinition(
             run_vehicle_type_light_duty, ("old_vehicle.type",), (VEHICLE_TYPE_LIGHT_DUTY_CHECK_ID,)
-        ),
-        "transfer_invoice_date": RuleDefinition(
-            run_transfer_invoice_date,
-            ("transfer.invoice_date", "application.source_published_at"),
-            (TRANSFER_DATE_CHECK_ID,),
         ),
         "affiliation_subject": RuleDefinition(
             run_affiliation_subject,

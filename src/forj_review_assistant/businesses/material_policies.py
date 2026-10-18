@@ -29,9 +29,19 @@ class MaterialRequirement:
     required_pages: tuple[int, ...] = ()
     display_name: str = "审核材料"
     # 同组材料互为替代：组内任一材料满足要求时，其余成员不再报缺失。
-    # 空字符串表示该材料不参与替代关系。车源审核的登记证书与车辆铭牌
-    # 属于同一组——两件材料只需要上传其中一件。
+    # 空字符串表示该材料不参与替代关系。
     alternative_group: str = ""
+    identity_side: Literal["FRONT", "BACK"] | None = None
+    presence_name: str = ""
+
+
+@dataclass(frozen=True)
+class MaterialPresenceGroup:
+    """上传要求：任一方案内的全部材料均提供，即满足该组。"""
+
+    key: str
+    display_name: str
+    alternatives: tuple[tuple[MaterialRequirement, ...], ...]
 
 
 @dataclass(frozen=True)
@@ -47,6 +57,7 @@ class MaterialPolicy:
     mode: Literal["disabled", "observe", "enforce"]
     materials: tuple[MaterialRequirement, ...] = ()
     field_sources: tuple[FieldSourceRequirement, ...] = ()
+    presence_groups: tuple[MaterialPresenceGroup, ...] = ()
 
 
 DEFAULT_RETRY_POLICY = RetryPolicy()

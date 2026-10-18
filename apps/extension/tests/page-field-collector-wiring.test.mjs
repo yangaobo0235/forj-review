@@ -21,7 +21,7 @@ const contentSource = readFileSync(
 function runContent(context) {
   const collector = context.globalThis?.ReviewPageFieldCollector;
   if (collector && !collector.collectIdentity) {
-    collector.collectIdentity = (root) => collector.collect(root, null);
+    collector.collectIdentity = (root) => collector.collect(root);
   }
   const cache = new Map();
   const load = (file) => {
@@ -47,7 +47,7 @@ function runContent(context) {
       if (!path.extname(target)) target = [".ts", ".js"].map((ext) => target + ext).find(existsSync);
       return load(target);
     };
-    vm.runInNewContext(output, { ...context, module, exports: module.exports, require: localRequire }, { filename: absolute });
+    vm.runInNewContext(output, { Node: {TEXT_NODE: 3}, HTMLImageElement: class {}, ...context, module, exports: module.exports, require: localRequire }, { filename: absolute });
     return module.exports;
   };
   load(fileURLToPath(new URL("../src/entrypoints/content.ts", import.meta.url)));
@@ -70,7 +70,7 @@ test("does not load the retired host-page review marker", () => {
 test("content script delegates page field collection without requiring a detected business", () => {
   assert.match(
     contentSource,
-    /ReviewPageFieldCollector\.collect\(\s*activeReviewPanel \?\? document,\s*business\?\.businessType \?\? null,?\s*\)/,
+    /ReviewPageFieldCollector\.collect\(\s*activeReviewRoot \?\? document\s*\)/,
   );
   assert.doesNotMatch(contentSource, /business\.businessType/);
 });
@@ -83,6 +83,131 @@ test("content script names its collection and focus message contract", () => {
   assert.match(contentSource, /focusReviewImage:\s*"FOCUS_REVIEW_IMAGE"/);
 });
 
+test("source review collects actual MyForm sibling fields through the full content message path", async () => {
+  // Mirrors my-form/index.vue: empty tab panes, followed by one row of title/field columns.
+  const f = reviewTabs(["车源审核", "过户审核"]);
+  f.form.setAttribute("class", "largeForm myForm");
+  f.panels.forEach(panel => { panel.textContent = ""; });
+  const row = f.add(f.form, "div", {class: "ant-row"});
+  const title = text => f.add(f.add(row, "div", {class: "ant-col"}), "div", {class: "formItemTitle"}, text);
+  const inputs = new Map();
+  const addField = (label, value, type = "text") => {
+    const col = f.add(row, "div", {class: "ant-col"});
+    const item = f.add(col, "div", {class: "ant-form-item"});
+    const id = `source-field-${inputs.size}`;
+    f.add(f.add(item, "div", {class: "ant-form-item-label"}), "label", {for: id}, label);
+    const input = f.add(f.add(item, "div", {class: "ant-form-item-control"}), "input", {id, type});
+    input.value = value;
+    inputs.set(label, input);
+  };
+  addField("车辆类型", "牵引车");
+  title("行驶证信息");
+  const license = {"车牌号码": "鲁A12345", VIN: "LFV00000000000001", "发动机号": "12345678",
+    "行驶证车辆类型": "重型半挂牵引车", "品牌型号": "解放牌MODEL100A",
+    "使用性质": "营运", "注册日期": "2023-03-22", "发证日期": "2026-02-11", "所有人": "合成示例公司", "地址": "无需核对"};
+  for (const [label, value] of Object.entries(license)) addField(label, value, label.includes("日期") ? "date" : "text");
+  title("规格参数");
+  const specs = {"品牌": "示例品牌", "车系": "示例车系", "车型": "示例完整销售车型",
+    "驱动形式": "6X4", "燃料种类": "柴油", "排放标准": "国六", "最大马力": "420",
+    "发动机品牌": "示例发动机", "发动机型号": "ENGINE42-E6", "货箱长度": ""};
+  for (const [label, value] of Object.entries(specs)) addField(label, value);
+  // 规格中的三项身份控件要保留真实 option ID，不能用文本输入框冒充选择框。
+  for (const [label, id, options] of [["品牌", "2", [["2", specs["品牌"]]]],
+    ["车系", "3", [["3", specs["车系"]]]],
+    ["车型", "9", [["9", specs["车型"]], ["10", "合成完整车型 420马力 6X4"]]]]) {
+    const select = inputs.get(label);
+    select.tagName = "SELECT"; select.value = id;
+    select.options = options.map(([value, textContent]) => ({value, textContent}));
+    Object.defineProperty(select, "selectedOptions", {get: () => select.options.filter(option => option.value === select.value)});
+  }
+  const old = f.add(f.panels[1], "input", {"aria-label": "车牌号码"}); old.value = "OLD-PLATE";
+  const filter = f.add(f.document.body, "input", {"aria-label": "车牌号码"}); filter.value = "FILTER-PLATE";
+  let handler;
+  const modelInput = {announcementModel: "MODEL100A80", engineModel: "ENGINE42-E6",
+    pageScope: {brandName: "示例品牌", seriesName: "示例车系", typeLevel: "牵引车"}};
+  const catalogModel = {modelId: "10", modelName: "合成完整车型 420马力 6X4", brandId: "2", brandName: "示例品牌",
+    seriesId: "3", seriesName: "示例车系", sameNameCount: 1, warnings: [], config: {
+      driveForm: "6X4", fuelType: "柴油", emissionStandard: "国六", maxHp: "420", engineBrand: "示例发动机", engineType: "ENGINE42-E6"}};
+  let sessionResult = {ok: false, message: "车型查询已失效，请重新搜索并选择"};
+  let catalogResult = catalogModel;
+  const modelMessages = [];
+  runContent({document: f.document, URL,
+    window: {location: {href: "https://admin.forjtruck.com/consistency-changchun?showPageModel=1"}},
+    chrome: {runtime: {onMessage: {addListener(fn) { handler = fn; }}, sendMessage: async request => {
+      modelMessages.push(request);
+      return request.type === "RESOLVE_REVIEW_MODEL_SEARCH" ? sessionResult : {ok: true, candidates: [catalogResult]};
+    }}}, console: {info() {}},
+    globalThis: {crypto: {randomUUID: () => "source-form-test"}},
+  });
+  const message = body => new Promise(resolve => handler(body, null, resolve));
+  const manifest = JSON.parse(readFileSync(new URL("./fixtures/collect-manifest-vehicle-source.json", import.meta.url), "utf8"));
+  const catalog = JSON.parse(readFileSync(new URL("./fixtures/page-catalog.json", import.meta.url), "utf8"));
+  const result = await message({type: "COLLECT_PAGE_MANIFEST", pageCatalog: catalog, collectManifests: [manifest]});
+  assert.equal(result.businessType, "vehicle_source");
+  assert.equal(result.pageFields["vehicle.plate_no"], license["车牌号码"]);
+  assert.equal(result.pageFields["vehicle.vin"], license.VIN);
+  assert.equal(result.pageFields["vehicle.owner"], license["所有人"]);
+  assert.equal(result.pageFields["vehicle.brand_model"], license["品牌型号"]);
+  assert.equal(result.pageFields["vehicle.model"], specs["车型"]);
+  assert.equal(result.pageFields["vehicle.type"], "牵引车");
+  assert.equal(Object.keys(result.pageFields).length, 19, "vehicle type, eight license and ten specification controls are collected");
+  assert.equal(result.reviewFields.filter(item => item.field).length, 9, "only eight license fields and model are reviewable");
+  assert.equal(result.reviewFields.find(item => item.field === "vehicle.plate_no").section, "license");
+  assert.equal(result.reviewFields.find(item => item.field === "vehicle.model").section, "spec");
+  assert.equal(result.fieldTargets.length, 19);
+  assert.equal(result.collectionDiagnostics.ambiguousFields.length, 0);
+  assert.ok(result.pageFingerprint, "live VIN is available to the write guard");
+  const target = {expectedPageUrl: result.pageUrl, expectedPageInstanceId: result.pageInstanceId,
+    expectedCollectionId: result.collectionId, expectedPageFingerprint: result.pageFingerprint};
+  const filled = await message({...target, type: "APPLY_PAGE_FIELD_VALUE", action: {
+    field: "vehicle.brand_model", value: "解放牌MODEL100A80", expectedValue: license["品牌型号"],
+  }});
+  assert.equal(filled.ok, true, filled.message);
+  assert.equal(inputs.get("品牌型号").value, "解放牌MODEL100A80");
+  assert.equal(inputs.get("车牌号码").value, license["车牌号码"]);
+  const applyModel = () => message({...target, type: "APPLY_VEHICLE_MODEL", searchId: "trusted-search", modelId: "10",
+    candidate: {...catalogModel, modelName: "不得使用消息内伪造的配置"}});
+  const rejected = await applyModel();
+  assert.equal(rejected.ok, false);
+  assert.match(rejected.message, /查询已失效/);
+  assert.equal(inputs.get("车型").value, "9");
+  sessionResult = {ok: true, candidate: catalogModel, input: modelInput};
+  catalogResult = {...catalogModel, modelName: "目录已更名"};
+  const changed = await applyModel();
+  assert.equal(changed.ok, false);
+  assert.match(changed.message, /配置已更新/);
+  assert.equal(inputs.get("车型").value, "9");
+  catalogResult = catalogModel;
+  inputs.get("车辆类型").value = "载货车";
+  const scopeChanged = await applyModel();
+  assert.equal(scopeChanged.ok, false);
+  // VM 内抛出的 Error 与测试 realm 不同，当前入口统一返回操作失败。
+  assert.equal(inputs.get("车型").value, "9");
+  assert.equal(modelMessages.filter(item => item.type === "QUERY_VEHICLE_MODEL_CATALOG").length, 1);
+  inputs.get("车辆类型").value = "牵引车";
+  // 模拟 Chrome storage 重新排列候选与嵌套配置的属性，完整回填链仍应通过。
+  catalogModel.sameNameCount = 2;
+  sessionResult.candidate = {...Object.fromEntries(Object.entries(catalogModel).reverse()),
+    config: Object.fromEntries(Object.entries(catalogModel.config).reverse())};
+  const modelFilled = await applyModel();
+  assert.equal(modelFilled.ok, true, modelFilled.message);
+  assert.equal(inputs.get("车型").value, "10");
+  assert.equal(modelFilled.actions.length, 9);
+  assert.equal(modelMessages[0].type, "RESOLVE_REVIEW_MODEL_SEARCH");
+  assert.equal(modelMessages.filter(item => item.type === "QUERY_VEHICLE_MODEL_CATALOG").length, 2);
+  f.select(1);
+  const messagesBefore = modelMessages.length;
+  const staleModel = await applyModel();
+  assert.equal(staleModel.ok, false);
+  assert.equal(staleModel.code, "PAGE_IDENTITY_CHANGED");
+  assert.equal(modelMessages.length, messagesBefore, "changed steps are rejected before resolving a model session");
+  const stale = await message({...target, type: "APPLY_PAGE_FIELD_VALUE", action: {
+    field: "vehicle.brand_model", value: "SHOULD-NOT-WRITE", expectedValue: "解放牌MODEL100A80",
+  }});
+  assert.equal(stale.ok, false, "step changes still block old source writes with form-level collection");
+  assert.equal(inputs.get("品牌型号").value, "解放牌MODEL100A80");
+});
+
 test("same-URL tab changes expire pending collections, fills, image focus and invoice verification", async () => {
   for (const mode of ["observed", "live", "pending"]) {
     const observed = mode !== "live";
@@ -91,14 +216,14 @@ test("same-URL tab changes expire pending collections, fills, image focus and in
     let handler, collectedRoot, writes = 0, identityReads = 0;
     const element = { value: "VIN-A", isConnected: true };
     const fields = { "vehicle.vin": "VIN-A", "vehicle.plate_no": "PLATE-A" };
-    const catalog = JSON.parse(readFileSync(new URL("./fixtures/page-catalog.json", import.meta.url), "utf8"));
-    const manifest = {business_type: "vehicle_source", region: "default", scopes: [], fields: [], materials: [], page_groups: [],
+    const catalog = JSON.parse(readFileSync(new URL("./fixtures/page-catalog-synthetic.json", import.meta.url), "utf8"));
+    const manifest = {business_type: "permit_initial", region: "default", scopes: [], fields: [], materials: [], page_groups: [],
       identity_anchors: ["vehicle.vin", "vehicle.plate_no"], record_identity_fields: ["vehicle.vin"], writable_fields: ["vehicle.vin", "vehicle.plate_no"]};
     const message = body => new Promise(resolve => handler(body, null, resolve));
     runContent({
       URL,
       document: fixture.document,
-      window: { location: { href: "https://admin.forjtruck.com/consistency-qingdao?showPageModel=1" } },
+      window: { location: { href: "https://admin.forjtruck.com/sample-review-qingdao?showPageModel=1" } },
       chrome: { runtime: { onMessage: { addListener(fn) { handler = fn; } } } },
       console: { info() {} },
       globalThis: {
@@ -109,7 +234,7 @@ test("same-URL tab changes expire pending collections, fills, image focus and in
             return {pageFields: fields, fieldTargets: [{field:"vehicle.vin", element}], writableTargets: [], unmatchedLabels: [],
               scannedControls: 1, candidateCount: 1, ambiguousFields: []};
           },
-          collectIdentity: root => { identityReads++; assert.equal(root, fixture.panels[0]); return {pageFields: fields, fieldTargets: []}; },
+          collectIdentity: root => { identityReads++; assert.equal(root, fixture.form); return {pageFields: fields, fieldTargets: []}; },
         },
         ReviewPageFieldWriter: { captureValue: () => ({control:element, value:element.value}),
           executeValue: async () => { writes++; return {ok:true}; },
@@ -127,8 +252,8 @@ test("same-URL tab changes expire pending collections, fills, image focus and in
     }
     const collected = await collecting;
     if (mode === "pending") assert.equal(collected.staleCollection, true, "a late response cannot restore an expired step");
-    assert.equal(collected.businessType, "vehicle_source", collected.businessDetectionError);
-    assert.equal(collectedRoot === fixture.panels[0], true, "formal collection must exclude inactive panels");
+    assert.equal(collected.businessType, "permit_initial", collected.businessDetectionError);
+    assert.equal(collectedRoot === fixture.form, true, "empty tab panels collect from their owning review form");
     assert.ok(collected.pageFingerprint);
     const target = {expectedPageUrl:collected.pageUrl, expectedPageInstanceId:collected.pageInstanceId,
       expectedCollectionId:collected.collectionId, expectedPageFingerprint:collected.pageFingerprint};

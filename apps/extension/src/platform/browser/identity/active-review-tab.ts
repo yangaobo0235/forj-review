@@ -38,6 +38,18 @@ export function readActiveReviewTab(root: Document, labels: readonly string[]): 
   return { label, panelReady, tab, panel: panelReady ? panel : null };
 }
 
+/** MyForm 的 tabs 只渲染步骤标题，字段行与空 tabpanel 同属一个 form。 */
+export function reviewTabCollectionRoot(snapshot: ActiveReviewTab): HTMLElement | null {
+  if (!snapshot.panelReady || !snapshot.panel || !snapshot.tab) return null;
+  const form = snapshot.tab.closest("form");
+  if (!form?.contains(snapshot.panel)) return null;
+  const controls = snapshot.panel.querySelectorAll<HTMLElement>(
+    'input, textarea, select, [role="combobox"], [contenteditable="true"]',
+  );
+  // 通常的 tabs 把字段放在面板内，继续保持面板隔离；空面板布局才使用所属表单。
+  return Array.from(controls).some(visible) ? snapshot.panel : form;
+}
+
 /** 步骤一旦离开即永久作废本次采集，切回原页签也不能恢复旧回填权限。 */
 export function guardActiveReviewTab(
   root: Document,

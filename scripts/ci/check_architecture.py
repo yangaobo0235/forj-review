@@ -8,6 +8,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = "forj_review_assistant"
 SOURCE = ROOT / "src" / PACKAGE
+GENERIC_WORKFLOW_MODULES = {
+    "runtime/workflow/graph.py", "runtime/workflow/capability_execution.py",
+    "runtime/workflow/planner.py", "runtime/workflow/state.py",
+}
 
 
 def runtime_imports(node: ast.AST, package: str):
@@ -65,10 +69,24 @@ def check_architecture(source: Path = SOURCE) -> list[str]:
                     reason = "evidence decisions import API response rendering"
             if reason:
                 findings.append(f"{relative.as_posix()}:{line}: {reason}: {module}")
-            if relative.as_posix() == "runtime/workflow/graph.py" and module.startswith(
+            if relative.as_posix() in GENERIC_WORKFLOW_MODULES and module.startswith(
                 f"{PACKAGE}.businesses.rules."
             ) and not module.startswith(f"{PACKAGE}.businesses.rules.catalog."):
                 findings.append(f"{relative.as_posix()}:{line}: workflow imports a concrete business rule: {module}")
+            if relative.as_posix() in {
+                "runtime/workflow/capability_execution.py", "runtime/workflow/state.py",
+            } and module.startswith((
+                f"{PACKAGE}.runtime.workflow.graph.", f"{PACKAGE}.presentation.",
+            )):
+                findings.append(f"{relative.as_posix()}:{line}: workflow state/execution imports graph or presentation: {module}")
+            if relative.as_posix() == "presentation/task_factory.py" and module.startswith(
+                f"{PACKAGE}."
+            ) and not module.startswith(f"{PACKAGE}.contracts."):
+                findings.append(f"{relative.as_posix()}:{line}: task factory imports execution or business policy: {module}")
+            if relative.as_posix() == "runtime/jobs/progress.py" and module.startswith(
+                f"{PACKAGE}.runtime.jobs.manager."
+            ):
+                findings.append(f"{relative.as_posix()}:{line}: progress view imports job lifecycle manager: {module}")
             if relative.parts[:2] == ("businesses", "configuration") and module.startswith((
                 f"{PACKAGE}.runtime", f"{PACKAGE}.integrations",
                 f"{PACKAGE}.interfaces", f"{PACKAGE}.bootstrap",
@@ -80,7 +98,7 @@ def check_architecture(source: Path = SOURCE) -> list[str]:
                     "eval", "exec", "__import__",
                 }:
                     findings.append(f"{relative.as_posix()}:{node.lineno}: configuration executes dynamic code")
-        if relative.as_posix() == "runtime/workflow/graph.py":
+        if relative.as_posix() in GENERIC_WORKFLOW_MODULES:
             business_ids = {"scrap_certificate_qr", "fill_affiliation_fields", "verify_invoice", "old_vehicle.affiliation", "new_vehicle.affiliation", "scrap_replacement"}
             for node in ast.walk(tree):
                 if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value in business_ids:

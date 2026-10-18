@@ -175,7 +175,9 @@ export function manifestSlotEntries(): [string, string][] | null {
 
 /** 唯一命中的原始区域标题；多个区域同时出现时保留歧义。 */
 export function manifestSectionFromText(text: string): string | null {
-  const matching = appliedSections.filter(section => section.title && text.includes(section.title));
+  const compact = (value: string) => value.replace(/\s+/g, "");
+  const normalized = compact(text);
+  const matching = appliedSections.filter(section => section.title && normalized.includes(compact(section.title)));
   const keys = new Set(matching.map(section => section.key));
   return keys.size === 1 ? matching[0].key : null;
 }
@@ -183,6 +185,13 @@ export function manifestSectionFromText(text: string): string | null {
 /** 已应用的图片筛选依据；没有应用清单时返回 null，调用方退回内置规则。 */
 export function manifestImageProfile(): ManifestImageProfile | null {
   return appliedImageProfile;
+}
+
+/** 仅匹配完整单图标题；不凭整个分组拼接文本排除材料。 */
+export function manifestIgnoresImage(label: string): boolean {
+  const normalize = (value: string) => value.replace(/\s+/g, "").trim();
+  const manifest = isValid(currentManifest) ? currentManifest : null;
+  return Boolean(label && manifest?.ignored_image_labels?.some(item => normalize(item) === normalize(label)));
 }
 
 /**
@@ -253,8 +262,7 @@ export function manifestWritableControlKinds(): Set<string> | null {
 /**
  * 已应用的页面指纹锚点；没有应用清单时返回 null，调用方退回内置表。
  *
- * 锚点写死在浏览器里会让另一个业务永远拿不到指纹（车源页面上没有
- * `old_vehicle.*`），而空指纹会让页面写回和原图定位全部拒绝执行。
+ * 锚点写死在浏览器里可能无法匹配业务字段；空指纹会拒绝页面写回和原图定位。
  */
 export function manifestIdentityAnchors(): string[] | null {
   return appliedIdentityAnchors;

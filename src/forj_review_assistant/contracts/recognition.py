@@ -22,6 +22,15 @@ class RecognizedDocument(BaseModel):
     qr_codes: list[str] = Field(default_factory=list)
 
 
+class DocumentClassification(BaseModel):
+    """已确认的材料类型，独立于后续字段提取的成败。"""
+
+    target_id: str
+    document_type: str
+    business_scope: str = "unknown"
+    identity_sides: list[Literal["FRONT", "BACK"]] = Field(default_factory=list)
+
+
 class MaterialFieldDetail(BaseModel):
     field: str
     field_label: str
@@ -75,6 +84,20 @@ class MaterialCompletenessReport(BaseModel):
     enforced: bool = False
     issues: list[MaterialCompletenessIssue] = Field(default_factory=list)
     checklist: list[MaterialChecklistItem] = Field(default_factory=list)
+    presence: "MaterialPresenceReport | None" = None
+
+
+class MaterialPresenceGroupResult(BaseModel):
+    key: str
+    display_name: str
+    status: Literal["PRESENT", "MISSING", "UNCERTAIN"]
+    alternatives: list[list[MaterialChecklistItem]] = Field(default_factory=list)
+
+
+class MaterialPresenceReport(BaseModel):
+    status: Literal["COMPLETE", "INCOMPLETE", "UNCERTAIN"]
+    groups: list[MaterialPresenceGroupResult] = Field(default_factory=list)
+    notices: list[str] = Field(default_factory=list)
 
 
 # 重试原因码：模型自报"看不清"的字段走定向重读，原因里带上字段名，
@@ -125,6 +148,7 @@ class QwenClassification(BaseModel):
     document_type: str
     confidence: float = Field(ge=0, le=1)
     reason: str = ""
+    identity_sides: list[Literal["FRONT", "BACK"]] = Field(default_factory=list)
 
 
 class QwenExtraction(BaseModel):
@@ -198,6 +222,7 @@ class AgentBatchResult(BaseModel):
     failed_image_ids: list[str] = Field(default_factory=list)
     timed_out_image_ids: list[str] = Field(default_factory=list)
     recognized_documents: list[RecognizedDocument] = Field(default_factory=list)
+    document_classifications: list[DocumentClassification] = Field(default_factory=list)
     material_completeness: MaterialCompletenessReport | None = None
     retry_summary: RetrySummary = Field(default_factory=RetrySummary)
 

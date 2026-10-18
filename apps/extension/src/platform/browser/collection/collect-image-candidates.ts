@@ -1,5 +1,6 @@
 import { ReviewBusinessScope } from "./business-scope.ts";
 import { imageLabelFor, nearestAncestorText } from "./image-label.ts";
+import { manifestIgnoresImage } from "../catalog/collect-manifest.ts";
 
 /** Shared DOM image discovery for formal collection and candidate trials. */
 export function collectImageCandidates(classifyImage: (hint: string) => string) {
@@ -60,8 +61,9 @@ export function collectImageCandidates(classifyImage: (hint: string) => string) 
       role: image.getAttribute("role") || "",
       ariaHidden: image.getAttribute("aria-hidden") === "true",
       emptySlot,
+      ignoredMaterial: manifestIgnoresImage(labelHint),
       hint,
-      categoryHint: classifyImage(hint),
+      categoryHint: classifyImage(labelHint || ownHint || scope.groupTitle),
       labelHint,
     };
   });

@@ -57,11 +57,8 @@ def _extraction_seeds(pack: BusinessExtensionPack) -> dict[str, MaterialDeclarat
     return result
 
 
-def compile_page(
-    definition: PageDefinition,
-    template: BusinessProfile | None = None,
-) -> BusinessProfile:
-    """Compile without changing templates or any process-global business tables."""
+def _resolve_template(definition: PageDefinition, template: BusinessProfile | None) -> BusinessExtensionPack:
+    """验证显式继承关系，保证模板不会被隐式套用或修改。"""
     if definition.extends:
         if template is None or template.pack_declaration is None:
             raise ValueError("extends 必须引用已配置的业务模板")
@@ -82,9 +79,13 @@ def compile_page(
             raise ValueError("未声明 extends，不能隐式使用模板")
         base = BusinessExtensionPack(business_type=str(definition.business_type))
 
-    scopes = definition.scopes if "scopes" in definition.model_fields_set else base.scopes
-    if not scopes:
-        raise ValueError("页面必须声明至少一个材料分区 scopes")
+    return base
+
+
+def _compile_fields(
+    definition: PageDefinition, base: BusinessExtensionPack, scopes: tuple[str, ...],
+) -> tuple[dict[str, FieldDeclaration], list[RouteDeclaration], list[tuple[str, str]]]:
+    """字段拥有证据路由；删除或重写字段时同步处理其路由和检查绑定。"""
     fields = {item.key: item for item in base.fields}
     removed = set(definition.remove_fields)
     unknown_removed = removed - fields.keys()
@@ -157,6 +158,14 @@ def compile_page(
         if not field.uncertain_requires_review and field.mode != "SYSTEM":
             raise ValueError(f"字段 {field.key} 不能关闭识别不确定性保护")
 
+    return fields, routes, bindings
+
+
+def _compile_materials(
+    definition: PageDefinition, base: BusinessExtensionPack, scopes: tuple[str, ...],
+    routes: list[RouteDeclaration],
+) -> tuple[tuple[MaterialDeclaration, ...], tuple[MaterialDeclaration, ...], MaterialPolicy | None]:
+    """保留显式提取种子，再由有效路由生成材料提取白名单和必传策略。"""
     materials = _extraction_seeds(base)
     unknown_materials = set(definition.remove_materials) - materials.keys()
     if unknown_materials:
@@ -264,6 +273,23 @@ def compile_page(
             material, fields=declared, scoped_fields=tuple(scoped.items())
         )
 
+    material_policy = None
+    if requirements or (base.material_policy and (
+        base.material_policy.field_sources or base.material_policy.presence_groups
+    )):
+        material_policy = replace(
+            base.material_policy or MaterialPolicy(mode="enforce"),
+            materials=tuple(requirements),
+        )
+    return tuple(materials.values()), extraction_seeds, material_policy
+
+
+def _compile_capabilities(
+    definition: PageDefinition, template: BusinessProfile | None,
+    fields: dict[str, FieldDeclaration], bindings: list[tuple[str, str]],
+    material_policy: MaterialPolicy | None,
+) -> tuple[tuple[CapabilitySpec, ...], tuple[CapabilityBinding, ...]]:
+    """合并能力声明并校验依赖；检查绑定必须有启用的规则生产者。"""
     specs = {spec.capability_id: spec for spec in (template.capabilities if template else ())}
     capability_bindings = {
         binding.capability_id: binding for binding in (template.bindings if template else ())
@@ -298,13 +324,7 @@ def compile_page(
                 "请显式修改该字段的 checks 或补充替代规则"
             )
 
-    material_policy = None
-    if requirements or (base.material_policy and base.material_policy.field_sources):
-        material_policy = MaterialPolicy(
-            mode=base.material_policy.mode if base.material_policy else "enforce",
-            materials=tuple(requirements),
-            field_sources=base.material_policy.field_sources if base.material_policy else (),
-        )
+    if material_policy is not None:
         specs.setdefault(
             "material_completeness",
             CapabilitySpec(
@@ -324,67 +344,15 @@ def compile_page(
         specs.pop(policy_rule_id, None)
         capability_bindings.pop(policy_rule_id, None)
 
-    template_region = base.region(template.region) if template else None
-    pack = replace(
-        base,
-        business_type=str(definition.business_type),
-        title=definition.title,
-        scopes=scopes,
-        fields=tuple(fields.values()),
-        materials=tuple(materials.values()),
-        material_extraction_seeds=extraction_seeds,
-        routes=tuple(routes),
-        sections=tuple(SectionDeclaration(**item.model_dump()) for item in definition.sections)
-        if "sections" in definition.model_fields_set
-        else base.sections,
-        page_groups=tuple(
-            PageGroupDeclaration(**item.model_dump()) for item in definition.page_groups
-        )
-        if "page_groups" in definition.model_fields_set
-        else base.page_groups,
-        regions=(
-            RegionDeclaration(
-                definition.region,
-                version=definition.version,
-                admin_paths=definition.paths,
-                page_anchors=definition.anchors,
-                review_tab=(definition.review_tab or "")
-                if "review_tab" in definition.model_fields_set
-                else template_region.review_tab if template_region else "",
-                replacement_policy=replace(template.replacement_policy, version=definition.version)
-                if template and template.replacement_policy
-                else None,
-            ),
-        ),
-        material_policy=material_policy,
-        capability_specs=tuple(specs.values()),
-        binding_declarations=tuple(capability_bindings.values()),
-        field_check_bindings=tuple(bindings),
-        presentation=replace(base.presentation, groups=tuple(
-            group for group in base.presentation.groups
-            if group.capability_id not in definition.disable_rules
-        )),
-        identity_anchors=definition.identity_anchors
-        if "identity_anchors" in definition.model_fields_set
-        else base.identity_anchors,
-        record_identity_fields=definition.record_identity_fields
-        if "record_identity_fields" in definition.model_fields_set
-        else base.record_identity_fields,
-        review_declared_fields_only=definition.review_declared_fields_only
-        if "review_declared_fields_only" in definition.model_fields_set or not template
-        else base.review_declared_fields_only,
-        page_action_ids=definition.page_actions
-        if "page_actions" in definition.model_fields_set
-        else base.page_action_ids,
-        writable_control_kinds=definition.writable_control_kinds
-        if "writable_control_kinds" in definition.model_fields_set
-        else base.writable_control_kinds,
-        page_interaction=bool(definition.page_actions)
-        if "page_actions" in definition.model_fields_set
-        else base.page_interaction,
-    )
+    return tuple(specs.values()), tuple(capability_bindings.values())
+
+
+def _validate_compiled_pack(pack: BusinessExtensionPack, base: BusinessExtensionPack) -> None:
+    """发布前统一校验字段、材料、投影和页面写回之间的引用。"""
     validate_pack_references(pack)
-    material_ids = materials.keys()
+    material_ids = {item.document_type for item in pack.materials}
+    specs = {item.capability_id for item in pack.capability_specs}
+    bindings = pack.field_check_bindings
     for field in pack.fields:
         projector_rule = TASK_PROJECTOR_RULES.get(field.task_projector)
         if projector_rule and projector_rule not in specs:
@@ -423,7 +391,7 @@ def compile_page(
         inherited_independent_scopes = {
             item.scope for item in base.page_groups if item.scope not in base.scopes
         }
-        if group.scope not in {*scopes, "other", *inherited_independent_scopes}:
+        if group.scope not in {*pack.scopes, "other", *inherited_independent_scopes}:
             raise ValueError(f"图片分组 {group.label} 引用了未知分区")
     if not pack.fields:
         raise ValueError("配置中没有审核字段")
@@ -433,4 +401,80 @@ def compile_page(
         not pack.writable_control_kinds or not pack.record_identity_fields
     ):
         raise ValueError("页面写回必须声明控件类型和独立记录身份字段")
+
+
+def compile_page(
+    definition: PageDefinition,
+    template: BusinessProfile | None = None,
+) -> BusinessProfile:
+    """Compile without changing templates or any process-global business tables."""
+    base = _resolve_template(definition, template)
+    scopes = definition.scopes if "scopes" in definition.model_fields_set else base.scopes
+    if not scopes:
+        raise ValueError("页面必须声明至少一个材料分区 scopes")
+    fields, routes, bindings = _compile_fields(definition, base, scopes)
+    materials, extraction_seeds, material_policy = _compile_materials(definition, base, scopes, routes)
+    specs, capability_bindings = _compile_capabilities(
+        definition, template, fields, bindings, material_policy,
+    )
+    template_region = base.region(template.region) if template else None
+    pack = replace(
+        base,
+        business_type=str(definition.business_type),
+        title=definition.title,
+        scopes=scopes,
+        fields=tuple(fields.values()),
+        materials=materials,
+        material_extraction_seeds=extraction_seeds,
+        routes=tuple(routes),
+        sections=tuple(SectionDeclaration(**item.model_dump()) for item in definition.sections)
+        if "sections" in definition.model_fields_set
+        else base.sections,
+        page_groups=tuple(
+            PageGroupDeclaration(**item.model_dump()) for item in definition.page_groups
+        )
+        if "page_groups" in definition.model_fields_set
+        else base.page_groups,
+        regions=(
+            RegionDeclaration(
+                definition.region,
+                version=definition.version,
+                admin_paths=definition.paths,
+                page_anchors=definition.anchors,
+                review_tab=(definition.review_tab or "")
+                if "review_tab" in definition.model_fields_set
+                else template_region.review_tab if template_region else "",
+                replacement_policy=replace(template.replacement_policy, version=definition.version)
+                if template and template.replacement_policy
+                else None,
+            ),
+        ),
+        material_policy=material_policy,
+        capability_specs=specs,
+        binding_declarations=capability_bindings,
+        field_check_bindings=tuple(bindings),
+        presentation=replace(base.presentation, groups=tuple(
+            group for group in base.presentation.groups
+            if group.capability_id not in definition.disable_rules
+        )),
+        identity_anchors=definition.identity_anchors
+        if "identity_anchors" in definition.model_fields_set
+        else base.identity_anchors,
+        record_identity_fields=definition.record_identity_fields
+        if "record_identity_fields" in definition.model_fields_set
+        else base.record_identity_fields,
+        review_declared_fields_only=definition.review_declared_fields_only
+        if "review_declared_fields_only" in definition.model_fields_set or not template
+        else base.review_declared_fields_only,
+        page_action_ids=definition.page_actions
+        if "page_actions" in definition.model_fields_set
+        else base.page_action_ids,
+        writable_control_kinds=definition.writable_control_kinds
+        if "writable_control_kinds" in definition.model_fields_set
+        else base.writable_control_kinds,
+        page_interaction=bool(definition.page_actions)
+        if "page_actions" in definition.model_fields_set
+        else base.page_interaction,
+    )
+    _validate_compiled_pack(pack, base)
     return build_profile(pack, definition.region, page_id=definition.page_id)

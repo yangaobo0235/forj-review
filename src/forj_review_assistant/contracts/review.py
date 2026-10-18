@@ -137,6 +137,10 @@ class ImageInput(BaseModel):
         default="unknown",
         validation_alias=AliasChoices("document_type_hint", "documentTypeHint"),
     )
+    identity_sides_hint: list[Literal["FRONT", "BACK"]] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("identity_sides_hint", "identitySidesHint"),
+    )
     collection_error: str | None = Field(
         default=None,
         validation_alias=AliasChoices("collection_error", "collectionError"),

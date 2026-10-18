@@ -12,7 +12,7 @@ import type { EvidenceFact } from "../../../shared/contracts/review";
  *
  * 以前这里是唯一的来源，绕过了后端下发的采集清单——于是同一份材料在同一块
  * 面板上有两个名字（清单说「机动车行驶证或车辆资料」，证据卡写死成「行驶证」），
- * 而车源/过户的材料类型（车辆铭牌、二手车销售统一发票）一律落到「图片证据」。
+ * 动态声明的材料类型也可能被遗漏而退回「图片证据」。
  * 新增材料类型只需在后端声明，不必回来加分支。
  */
 const FALLBACK_MATERIAL_LABELS: Record<string, string> = {

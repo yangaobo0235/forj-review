@@ -17,7 +17,6 @@ from forj_review_assistant.businesses.rules.affiliation import (
 from forj_review_assistant.contracts.recognition import AgentBatchResult
 from forj_review_assistant.contracts.review import (
     FieldObservation,
-    Region,
     ReviewRequest,
 )
 from forj_review_assistant.runtime.review_service import ReviewService
@@ -314,25 +313,17 @@ def test_transfer_compatibility_does_not_allow_other_route_contexts(
         ReviewService().resolve_profile(request)
 
 
-@pytest.mark.parametrize(
-    "path",
-    ["consistency-qingdao", "consistency-changchun"],
-)
-def test_three_review_steps_share_consistency_routes(path):
-    """车源、过户、一致性共用入口；一致性的规则仍未配置。"""
-    for business_type, configured in (("consistency", False), ("transfer", True), ("vehicle_source", True)):
-        request = ReviewRequest(
-            page_url=f"https://admin.forjtruck.com/{path}/review/1",
-            business_type=business_type,
-            region="default",
-            workflow_stage=business_type,
-        )
-        profile = ReviewService().resolve_profile(request)
-        assert profile.business_type.value == business_type
-        assert profile.region is Region.DEFAULT
+@pytest.mark.parametrize("path", ["consistency-qingdao", "consistency-changchun"])
+def test_consistency_routes_keep_page_identity_separate_from_configured_rules(path):
+    service = ReviewService(load_model=False)
+    request = ReviewRequest(page_url=f"https://admin.forjtruck.com/{path}/review/1",
+                            business_type="consistency", region="default")
+    for business, configured in (("vehicle_source", True), ("transfer", True), ("consistency", False)):
+        profile = service.resolve_profile(request.model_copy(update={"business_type": business}))
         assert profile.rules_configured is configured
-        # 未配置的业务必须说清楚为什么不能自动判；配置好的业务不写这句话。
-        assert bool(profile.unconfigured_message) is not configured
+        if business == "transfer":
+            assert "transfer_invoice.invoice_no" in profile.required_fields
+            assert profile.enabled_page_actions == ("fill_review_fields",)
 
 
 @pytest.mark.parametrize(

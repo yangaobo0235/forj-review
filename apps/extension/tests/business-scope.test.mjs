@@ -53,14 +53,12 @@ test("does not infer a retired transfer scope", () => {
   ]);
 });
 
-test("maps fixed scrap-replacement upload slots to physical document types", () => {
+test("scrap image order never substitutes for a physical material label", () => {
   const { documentTypeFor } = loadBusinessScope();
 
-  assert.equal(documentTypeFor("old_vehicle", 1, "old_vehicle"), "vehicle_license");
-  assert.equal(documentTypeFor("old_vehicle", 2, "old_vehicle"), "registration_certificate");
-  assert.equal(documentTypeFor("old_vehicle", 3, "old_vehicle"), "scrap_certificate");
-  assert.equal(documentTypeFor("new_vehicle", 1, "new_vehicle"), "vehicle_license");
-  assert.equal(documentTypeFor("new_vehicle", 2, "new_vehicle"), "registration_certificate");
-  assert.equal(documentTypeFor("new_vehicle", 3, "new_vehicle"), "invoice");
+  for (const scope of ["old_vehicle", "new_vehicle"]) {
+    for (const order of [1, 2, 3, 4]) assert.equal(documentTypeFor(scope, order, scope), "unknown");
+  }
+  assert.equal(documentTypeFor("old_vehicle", 3, "vehicle_license"), "vehicle_license");
   assert.equal(documentTypeFor("identity", 1, "id_card"), "identity_card");
 });

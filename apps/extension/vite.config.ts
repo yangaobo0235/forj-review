@@ -19,7 +19,10 @@ export default defineConfig(({ mode }) => {
         const localBuild = mode !== 'public'
         const entries = ['content', 'background']
         for (const entry of entries) {
-          await build({ configFile: false, build: {
+          await build({ configFile: false, define: {
+            __REVIEW_AGENT_BUILD_MODE__: JSON.stringify(mode),
+            __REVIEW_AGENT_BASE_URL__: JSON.stringify(process.env.VITE_AGENT_BASE_URL ?? env.VITE_AGENT_BASE_URL ?? ''),
+          }, build: {
             emptyOutDir: false,
             lib: { entry: resolve(import.meta.dirname, `src/entrypoints/${entry}.ts`), formats: ['iife'], name: entry.replace(/-/g, '_'), fileName: () => `${entry}.js` },
           } })

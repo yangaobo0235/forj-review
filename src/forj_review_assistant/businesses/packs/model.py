@@ -108,8 +108,7 @@ class MaterialDeclaration:
     scoped_fields: tuple[tuple[str, tuple[str, ...]], ...] = ()
     scoped_guidance: tuple[tuple[str, str], ...] = ()
     # 一份材料被多个业务共用时（如行驶证），不同业务的称呼可能不同，
-    # 识别提示词里的称呼按业务分区覆写，避免车源审核的行驶证提示词
-    # 沿用报废置换的“行驶证或车辆资料”。
+    # 识别提示词里的称呼按业务分区覆写，避免借用其他业务的材料称呼。
     scoped_names: tuple[tuple[str, str], ...] = ()
     # 页面分组文字，供前端识别该材料的图片区域。
     hints: tuple[str, ...] = ()
@@ -287,6 +286,8 @@ class BusinessExtensionPack:
     material_extraction_seeds: tuple[MaterialDeclaration, ...] | None = None
     # 页面上的图片分组标题 → 业务分区。
     page_groups: tuple[PageGroupDeclaration, ...] = ()
+    # 页面明确标注的补充资料卡片，不进入本业务识别与完整性计算。
+    ignored_image_labels: tuple[str, ...] = ()
     # 材料字段 → 领域字段的路由规则。
     routes: tuple[RouteDeclaration, ...] = ()
     # 各地区变体；字段与材料在地区之间共用。
@@ -534,6 +535,17 @@ def validate_pack_references(pack: BusinessExtensionPack) -> None:
     if pack.material_policy:
         for requirement in pack.material_policy.field_sources:
             require(requirement.field, "材料证据要求 field_sources")
+        presence_keys: set[str] = set()
+        for group in pack.material_policy.presence_groups:
+            if not group.key or group.key in presence_keys:
+                problems.append("上传完整性分组的 key 为空或重复")
+            presence_keys.add(group.key)
+            if not group.alternatives or any(not option for option in group.alternatives):
+                problems.append(f"上传完整性分组「{group.key}」存在空方案")
+            for option in group.alternatives:
+                for item in option:
+                    if item.document_type not in seen_materials:
+                        problems.append(f"上传完整性分组「{group.key}」引用了未声明的材料「{item.document_type}」")
 
     if problems:
         detail = "\n  - ".join(problems)
@@ -551,6 +563,7 @@ def build_collect_manifest(pack: BusinessExtensionPack) -> dict[str, object]:
         # 该业务认定的材料分区。前端据此判断图片是否属于审核材料、以及
         # 哪些分区的图片优先入选。
         "scopes": list(pack.scopes),
+        **({"ignored_image_labels": list(pack.ignored_image_labels)} if pack.ignored_image_labels else {}),
         "page_sections": [
             {"key": key, "title": next((section.title for section in pack.sections if section.key == key), key)}
             for key in dict.fromkeys(item.page_section for item in pack.fields if item.page_section != "unknown")
