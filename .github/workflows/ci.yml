@@ -151,7 +151,12 @@ jobs:
       - name: Build production image
         run: docker build --file deploy/Dockerfile --tag forj-review-service:ci .
       - name: Validate deployment Compose
-        run: docker compose --project-directory . --env-file src/forj_review_service/.env.example -f deploy/server/docker-compose.server.yml config --no-env-resolution --quiet
+        run: |
+          validation_dir="$(mktemp -d)"
+          trap 'rm -rf "$validation_dir"' EXIT
+          cp deploy/server/review.env.example "$validation_dir/.env"
+          cp deploy/server/database.env.example "$validation_dir/.env.database"
+          docker compose --project-directory "$validation_dir" --env-file "$validation_dir/.env" -f deploy/server/docker-compose.server.yml config --quiet
       - name: Verify health and persistent application logs
         run: uv run python scripts/ci/smoke_container.py forj-review-service:ci
 

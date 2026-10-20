@@ -85,7 +85,7 @@ def pytest_asyncio_loop_factories(config, item):
     """psycopg requires selector loops on Windows, including async fixtures."""
     if sys.platform == "win32":
         return {"selector": asyncio.SelectorEventLoop}
-    return None
+    return {"default": asyncio.new_event_loop}
 
 
 @pytest.fixture

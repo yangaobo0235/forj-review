@@ -348,11 +348,6 @@ const matchingScore = (definition: FieldDefinition, candidate: FieldCandidate, s
   const label = normalizeText(candidate.label);
   if (definition.locatorId && candidate.element?.id !== definition.locatorId) return null;
   if (definition.locatorName && candidate.element?.getAttribute("name") !== definition.locatorName) return null;
-  if (definition.occurrence && candidate.element && !definition.locatorId && !definition.locatorName) {
-    // occurrence 按本次审核详情中的控件计数，列表筛选框和隐藏控件不参与定位。
-    const equivalent = scopedControls.filter(el => normalizeText(controlLabel(el.ownerDocument, el)) === label && findSection(el) === candidate.section);
-    if (equivalent.length && equivalent.indexOf(candidate.element) !== definition.occurrence - 1) return null;
-  }
   let exact = true;
   let aliasIndex = definition.aliases.findIndex((alias) => normalizeText(alias) === label);
   if (aliasIndex < 0) {
@@ -371,6 +366,13 @@ const matchingScore = (definition: FieldDefinition, candidate: FieldCandidate, s
     aliasFieldCount > 1 &&
     candidate.section === "unknown"
   ) return null;
+
+  if (definition.occurrence && candidate.element && !definition.locatorId && !definition.locatorName) {
+    // Only matching labels/sections need occurrence resolution. Scanning the
+    // entire form for unrelated candidates makes repeated write guards costly.
+    const equivalent = scopedControls.filter(el => normalizeText(controlLabel(el.ownerDocument, el)) === label && findSection(el) === candidate.section);
+    if (equivalent.length && equivalent.indexOf(candidate.element) !== definition.occurrence - 1) return null;
+  }
 
   return (
     (exact ? 10_000 : 5_000) -
