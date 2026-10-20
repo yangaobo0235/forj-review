@@ -1,8 +1,8 @@
 import httpx
 import pytest
 
-from forj_review_assistant.integrations.qr.decoder import QrImageDecoder
-from forj_review_assistant.integrations.qr.image_transport import ImageTransport
+from forj_review_service.integrations.qr.decoder import QrImageDecoder
+from forj_review_service.integrations.qr.image_transport import ImageTransport
 
 
 @pytest.mark.asyncio

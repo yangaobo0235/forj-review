@@ -2,24 +2,24 @@
 
 import pytest
 
-from forj_review_assistant.businesses.profiles import (
+from forj_review_service.businesses.profiles import (
     SCRAP_REPLACEMENT_CHANGCHUN,
     SCRAP_REPLACEMENT_QINGDAO,
 )
-from forj_review_assistant.businesses.rules.vehicle_type_light_duty import (
+from forj_review_service.businesses.rules.vehicle_type_light_duty import (
     VEHICLE_TYPE_LIGHT_DUTY_CHECK_ID,
     build_vehicle_type_light_duty_check,
 )
-from forj_review_assistant.capabilities.specs import ReviewExecutionContext
-from forj_review_assistant.contracts.recognition import AgentBatchResult
-from forj_review_assistant.contracts.review import (
+from forj_review_service.capabilities.specs import ReviewExecutionContext
+from forj_review_service.contracts.recognition import RecognitionBatchResult
+from forj_review_service.contracts.review import (
     FieldComparison,
     FieldObservation,
     FieldStatus,
     ReviewRequest,
 )
-from forj_review_assistant.presentation.routing import build_review_tasks
-from forj_review_assistant.runtime.review_service import ReviewService
+from forj_review_service.presentation.routing import build_review_tasks
+from forj_review_service.runtime.review_service import ReviewService
 
 PAGE = {"old_vehicle.type": "载货车"}
 
@@ -46,7 +46,7 @@ def run(observations: list[FieldObservation], profile=SCRAP_REPLACEMENT_QINGDAO)
                 page_fields=PAGE,
             ),
             profile=profile,
-            batch=AgentBatchResult(),
+            batch=RecognitionBatchResult(),
             observations=tuple(observations),
         )
     ).checks
@@ -169,7 +169,7 @@ async def test_light_duty_reaches_the_workbench_through_the_graph(monkeypatch) -
     service = ReviewService()
 
     async def extract(*args):
-        return AgentBatchResult(observations=[
+        return RecognitionBatchResult(observations=[
             observation("重型厢式货车", "vehicle_license", 1),
             observation("重型厢式货车", "registration_certificate", 2),
             observation("轻型厢式货车", "scrap_certificate", 3),

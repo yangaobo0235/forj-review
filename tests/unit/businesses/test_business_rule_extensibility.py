@@ -1,11 +1,11 @@
 import pytest
 
-from forj_review_assistant.businesses.profiles import BusinessProfile
-from forj_review_assistant.businesses.registry import BusinessRegistry
-from forj_review_assistant.capabilities.specs import RuleExecutionResult
-from forj_review_assistant.contracts.recognition import CheckResult
-from forj_review_assistant.contracts.review import BusinessType, Region, ReviewRequest
-from forj_review_assistant.runtime.review_service import ReviewService
+from forj_review_service.businesses.profiles import BusinessProfile
+from forj_review_service.businesses.registry import BusinessRegistry
+from forj_review_service.capabilities.specs import CapabilitySpec, RuleExecutionResult
+from forj_review_service.contracts.recognition import CheckResult
+from forj_review_service.contracts.review import BusinessType, Region, ReviewRequest
+from forj_review_service.runtime.review_service import ReviewService
 
 
 def single_field_profile():
@@ -16,9 +16,8 @@ def single_field_profile():
         required_fields=(),
         sections=(),
         rules_configured=True,
-        rule_groups=("single_field_test",),
-        external_checks=(),
-        page_actions=(),
+        capability_specs=(CapabilitySpec("single_field_test", kind="RULE", stage="POST_COMPARE"),),
+        page_action_ids=(),
     )
 
 
@@ -28,15 +27,21 @@ async def test_profile_without_material_or_field_requirements_has_no_missing_inp
         registry=BusinessRegistry((single_field_profile(),)),
         business_rule_handlers={
             "single_field_test": lambda _: RuleExecutionResult(
-                checks=(CheckResult(check_id="READY", label="配置核验", status="MATCH", reason="配置满足"),)
+                checks=(
+                    CheckResult(
+                        check_id="READY", label="配置核验", status="MATCH", reason="配置满足"
+                    ),
+                )
             )
         },
     )
-    response = await service.assist_async(ReviewRequest(
-        page_url="https://example.test/empty",
-        business_type="vehicle_source",
-        region="default",
-    ))
+    response = await service.assist_async(
+        ReviewRequest(
+            page_url="https://example.test/empty",
+            business_type="vehicle_source",
+            region="default",
+        )
+    )
     assert response.issues == []
     assert response.agent_advice.findings == []
     assert response.recommendation.value == "PASS"

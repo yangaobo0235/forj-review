@@ -2,33 +2,33 @@ from dataclasses import replace
 
 import pytest
 
-from forj_review_assistant.businesses.profiles import (
+from forj_review_service.businesses.profiles import (
     CONSISTENCY_DEFAULT,
     SCRAP_REPLACEMENT_QINGDAO,
 )
-from forj_review_assistant.businesses.rules.invoice_verification import (
+from forj_review_service.businesses.rules.invoice_verification import (
     run_verify_invoice,
 )
-from forj_review_assistant.capabilities.specs import (
+from forj_review_service.capabilities.specs import (
     CapabilitySpec,
     ReviewExecutionContext,
 )
-from forj_review_assistant.contracts.evidence import EvidenceFact
-from forj_review_assistant.contracts.recognition import AgentBatchResult
-from forj_review_assistant.contracts.review import (
+from forj_review_service.contracts.evidence import EvidenceFact
+from forj_review_service.contracts.recognition import RecognitionBatchResult
+from forj_review_service.contracts.review import (
     CapabilityResult,
     FieldObservation,
     ReviewRequest,
 )
-from forj_review_assistant.runtime.review_service import ReviewService
-from forj_review_assistant.runtime.workflow.capability_execution import (
+from forj_review_service.runtime.review_service import ReviewService
+from forj_review_service.runtime.workflow.capability_execution import (
     execute_stage,
     plan_remaining_capabilities,
 )
-from forj_review_assistant.runtime.workflow.graph import (
+from forj_review_service.runtime.workflow.graph import (
     WORKFLOW_NODE_ORDER,
 )
-from forj_review_assistant.runtime.workflow.state import ReviewState
+from forj_review_service.runtime.workflow.state import ReviewState
 
 
 @pytest.mark.asyncio
@@ -58,7 +58,7 @@ async def test_capability_consumers_require_actual_successful_output(output, sep
 
     workflow.capabilities.handlers.update(z_producer=producer, a_consumer=consumer)
     state = {"request": ReviewRequest(page_url="https://example.test/review"),
-             "profile": profile, "batch": AgentBatchResult()}
+             "profile": profile, "batch": RecognitionBatchResult()}
     state.update(plan_remaining_capabilities(state))
     if separate_stages:
         state.update(await execute_stage(workflow.capabilities, state, {"PRE_COMPARE"}))
@@ -122,6 +122,7 @@ async def test_workflow_returns_both_cross_checks_and_two_state_advice() -> None
         "MATERIAL-COMPLETENESS",
         "FIELD-INVOICE-CODE-NO",
         "FIELD-NEW-VEHICLE-VIN",
+        "EMISSION-STANDARD-001",
     }
     assert result.recommendation.value == "REVIEW_REQUIRED"
     assert result.agent_advice.decision == "REVIEW_REQUIRED"
@@ -150,7 +151,7 @@ def test_partial_response_uses_final_advice_contract() -> None:
 
     response = service._build_response(
         request,
-        AgentBatchResult(),
+        RecognitionBatchResult(),
     )
 
     assert response.agent_advice.title == "建议人工复核"
@@ -173,7 +174,7 @@ async def test_matched_invoice_number_proposes_verify_invoice_page_action(monkey
     service = ReviewService()
 
     async def matched(*_args, **_kwargs):
-        return AgentBatchResult(observations=[_invoice_observation(INVOICE_NO)])
+        return RecognitionBatchResult(observations=[_invoice_observation(INVOICE_NO)])
 
     monkeypatch.setattr(service, "_extract_documents", matched)
     response = await service.assist_async(ReviewRequest(
@@ -192,7 +193,7 @@ async def test_conflicting_invoice_number_does_not_propose_verify_invoice(monkey
     service = ReviewService()
 
     async def mismatched(*_args, **_kwargs):
-        return AgentBatchResult(observations=[_invoice_observation("99999999999999999999")])
+        return RecognitionBatchResult(observations=[_invoice_observation("99999999999999999999")])
 
     monkeypatch.setattr(service, "_extract_documents", mismatched)
     response = await service.assist_async(ReviewRequest(
@@ -209,7 +210,7 @@ def test_verify_invoice_capability_is_silent_without_comparisons() -> None:
     context = ReviewExecutionContext(
         request=ReviewRequest(page_url="https://example.test/review/1", region="qingdao"),
         profile=SCRAP_REPLACEMENT_QINGDAO,
-        batch=AgentBatchResult(),
+        batch=RecognitionBatchResult(),
         observations=(),
         comparisons=(),
     )

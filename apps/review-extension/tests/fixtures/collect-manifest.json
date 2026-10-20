@@ -1,0 +1,453 @@
+{
+  "business_type": "scrap_replacement",
+  "scopes": [
+    "old_vehicle",
+    "new_vehicle"
+  ],
+  "page_groups": [
+    {
+      "label": "报废车辆资料",
+      "scope": "old_vehicle",
+      "title": "报废车辆资料"
+    },
+    {
+      "label": "报废车辆信息",
+      "scope": "old_vehicle",
+      "title": "报废车辆信息"
+    },
+    {
+      "label": "报废车资料",
+      "scope": "old_vehicle",
+      "title": "报废车资料"
+    },
+    {
+      "label": "旧车资料",
+      "scope": "old_vehicle",
+      "title": "旧车资料"
+    },
+    {
+      "label": "新车资料",
+      "scope": "new_vehicle",
+      "title": "新车资料"
+    },
+    {
+      "label": "新车及发票信息",
+      "scope": "new_vehicle",
+      "title": "新车及发票信息"
+    },
+    {
+      "label": "新车及发票资料",
+      "scope": "new_vehicle",
+      "title": "新车及发票资料"
+    },
+    {
+      "label": "发票资料",
+      "scope": "new_vehicle",
+      "title": "发票资料"
+    },
+    {
+      "label": "营业执照",
+      "scope": "business_license",
+      "title": "营业执照"
+    },
+    {
+      "label": "身份证正面",
+      "scope": "identity",
+      "title": "身份证正面"
+    },
+    {
+      "label": "身份证反面",
+      "scope": "identity",
+      "title": "身份证反面"
+    },
+    {
+      "label": "身份证",
+      "scope": "identity",
+      "title": "身份证"
+    },
+    {
+      "label": "其他图片",
+      "scope": "other",
+      "title": "其他图片"
+    }
+  ],
+  "fields": [
+    {
+      "key": "old_vehicle.type",
+      "label": "报废车辆类型",
+      "aliases": [
+        "报废车辆类型"
+      ],
+      "section": "old_vehicle",
+      "section_required": false,
+      "reviewable": true
+    },
+    {
+      "key": "old_vehicle.recycle_date",
+      "label": "报废交车日期",
+      "aliases": [
+        "报废交车日期",
+        "报废车日期"
+      ],
+      "section": "old_vehicle",
+      "section_required": false,
+      "reviewable": true
+    },
+    {
+      "key": "scrap_certificate.certificate_no",
+      "label": "报废证明编号",
+      "aliases": [
+        "报废证明编号",
+        "回收证明编号"
+      ],
+      "section": "old_vehicle",
+      "section_required": false,
+      "reviewable": true
+    },
+    {
+      "key": "old_vehicle.vin",
+      "label": "报废车辆车架号",
+      "aliases": [
+        "报废车辆车架号",
+        "旧车车架号",
+        "车架号"
+      ],
+      "section": "old_vehicle",
+      "section_required": true,
+      "reviewable": true
+    },
+    {
+      "key": "old_vehicle.plate_no",
+      "label": "报废车辆车牌号",
+      "aliases": [
+        "报废车辆车牌号",
+        "旧车车牌号",
+        "车牌号"
+      ],
+      "section": "old_vehicle",
+      "section_required": true,
+      "reviewable": true
+    },
+    {
+      "key": "old_vehicle.owner",
+      "label": "报废车辆所有人",
+      "aliases": [
+        "报废车辆所有人",
+        "旧车所有人",
+        "车辆所有人",
+        "所有人"
+      ],
+      "section": "old_vehicle",
+      "section_required": true,
+      "reviewable": true
+    },
+    {
+      "key": "old_vehicle.engine_model",
+      "label": "报废发动机型号",
+      "aliases": [
+        "报废发动机型号",
+        "发动机型号"
+      ],
+      "section": "old_vehicle",
+      "section_required": false,
+      "reviewable": true
+    },
+    {
+      "key": "new_vehicle.fuel_type",
+      "label": "新车燃料类型",
+      "aliases": [
+        "新车燃料类型"
+      ],
+      "section": "new_vehicle",
+      "section_required": false,
+      "reviewable": true
+    },
+    {
+      "key": "invoice.code",
+      "label": "发票代码",
+      "aliases": [
+        "发票代码"
+      ],
+      "section": "new_vehicle",
+      "section_required": false,
+      "reviewable": true
+    },
+    {
+      "key": "invoice.invoice_no",
+      "label": "发票号码",
+      "aliases": [
+        "发票号码"
+      ],
+      "section": "new_vehicle",
+      "section_required": false,
+      "reviewable": true
+    },
+    {
+      "key": "invoice.amount",
+      "label": "开票金额",
+      "aliases": [
+        "开票金额"
+      ],
+      "section": "new_vehicle",
+      "section_required": false,
+      "reviewable": true
+    },
+    {
+      "key": "invoice.invoice_date",
+      "label": "开票日期",
+      "aliases": [
+        "开票日期",
+        "发票日期"
+      ],
+      "section": "new_vehicle",
+      "section_required": false,
+      "reviewable": true
+    },
+    {
+      "key": "new_vehicle.vin",
+      "label": "新车车架号",
+      "aliases": [
+        "新车车架号",
+        "车架号"
+      ],
+      "section": "new_vehicle",
+      "section_required": true,
+      "reviewable": true
+    },
+    {
+      "key": "new_vehicle.plate_no",
+      "label": "新车车牌号",
+      "aliases": [
+        "新车车牌号",
+        "车牌号"
+      ],
+      "section": "new_vehicle",
+      "section_required": true,
+      "reviewable": true
+    },
+    {
+      "key": "new_vehicle.owner",
+      "label": "新车所有人",
+      "aliases": [
+        "新车所有人",
+        "车辆所有人",
+        "所有人"
+      ],
+      "section": "new_vehicle",
+      "section_required": true,
+      "reviewable": true
+    },
+    {
+      "key": "new_vehicle.registration_date",
+      "label": "注册日期",
+      "aliases": [
+        "注册日期"
+      ],
+      "section": "new_vehicle",
+      "section_required": false,
+      "reviewable": true
+    },
+    {
+      "key": "application.terminal_certificate_no",
+      "label": "终端证件号",
+      "aliases": [
+        "终端证件号"
+      ],
+      "section": "new_vehicle",
+      "section_required": false,
+      "reviewable": true
+    },
+    {
+      "key": "application.customer_name",
+      "label": "客户名称",
+      "aliases": [
+        "客户名称"
+      ],
+      "section": "new_vehicle",
+      "section_required": false,
+      "reviewable": true
+    },
+    {
+      "key": "application.terminal_phone",
+      "label": "终端客户手机号",
+      "aliases": [
+        "终端客户手机号"
+      ],
+      "section": "new_vehicle",
+      "section_required": false,
+      "reviewable": true
+    },
+    {
+      "key": "application.id",
+      "label": "申请单ID",
+      "aliases": [
+        "申请单ID",
+        "申请单编号"
+      ],
+      "section": "unknown",
+      "section_required": false,
+      "reviewable": true
+    },
+    {
+      "key": "application.submitted_at",
+      "label": "申请时间",
+      "aliases": [
+        "申请时间"
+      ],
+      "section": "unknown",
+      "section_required": false,
+      "reviewable": false
+    },
+    {
+      "key": "application.owner_type",
+      "label": "车辆所有人类型",
+      "aliases": [
+        "车辆所有人类型"
+      ],
+      "section": "unknown",
+      "section_required": false,
+      "reviewable": true
+    },
+    {
+      "key": "application.dealer_name",
+      "label": "经销商",
+      "aliases": [
+        "经销商"
+      ],
+      "section": "old_vehicle",
+      "section_required": false,
+      "reviewable": false
+    },
+    {
+      "key": "page_ocr.new_vehicle_vin",
+      "label": "OCR新车车架号",
+      "aliases": [
+        "OCR新车车架号"
+      ],
+      "section": "new_vehicle",
+      "section_required": false,
+      "reviewable": true
+    }
+  ],
+  "writable_fields": [
+    "old_vehicle.type",
+    "old_vehicle.recycle_date",
+    "scrap_certificate.certificate_no",
+    "old_vehicle.vin",
+    "old_vehicle.plate_no",
+    "old_vehicle.owner",
+    "old_vehicle.engine_model",
+    "new_vehicle.fuel_type",
+    "invoice.code",
+    "invoice.invoice_no",
+    "invoice.amount",
+    "invoice.invoice_date",
+    "new_vehicle.vin",
+    "new_vehicle.plate_no",
+    "new_vehicle.owner",
+    "new_vehicle.registration_date",
+    "application.terminal_certificate_no",
+    "application.customer_name",
+    "application.terminal_phone",
+    "application.owner_type",
+    "page_ocr.new_vehicle_vin",
+    "old_vehicle.affiliation",
+    "new_vehicle.affiliation"
+  ],
+  "writable_control_kinds": [],
+  "identity_anchors": [
+    "application.id",
+    "old_vehicle.vin",
+    "new_vehicle.vin",
+    "old_vehicle.owner",
+    "new_vehicle.owner"
+  ],
+  "materials": [
+    {
+      "document_type": "scrap_certificate",
+      "label": "报废机动车回收证明",
+      "hints": [
+        "报废证明",
+        "回收证明",
+        "报废车辆资料",
+        "旧车资料"
+      ],
+      "slots": [
+        [
+          "old_vehicle",
+          3
+        ]
+      ]
+    },
+    {
+      "document_type": "vehicle_license",
+      "label": "机动车行驶证或车辆资料",
+      "hints": [
+        "行驶证",
+        "旧车资料",
+        "新车资料",
+        "报废车辆资料"
+      ],
+      "slots": [
+        [
+          "old_vehicle",
+          1
+        ],
+        [
+          "new_vehicle",
+          1
+        ]
+      ]
+    },
+    {
+      "document_type": "registration_certificate",
+      "label": "机动车登记证书",
+      "hints": [
+        "登记证书",
+        "机动车登记证",
+        "旧车资料",
+        "新车资料"
+      ],
+      "slots": [
+        [
+          "old_vehicle",
+          2
+        ],
+        [
+          "new_vehicle",
+          2
+        ]
+      ]
+    },
+    {
+      "document_type": "invoice",
+      "label": "机动车销售发票",
+      "hints": [
+        "发票",
+        "新车资料"
+      ],
+      "slots": [
+        [
+          "new_vehicle",
+          3
+        ]
+      ]
+    },
+    {
+      "document_type": "business_license",
+      "label": "营业执照",
+      "hints": [
+        "营业执照"
+      ],
+      "slots": []
+    },
+    {
+      "document_type": "identity_card",
+      "label": "居民身份证",
+      "hints": [
+        "身份证"
+      ],
+      "slots": []
+    }
+  ]
+}

@@ -1,17 +1,17 @@
 import pytest
 
-from forj_review_assistant.businesses.profiles import (
+from forj_review_service.businesses.profiles import (
     SCRAP_REPLACEMENT_CHANGCHUN,
     SCRAP_REPLACEMENT_QINGDAO,
 )
-from forj_review_assistant.contracts.review import (
+from forj_review_service.contracts.review import (
     FieldObservation,
     FieldStatus,
     ReviewFieldSnapshot,
     ReviewRequest,
 )
-from forj_review_assistant.evidence.comparison.review import build_field_comparisons
-from forj_review_assistant.presentation.routing import build_review_tasks
+from forj_review_service.evidence.comparison.review import build_field_comparisons
+from forj_review_service.presentation.routing import build_review_tasks
 
 
 @pytest.mark.parametrize("profile", [SCRAP_REPLACEMENT_CHANGCHUN, SCRAP_REPLACEMENT_QINGDAO])

@@ -1,10 +1,10 @@
-from forj_review_assistant.contracts.review import (
+from forj_review_service.contracts.review import (
     FieldComparison,
     FieldStatus,
     ReviewFieldSnapshot,
     ReviewRequest,
 )
-from forj_review_assistant.evidence.comparison.composite_fields import (
+from forj_review_service.evidence.comparison.composite_fields import (
     build_page_composite_checks,
 )
 
@@ -50,9 +50,9 @@ def test_invoice_composite_checks_page_pair_before_material() -> None:
 
 
 def test_composite_task_uses_reviewer_facing_page_labels_and_keeps_differences() -> None:
-    from forj_review_assistant.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
-    from forj_review_assistant.contracts.evidence import DifferenceRange, EvidenceFact
-    from forj_review_assistant.presentation.routing import build_review_tasks
+    from forj_review_service.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
+    from forj_review_service.contracts.evidence import DifferenceRange, EvidenceFact
+    from forj_review_service.presentation.routing import build_review_tasks
 
     difference = DifferenceRange(
         kind="REPLACE", start=4, end=5, page_start=4, page_end=5, page_text="A"

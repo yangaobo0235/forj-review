@@ -2,27 +2,27 @@ from dataclasses import replace
 
 import pytest
 
-from forj_review_assistant.businesses.profiles import (
+from forj_review_service.businesses.profiles import (
     CONSISTENCY_DEFAULT,
     SCRAP_REPLACEMENT_QINGDAO,
 )
-from forj_review_assistant.businesses.registry import BusinessRegistry
-from forj_review_assistant.capabilities.business_rules import BusinessRuleRegistry
-from forj_review_assistant.capabilities.specs import (
-    ExternalCheckSpec,
+from forj_review_service.businesses.registry import BusinessRegistry
+from forj_review_service.capabilities.business_rules import BusinessRuleRegistry
+from forj_review_service.capabilities.specs import (
+    CapabilitySpec,
     ReviewExecutionContext,
     RuleExecutionResult,
 )
-from forj_review_assistant.contracts.recognition import (
-    AgentBatchResult,
+from forj_review_service.contracts.recognition import (
     CheckResult,
     MaterialCompletenessIssue,
     MaterialCompletenessReport,
+    RecognitionBatchResult,
     RecognizedDocument,
 )
-from forj_review_assistant.contracts.review import FieldObservation, ReviewRequest
-from forj_review_assistant.presentation.advice import build_final_advice
-from forj_review_assistant.runtime.review_service import ReviewService
+from forj_review_service.contracts.review import FieldObservation, ReviewRequest
+from forj_review_service.presentation.advice import build_final_advice
+from forj_review_service.runtime.review_service import ReviewService
 
 
 def request_for(profile):
@@ -40,9 +40,9 @@ def test_removed_qr_switch_cannot_be_configured_as_a_second_source_of_truth():
         build_final_advice([], [], [], [], [], [], qr_required=True)
 
 
-def test_invalid_external_mode_is_rejected():
+def test_invalid_capability_kind_is_rejected():
     with pytest.raises(ValueError):
-        ExternalCheckSpec("scrap_certificate_qr", "SOMETIMES")
+        CapabilitySpec("scrap_certificate_qr", kind="SOMETIMES")
 
 
 def test_capability_registries_cannot_be_modified_after_startup():
@@ -54,9 +54,7 @@ def test_capability_registries_cannot_be_modified_after_startup():
 
 def test_partial_response_never_runs_retired_owner_or_same_year_checks():
     service = ReviewService()
-    response = service._build_response(
-        request_for(SCRAP_REPLACEMENT_QINGDAO), AgentBatchResult()
-    )
+    response = service._build_response(request_for(SCRAP_REPLACEMENT_QINGDAO), RecognitionBatchResult())
     assert response.cross_checks == []
     assert not any(
         item.check_id.startswith(("CROSS-OWNER", "CROSS-DATE", "QR-"))
@@ -65,9 +63,7 @@ def test_partial_response_never_runs_retired_owner_or_same_year_checks():
 
 
 def test_duplicate_checks_count_once_and_keep_failure_over_match():
-    duplicate = CheckResult(
-        check_id="DUP", label="重复检查", status="CONFLICT", reason="证据冲突"
-    )
+    duplicate = CheckResult(check_id="DUP", label="重复检查", status="CONFLICT", reason="证据冲突")
     _, advice = build_final_advice(
         [],
         [duplicate, duplicate, duplicate.model_copy(update={"status": "MATCH"})],
@@ -80,14 +76,12 @@ def test_duplicate_checks_count_once_and_keep_failure_over_match():
     assert advice.summary == "发现 1 项需要审核人员确认"
 
 
-@pytest.mark.parametrize(
-    "uncertain,expected", [(True, "INSUFFICIENT"), (False, "MATCH")]
-)
+@pytest.mark.parametrize("uncertain,expected", [(True, "INSUFFICIENT"), (False, "MATCH")])
 @pytest.mark.asyncio
 async def test_full_graph_marks_uncertain_representative_insufficient_and_keeps_progress_business_free(
     monkeypatch, uncertain, expected
 ):
-    profile = replace(SCRAP_REPLACEMENT_QINGDAO, external_checks=())
+    profile = replace(SCRAP_REPLACEMENT_QINGDAO, binding_declarations=())
     observations = [
         FieldObservation(
             field=field,
@@ -145,7 +139,7 @@ async def test_full_graph_marks_uncertain_representative_insufficient_and_keeps_
             ("new_vehicle.origin", "长春市", "invoice", "invoice", "new_vehicle"),
         ]
     ]
-    batch = AgentBatchResult(
+    batch = RecognitionBatchResult(
         observations=observations,
         recognized_documents=[
             RecognizedDocument(
@@ -183,15 +177,12 @@ async def test_full_graph_marks_uncertain_representative_insufficient_and_keeps_
         }
     )
     progress = []
-    response = await service.assist_async(
-        request, lambda response, _: progress.append(response)
-    )
+    response = await service.assist_async(request, lambda response, _: progress.append(response))
     assert all(item.cross_checks == [] for item in progress[:-1])
     checks = {item.check_id: item for item in response.cross_checks}
     assert checks["AFFILIATION-SUBJECT-001"].status == expected
     # 青岛按配置核验产地；该样例使用的产地不是青岛，因此应进入人工处理。
     assert checks["POLICY-NEW-ORIGIN"].status == ("INSUFFICIENT" if uncertain else "CONFLICT")
-    assert bool(response.page_fill_intent) == (not uncertain)
     subject_step = next(
         step for step in response.review_tasks if "AFFILIATION-SUBJECT" in step.step_id
     )
@@ -213,13 +204,11 @@ def test_duplicate_rule_groups_and_ids_produce_single_check():
         ReviewExecutionContext(
             request=request_for(CONSISTENCY_DEFAULT),
             profile=CONSISTENCY_DEFAULT,
-            batch=AgentBatchResult(),
+            batch=RecognitionBatchResult(),
             observations=(),
         ),
     )
-    assert [(check.check_id, check.status) for check in result.checks] == [
-        ("DUP", "CONFLICT")
-    ]
+    assert [(check.check_id, check.status) for check in result.checks] == [("DUP", "CONFLICT")]
 
 
 def test_deduplication_preserves_distinct_material_issues_sharing_a_reason_code():

@@ -17,6 +17,20 @@ jobs:
   backend:
     name: Backend
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: test-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      FORJ_TEST_POSTGRES_URL: postgresql://postgres:test-only@127.0.0.1:5432/postgres
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,8 +45,11 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked
 
-      - name: Run tests
-        run: uv run pytest -q
+      - name: Unit and contract tests (no database)
+        run: uv run pytest -q tests/unit tests/contracts
+
+      - name: Integration tests (isolated PostgreSQL)
+        run: uv run pytest -q tests/integration tests/release
 
       - name: Run Ruff
         run: uv run ruff check src tests scripts
@@ -52,7 +69,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: apps/extension
+        working-directory: apps/review-extension
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -62,7 +79,7 @@ jobs:
         with:
           node-version: "22.18.0"
           cache: npm
-          cache-dependency-path: apps/extension/package-lock.json
+          cache-dependency-path: apps/review-extension/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -70,10 +87,16 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Install browser for integration tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser collection and write-back tests
+        run: npm run test:browser
+
       - name: Build extension
         run: npm run build
 
-      # 发布给用户的是 build:public（见 docs/指南/部署.md）。之前 CI 只验证了
+      # 发布给用户的是 build:public（见 docs/部署运维.md）。之前 CI 只验证了
       # 开发模式构建，发布路径没有任何门禁。
       - name: Build extension (release)
         run: npm run build:public
@@ -89,7 +112,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: apps/configuration-web
+        working-directory: apps/review-config-web
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -99,7 +122,7 @@ jobs:
         with:
           node-version: "22.18.0"
           cache: npm
-          cache-dependency-path: apps/configuration-web/package-lock.json
+          cache-dependency-path: apps/review-config-web/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -119,12 +142,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+      - name: Install smoke-test dependencies
+        run: uv sync --locked
       - name: Build production image
-        run: docker build --file deploy/Dockerfile --tag forj-review-api:ci .
+        run: docker build --file deploy/Dockerfile --tag forj-review-service:ci .
       - name: Validate deployment Compose
-        run: docker compose --env-file src/forj_review_assistant/.env.example -f docker-compose.server.yml config --no-env-resolution --quiet
+        run: docker compose --project-directory . --env-file src/forj_review_service/.env.example -f deploy/server/docker-compose.server.yml config --no-env-resolution --quiet
       - name: Verify health and persistent application logs
-        run: python3 scripts/ci/smoke-container.py forj-review-api:ci
+        run: uv run python scripts/ci/smoke_container.py forj-review-service:ci
 
   secrets:
     name: Secret scan

@@ -4,16 +4,16 @@ from pathlib import Path
 
 import pytest
 
-from forj_review_assistant.businesses.configuration.history import record_snapshot
-from forj_review_assistant.businesses.configuration.inspection import compare_configurations
-from forj_review_assistant.interfaces.cli import main
-from forj_review_assistant.interfaces.page_tools import (
+from forj_review_service.businesses.page_config.history import record_snapshot
+from forj_review_service.businesses.page_config.inspection import compare_configurations
+from forj_review_service.interfaces.cli import main
+from forj_review_service.interfaces.page_tools import (
     inspect_directory,
     replay_cases,
     validated_configuration,
 )
 
-EXAMPLES = Path(__file__).resolve().parents[3] / "docs/示例/页面配置"
+EXAMPLES = Path(__file__).resolve().parents[3] / "examples/page-config"
 
 
 @pytest.fixture
@@ -33,7 +33,9 @@ def _edit(directory, **changes):
     return data
 
 
-def test_effective_preview_is_stable_and_diff_tracks_fields_across_versions(page_directory, tmp_path):
+def test_effective_preview_is_stable_and_diff_tracks_fields_across_versions(
+    page_directory, tmp_path
+):
     before = inspect_directory(page_directory)
     assert before == inspect_directory(page_directory)
     next_directory = tmp_path / "next"
@@ -57,7 +59,10 @@ def test_snapshot_pins_source_and_effective_content_across_loads(page_directory)
     assert first == record_snapshot(page_directory, pages)
     archive = Path(first["path"])
     assert archive.is_file()
-    assert json.loads(archive.read_text(encoding="utf-8"))["files"]["permit.json"]["page_id"] == "example_permit"
+    assert (
+        json.loads(archive.read_text(encoding="utf-8"))["files"]["permit.json"]["page_id"]
+        == "example_permit"
+    )
     _edit(page_directory, title="原地覆盖")
     with pytest.raises(ValueError, match="已有本地快照"):
         validated_configuration(page_directory)
@@ -83,17 +88,25 @@ def test_new_version_and_local_rollback_are_accepted(page_directory):
     pages, _ = validated_configuration(page_directory)
     record_snapshot(page_directory, pages)
     original = _edit(page_directory, active=False)
-    next_version = {**original, "version": "2.0", "active": True,
-                    "extends": {"page_id": "example_permit", "version": "1.0"}}
+    next_version = {
+        **original,
+        "version": "2.0",
+        "active": True,
+        "extends": {"page_id": "example_permit", "version": "1.0"},
+    }
     (page_directory / "next.json").write_text(json.dumps(next_version), encoding="utf-8")
     pages, registry = validated_configuration(page_directory)
     record_snapshot(page_directory, pages)
-    assert next(p for p in registry.active_profiles if p.page_id == "example_permit").version == "2.0"
+    assert (
+        next(p for p in registry.active_profiles if p.page_id == "example_permit").version == "2.0"
+    )
     _edit(page_directory, active=True)
     next_version["active"] = False
     (page_directory / "next.json").write_text(json.dumps(next_version), encoding="utf-8")
     _, registry = validated_configuration(page_directory)
-    assert next(p for p in registry.active_profiles if p.page_id == "example_permit").version == "1.0"
+    assert (
+        next(p for p in registry.active_profiles if p.page_id == "example_permit").version == "1.0"
+    )
 
 
 def test_corrupt_local_history_and_concurrent_snapshot_writer_are_rejected(page_directory):
@@ -105,7 +118,7 @@ def test_corrupt_local_history_and_concurrent_snapshot_writer_are_rejected(page_
         record_snapshot(page_directory, pages)
     (history / "write.lock").unlink()
     (history / "versions.json").write_text('{"versions": {"wrong": {}}}', encoding="utf-8")
-    with pytest.raises(ValueError, match="本地配置历史"):
+    with pytest.raises(ValueError, match="配置历史"):
         validated_configuration(page_directory)
 
 
@@ -115,7 +128,7 @@ async def test_sample_replay_runs_real_graph_without_network(page_directory, mon
         raise AssertionError("replay must not access the network")
 
     monkeypatch.setattr("httpx.AsyncClient.request", forbidden)
-    caplog.set_level("INFO", logger="forj_review_assistant.runtime.workflow.graph")
+    caplog.set_level("INFO", logger="forj_review_service.runtime.workflow.graph")
     result = await replay_cases(page_directory, EXAMPLES / "回放样例/permit-cases.json")
     assert result["ok"]
     assert len(result["cases"]) == 4
@@ -128,26 +141,41 @@ async def test_sample_replay_runs_real_graph_without_network(page_directory, mon
 
 
 @pytest.mark.asyncio
-async def test_external_replay_never_calls_live_qr_even_without_fixtures(page_directory, tmp_path, monkeypatch):
-    from forj_review_assistant.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
-    from forj_review_assistant.runtime.review_service import ReviewService
+async def test_external_replay_never_calls_live_qr_even_without_fixtures(
+    page_directory, tmp_path, monkeypatch
+):
+    from forj_review_service.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
+    from forj_review_service.runtime.review_service import ReviewService
 
     async def forbidden(*args, **kwargs):
         raise AssertionError("live QR verification is forbidden")
 
     monkeypatch.setattr(ReviewService, "_collect_qr_checks", forbidden)
     profile = SCRAP_REPLACEMENT_QINGDAO
-    suite = {"cases": [{
-        "name": "本地缺失外部样例必须降级", "request": {
-            "page_id": profile.page_id, "business_type": profile.business_type,
-            "region": profile.region, "profile_version": profile.version,
-            "page_url": "https://example.test/synthetic",
-            "images": [{"index": 0, "src": "https://example.test/synthetic.jpg",
-                        "business_scope": "old_vehicle", "document_type_hint": "scrap_certificate"}],
-        },
-        "batch": {"total_count": 1, "completed_count": 1},
-        "expect": {"recommendation": "REVIEW_REQUIRED"},
-    }]}
+    suite = {
+        "cases": [
+            {
+                "name": "本地缺失外部样例必须降级",
+                "request": {
+                    "page_id": profile.page_id,
+                    "business_type": profile.business_type,
+                    "region": profile.region,
+                    "profile_version": profile.version,
+                    "page_url": "https://example.test/synthetic",
+                    "images": [
+                        {
+                            "index": 0,
+                            "src": "https://example.test/synthetic.jpg",
+                            "business_scope": "old_vehicle",
+                            "document_type_hint": "scrap_certificate",
+                        }
+                    ],
+                },
+                "batch": {"total_count": 1, "completed_count": 1},
+                "expect": {"recommendation": "REVIEW_REQUIRED"},
+            }
+        ]
+    }
     path = tmp_path / "cases.json"
     path.write_text(json.dumps(suite), encoding="utf-8")
     result = await replay_cases(page_directory, path)
@@ -158,35 +186,66 @@ async def test_external_replay_never_calls_live_qr_even_without_fixtures(page_di
 
 @pytest.mark.asyncio
 async def test_generic_page_uses_declared_projector_and_field_write_permissions(tmp_path):
-    from forj_review_assistant.businesses.configuration.compiler import compile_page
-    from forj_review_assistant.businesses.configuration.schema import PageDefinition
-    from forj_review_assistant.businesses.registry import BusinessRegistry
-    from forj_review_assistant.contracts.recognition import AgentBatchResult
-    from forj_review_assistant.contracts.review import ReviewRequest
-    from forj_review_assistant.runtime.review_service import ReviewService
+    from forj_review_service.businesses.page_config.compiler import compile_page
+    from forj_review_service.businesses.page_config.schema import PageDefinition
+    from forj_review_service.businesses.registry import BusinessRegistry
+    from forj_review_service.contracts.recognition import RecognitionBatchResult
+    from forj_review_service.contracts.review import ReviewRequest
+    from forj_review_service.runtime.review_service import ReviewService
 
-    profile = compile_page(PageDefinition.model_validate({
-        "page_id": "custom_page", "business_type": "custom_business", "title": "自定义类型",
-        "paths": ["/custom"], "scopes": ["custom"],
-        "page_actions": ["fill_review_fields"], "writable_control_kinds": ["text"],
-        "identity_anchors": ["application.id"], "record_identity_fields": ["application.id"],
-        "fields": [
-            {"key": "application.owner_type", "label": "自定义类型", "aliases": ["自定义类型"],
-             "mode": "SYSTEM", "writable": False},
-            {"key": "application.id", "label": "单号", "aliases": ["单号"],
-             "required": False, "reviewable": False},
-        ],
-    }))
+    profile = compile_page(
+        PageDefinition.model_validate(
+            {
+                "page_id": "custom_page",
+                "business_type": "custom_business",
+                "title": "自定义类型",
+                "paths": ["/custom"],
+                "scopes": ["custom"],
+                "page_actions": ["fill_review_fields"],
+                "writable_control_kinds": ["text"],
+                "identity_anchors": ["application.id"],
+                "record_identity_fields": ["application.id"],
+                "fields": [
+                    {
+                        "key": "application.owner_type",
+                        "label": "自定义类型",
+                        "aliases": ["自定义类型"],
+                        "mode": "SYSTEM",
+                        "writable": False,
+                    },
+                    {
+                        "key": "application.id",
+                        "label": "单号",
+                        "aliases": ["单号"],
+                        "required": False,
+                        "reviewable": False,
+                    },
+                ],
+            }
+        )
+    )
     service = ReviewService(registry=BusinessRegistry((profile,)))
     request = ReviewRequest(
-        page_id=profile.page_id, business_type=profile.business_type, page_url="https://example.test/custom",
+        page_id=profile.page_id,
+        business_type=profile.business_type,
+        page_url="https://example.test/custom",
         page_fields={"application.id": "SYNTHETIC", "application.owner_type": "自定义类型值"},
-        images=[{"index": 0, "src": "https://example.test/synthetic.jpg", "business_scope": "custom"}],
-        review_fields=[{"field": "application.owner_type", "label": "自定义类型", "value": "自定义类型值",
-                        "control_type": "text", "editable": True}],
+        images=[
+            {"index": 0, "src": "https://example.test/synthetic.jpg", "business_scope": "custom"}
+        ],
+        review_fields=[
+            {
+                "field": "application.owner_type",
+                "label": "自定义类型",
+                "value": "自定义类型值",
+                "control_type": "text",
+                "editable": True,
+            }
+        ],
     )
     response, _ = await service.assist_with_batch_async(
-        request, initial_batch=AgentBatchResult(total_count=1, completed_count=1),
+        request,
+        initial_batch=RecognitionBatchResult(total_count=1, completed_count=1),
     )
     assert response.recommendation == "PASS"
     task = next(t for t in response.review_tasks if t.page_target_field == "application.owner_type")
@@ -205,7 +264,8 @@ async def test_replay_reports_lost_checks_and_manifest_changes(page_directory, t
     result = await replay_cases(page_directory, cases)
     assert not result["ok"]
     assert {f["path"] for f in result["cases"][0]["failures"]} == {
-        "checks.removed-rule", "manifest_fields",
+        "checks.removed-rule",
+        "manifest_fields",
     }
 
 
@@ -224,11 +284,20 @@ async def test_replay_requires_fixed_batch_and_exact_page(page_directory, tmp_pa
             await replay_cases(page_directory, cases)
 
 
-def test_cli_check_returns_json_errors_and_does_not_start_server(page_directory, monkeypatch, capsys):
-    _edit(page_directory, fields=[{
-        "key": "permit.vin", "label": "VIN", "locator_id": "vin",
-        "evidence": [{"material": "permit", "field": "license.vin"}],
-    }])
+def test_cli_check_returns_json_errors_and_does_not_start_server(
+    page_directory, monkeypatch, capsys
+):
+    _edit(
+        page_directory,
+        fields=[
+            {
+                "key": "permit.vin",
+                "label": "VIN",
+                "locator_id": "vin",
+                "evidence": [{"material": "permit", "field": "license.vin"}],
+            }
+        ],
+    )
     monkeypatch.setattr("sys.argv", ["review", "--check-pages", str(page_directory), "--json"])
     with pytest.raises(SystemExit) as exc:
         main()
@@ -243,9 +312,16 @@ def test_cli_replay_returns_nonzero_on_regression(page_directory, tmp_path, monk
     suite["cases"][0]["expect"]["recommendation"] = "REVIEW_REQUIRED"
     cases = tmp_path / "cases.json"
     cases.write_text(json.dumps(suite), encoding="utf-8")
-    monkeypatch.setattr("sys.argv", [
-        "review", "--replay-pages", str(page_directory), "--cases", str(cases),
-    ])
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "review",
+            "--replay-pages",
+            str(page_directory),
+            "--cases",
+            str(cases),
+        ],
+    )
     with pytest.raises(SystemExit) as exc:
         main()
     assert exc.value.code == 1
@@ -257,8 +333,13 @@ async def test_replay_checks_why_a_configured_field_needs_review(page_directory,
     data = json.loads((EXAMPLES / "回放样例/permit-cases.json").read_text(encoding="utf-8"))
     case = data["cases"][0]
     case["batch"]["observations"][0]["uncertain"] = True
-    case["expect"].update({"recommendation": "REVIEW_REQUIRED", "comparisons": {"permit.vin": "REVIEW_REQUIRED"},
-                           "comparison_reasons": {"permit.vin": ["RECOGNITION_UNCERTAIN"]}})
+    case["expect"].update(
+        {
+            "recommendation": "REVIEW_REQUIRED",
+            "comparisons": {"permit.vin": "REVIEW_REQUIRED"},
+            "comparison_reasons": {"permit.vin": ["RECOGNITION_UNCERTAIN"]},
+        }
+    )
     data["cases"] = [case]
     path = tmp_path / "reason-cases.json"
     path.write_text(json.dumps(data), encoding="utf-8")

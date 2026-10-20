@@ -3,18 +3,18 @@ from dataclasses import replace
 import pytest
 from pydantic import ValidationError
 
-from forj_review_assistant.businesses.profiles import (
+from forj_review_service.businesses.profiles import (
     BUSINESS_PROFILES,
     SCRAP_REPLACEMENT_CHANGCHUN,
     SCRAP_REPLACEMENT_QINGDAO,
 )
-from forj_review_assistant.contracts.evidence import DifferenceRange, EvidenceFact
-from forj_review_assistant.contracts.recognition import (
+from forj_review_service.contracts.evidence import DifferenceRange, EvidenceFact
+from forj_review_service.contracts.recognition import (
     CheckResult,
     MaterialCompletenessIssue,
     MaterialCompletenessReport,
 )
-from forj_review_assistant.contracts.review import (
+from forj_review_service.contracts.review import (
     FieldComparison,
     FieldStatus,
     ReviewDisplayTarget,
@@ -22,8 +22,8 @@ from forj_review_assistant.contracts.review import (
     ReviewRequest,
     ReviewTask,
 )
-from forj_review_assistant.presentation.routing import build_review_tasks
-from forj_review_assistant.presentation.tasks import prepare_display_tasks
+from forj_review_service.presentation.routing import build_review_tasks
+from forj_review_service.presentation.tasks import prepare_display_tasks
 
 
 def make_step(**changes) -> ReviewTask:
@@ -161,6 +161,33 @@ def test_field_step_counts_only_unique_material_images_as_evidence() -> None:
     assert step.evidence_count == 3
     assert len(step.evidence) == 3
     assert all(item.image_id for item in step.evidence)
+
+
+def test_jiefang_flag_candidate_uses_page_vocabulary_for_fill() -> None:
+    comparison = FieldComparison(
+        field="old_vehicle.is_jiefang",
+        left_value="福田牌",
+        right_value=None,
+        status=FieldStatus.REVIEW_REQUIRED,
+        message="页面字段未填写",
+        evidence=[
+            EvidenceFact(
+                source="图片识别",
+                source_id="registration",
+                image_id="registration-image",
+                value="福田牌",
+            ),
+        ],
+    )
+
+    step = next(
+        item
+        for item in build_steps(comparisons=[comparison])
+        if item.step_id == "FIELD-old_vehicle.is_jiefang"
+    )
+
+    assert step.values[0].value == "否"
+    assert step.evidence[0].value == "福田牌"
 
 
 def test_old_vehicle_vin_task_preserves_backend_difference_ranges() -> None:
@@ -647,6 +674,49 @@ def test_page_only_field_is_visible_but_never_falsely_marked_as_matching() -> No
     ]
 
 
+def test_derived_emission_task_keeps_manual_fill_enabled_when_page_value_is_empty() -> None:
+    step = next(
+        item
+        for item in build_steps(
+            page_fields={"old_vehicle.emission_standard": "未填写"},
+            business_checks=[
+                CheckResult(
+                    check_id="EMISSION-STANDARD-001",
+                    label="排放标准",
+                    status="INSUFFICIENT",
+                    reason="登记证书排放标准识别为 国五，页面尚未填写，请核对后回填",
+                    reason_codes=["PAGE_VALUE_MISSING"],
+                    values=[
+                        {
+                            "source": "登记证书排放标准推导",
+                            "value": "国五",
+                            "derived_from": "登记证书排放标准",
+                        }
+                    ],
+                    details={
+                        "standard": "国五",
+                        "permitted_fill_values": ["国五"],
+                    },
+                )
+            ],
+            review_fields=[
+                ReviewFieldSnapshot(
+                    field="old_vehicle.emission_standard",
+                    label="排放标准",
+                    value="未填写",
+                    control_type="select",
+                    order=1,
+                )
+            ],
+        )
+        if item.step_id == "FIELD-old_vehicle.emission_standard"
+    )
+
+    assert step.writable is True
+    assert step.details["permitted_fill_values"] == ["国五"]
+    assert any(item.value == "国五" for item in step.values)
+
+
 def test_missing_configured_page_field_becomes_actionable_assistant_step():
     step = next(item for item in build_steps(
         comparisons=[matching_comparison("new_vehicle.vin")],
@@ -701,3 +771,47 @@ def test_ambiguous_collected_page_field_routes_to_assistant() -> None:
     assert step.display_target is ReviewDisplayTarget.ASSISTANT
     assert step.result_status == "INSUFFICIENT"
     assert step.requires_reviewer_action is True
+
+
+def test_unmapped_duplicate_vin_snapshot_is_merged_into_composite_task() -> None:
+    steps = build_steps(
+        page_fields={
+            "new_vehicle.vin": "VIN-1",
+            "page_ocr.new_vehicle_vin": "VIN-1",
+        },
+        review_fields=[
+            ReviewFieldSnapshot(
+                field="new_vehicle.vin", label="新车车架号", value="VIN-1", order=1
+            ),
+            # A duplicate DOM candidate may arrive without a canonical mapping.
+            ReviewFieldSnapshot(field=None, label="新车车架号", value="VIN-1", order=2),
+        ],
+    )
+
+    assert [item.step_id for item in steps].count("FIELD-NEW-VEHICLE-VIN") == 1
+    assert not any(item.step_id.startswith("FIELD-DOM-") for item in steps)
+
+
+def test_unmapped_duplicate_customer_snapshot_does_not_create_second_task() -> None:
+    steps = build_steps(
+        page_fields={"application.customer_name": "甲公司"},
+        business_checks=[
+            CheckResult(
+                check_id="AFFILIATION-AUX-CUSTOMER-NAME",
+                label="客户名称",
+                status="INSUFFICIENT",
+                reason="页面与材料未取得可比较的明确值",
+            )
+        ],
+        review_fields=[
+            ReviewFieldSnapshot(
+                field="application.customer_name", label="客户名称", value="甲公司", order=1
+            ),
+            ReviewFieldSnapshot(field=None, label="客户名称", value="", order=2),
+        ],
+    )
+
+    customer_steps = [item for item in steps if item.label == "客户名称"]
+    assert len(customer_steps) == 1
+    assert customer_steps[0].step_id == "FIELD-application.customer_name"
+    assert customer_steps[0].page_value == "甲公司"

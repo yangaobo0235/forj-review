@@ -7,13 +7,13 @@ def test_architecture_rejects_reverse_dependencies_and_retired_imports(tmp_path)
     (tmp_path / "contracts").mkdir()
     (tmp_path / "runtime").mkdir()
     (tmp_path / "contracts/review.py").write_text(
-        "from forj_review_assistant.runtime import jobs\n"
-        "from forj_review_assistant import runtime\n"
+        "from forj_review_service.runtime import jobs\n"
+        "from forj_review_service import runtime\n"
         "from .. import integrations\n",
         encoding="utf-8",
     )
     (tmp_path / "runtime/work.py").write_text(
-        "from forj_review_assistant.interfaces.http import review\nimport app.main\n",
+        "from forj_review_service.interfaces.http import review\nimport app.main\n",
         encoding="utf-8",
     )
     findings = check_architecture(tmp_path)
@@ -27,9 +27,9 @@ def test_architecture_allows_protocols_and_annotations_only_imports(tmp_path):
     (tmp_path / "runtime").mkdir()
     (tmp_path / "runtime/work.py").write_text(
         "from typing import TYPE_CHECKING\n"
-        "from forj_review_assistant.contracts import review\n"
+        "from forj_review_service.contracts import review\n"
         "if TYPE_CHECKING:\n"
-        "    from forj_review_assistant.bootstrap import application\n",
+        "    from forj_review_service.bootstrap import application\n",
         encoding="utf-8",
     )
     assert check_architecture(tmp_path) == []
@@ -38,22 +38,22 @@ def test_architecture_allows_protocols_and_annotations_only_imports(tmp_path):
 def test_workflow_cannot_register_concrete_business_rules(tmp_path):
     (tmp_path / "runtime/workflow").mkdir(parents=True)
     graph = tmp_path / "runtime/workflow/graph.py"
-    graph.write_text("from forj_review_assistant.businesses.rules.vehicle_model import run_vehicle_model\n", encoding="utf-8")
+    graph.write_text("from forj_review_service.businesses.rules.vehicle_model import run_vehicle_model\n", encoding="utf-8")
     assert any("concrete business rule" in item for item in check_architecture(tmp_path))
-    graph.write_text("from forj_review_assistant.businesses.rules.catalog import build_rule_handlers\n", encoding="utf-8")
+    graph.write_text("from forj_review_service.businesses.rules.catalog import build_rule_handlers\n", encoding="utf-8")
     assert check_architecture(tmp_path) == []
 
 
 def test_configuration_cannot_execute_generated_python(tmp_path):
-    (tmp_path / "businesses/configuration").mkdir(parents=True)
-    (tmp_path / "businesses/configuration/loader.py").write_text("exec('print(1)')\n", encoding="utf-8")
+    (tmp_path / "businesses/page_config").mkdir(parents=True)
+    (tmp_path / "businesses/page_config/loader.py").write_text("exec('print(1)')\n", encoding="utf-8")
     assert any("dynamic code" in item for item in check_architecture(tmp_path))
 
 
 def test_field_decisions_cannot_depend_on_response_rendering(tmp_path):
     (tmp_path / "evidence").mkdir()
     (tmp_path / "evidence/comparison.py").write_text(
-        "from forj_review_assistant.presentation.response import build_review_response\n",
+        "from forj_review_service.presentation.response import build_review_response\n",
         encoding="utf-8",
     )
     assert any("API response rendering" in item for item in check_architecture(tmp_path))
@@ -78,5 +78,5 @@ def test_refactored_modules_cannot_reintroduce_reverse_dependencies(tmp_path, pa
     target = tmp_path / path
     target.parent.mkdir(parents=True)
     module, symbol = dependency.rsplit(".", 1)
-    target.write_text(f"from forj_review_assistant.{module} import {symbol}\n", encoding="utf-8")
+    target.write_text(f"from forj_review_service.{module} import {symbol}\n", encoding="utf-8")
     assert any(reason in item for item in check_architecture(tmp_path))

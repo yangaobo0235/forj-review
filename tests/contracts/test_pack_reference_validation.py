@@ -8,8 +8,8 @@
 
 import pytest
 
-from forj_review_assistant.businesses.packs import BUSINESS_PACKS
-from forj_review_assistant.businesses.packs.model import (
+from forj_review_service.businesses.packs import BUSINESS_PACKS
+from forj_review_service.businesses.packs.model import (
     BusinessExtensionPack,
     CompositeFieldDeclaration,
     FieldDeclaration,
@@ -54,6 +54,18 @@ def test_route_target_must_be_declared() -> None:
         routes=(RouteDeclaration("vehicle_license", "vehicle.vin", ("vehicle.vinn",)),)
     )
     with pytest.raises(ValueError, match="vehicle.vinn"):
+        validate_pack_references(pack)
+
+
+def test_duplicate_route_target_is_rejected() -> None:
+    """同一材料字段到同一领域字段的重复路由没有额外语义，应直接拦截。"""
+    pack = _pack(
+        routes=(
+            RouteDeclaration("vehicle_license", "vehicle.vin", ("vehicle.vin",)),
+            RouteDeclaration("vehicle_license", "vehicle.vin", ("vehicle.vin",)),
+        )
+    )
+    with pytest.raises(ValueError, match="路由重复声明"):
         validate_pack_references(pack)
 
 
@@ -175,7 +187,7 @@ def test_duplicate_field_key_is_rejected() -> None:
 
 @pytest.mark.parametrize("options", [(), ((),)])
 def test_presence_never_accepts_an_empty_alternative(options):
-    from forj_review_assistant.businesses.material_policies import (
+    from forj_review_service.businesses.material_policies import (
         MaterialPolicy,
         MaterialPresenceGroup,
     )
@@ -188,7 +200,7 @@ def test_presence_never_accepts_an_empty_alternative(options):
 
 
 def test_presence_rejects_an_undeclared_document_type():
-    from forj_review_assistant.businesses.material_policies import (
+    from forj_review_service.businesses.material_policies import (
         MaterialPolicy,
         MaterialPresenceGroup,
         MaterialRequirement,

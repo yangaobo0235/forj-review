@@ -5,7 +5,9 @@
 # `.env.production.example` 这类会被 `.env.*` 吞掉——而且被忽略的文件不会出现在
 # `git status` 里，等于静默消失在仓库之外。
 !*.example
-/deploy/review-agent.env
+postgres-owner.env
+postgres-review.env
+postgres-local.env
 
 # Python
 __pycache__/
@@ -26,7 +28,7 @@ dist-ssr/
 *.tsbuildinfo
 coverage/
 *.log
-# 按天轮转出的历史分片（review-agent.log.2026-09-23 这类），`*.log` 匹配不到。
+# 按天轮转出的历史分片（review-service.log.2026-09-23 这类），`*.log` 匹配不到。
 *.log.[0-9]*
 npm-debug.log*
 yarn-debug.log*
@@ -39,7 +41,7 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 
-# Local agent state and temporary work
+# Local runtime state and temporary work
 .tmp/
 # 本地按天轮转的后端日志（根目录启动时 REVIEW_LOG_DIR=logs）
 logs/
@@ -50,5 +52,12 @@ logs/
 .superpowers/
 
 # Local configuration conversations, checkpoints and credentials
-.review-agent/
+.review-config/
 .review-pages.lock
+
+# Generated delivery files; deploy/ contains only maintained sources.
+/release/
+
+# Browser test artifacts
+**/playwright-report/
+**/test-results/

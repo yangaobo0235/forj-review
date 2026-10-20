@@ -1,0 +1,24 @@
+<!doctype html><html lang="zh"><meta charset="utf-8"><title>合成审核页面</title><body><form id="review"></form>
+<script type="module">
+import manifest from "../fixtures/collect-manifest-transfer.json";
+import {applyCollectManifest} from "../../src/platform/browser/catalog/collect-manifest.ts";
+import {ReviewPageFieldCollector} from "../../src/platform/browser/collection/page-field-collector.ts";
+import {ReviewPageFieldWriter} from "../../src/platform/browser/actions/page-field-writer.ts";
+applyCollectManifest(manifest);
+const form = document.querySelector("form");
+const row = document.createElement("div"); row.className = "ant-row"; form.append(row);
+for (const section of manifest.page_sections) {
+  const title = document.createElement("div"); title.className = "formItemTitle"; title.textContent = section.title; row.append(title);
+  for (const field of manifest.fields.filter(field => field.reviewable && field.section === section.key)) {
+    const item = document.createElement("div"); item.className = "ant-form-item";
+    const label = document.createElement("label"); label.htmlFor = field.key; label.textContent = field.label;
+    const input = document.createElement("input"); input.id = field.key; input.value = field.key + "-原值";
+    item.append(label, input); row.append(item);
+  }
+}
+window.reviewFixture = {
+  collect: () => ReviewPageFieldCollector.collect(form),
+  fill: async (field, value, expectedValue) => ReviewPageFieldWriter.executeValue(document, document.getElementById(field),
+    {field, value, expectedValue}, undefined, {fields: new Set(manifest.writable_fields), controlKinds: new Set(manifest.writable_control_kinds)}),
+};
+</script></body></html>

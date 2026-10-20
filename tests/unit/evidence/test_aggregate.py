@@ -1,18 +1,18 @@
 import pytest
 
-from forj_review_assistant.businesses.field_policies import field_policy
-from forj_review_assistant.contracts.recognition import (
-    AgentBatchResult,
+from forj_review_service.businesses.field_policies import field_policy
+from forj_review_service.contracts.recognition import (
+    RecognitionBatchResult,
     RecognizedDocument,
     RetryAttempt,
     RetrySummary,
 )
-from forj_review_assistant.contracts.review import FieldObservation, FieldStatus
-from forj_review_assistant.evidence.comparison.aggregate import (
+from forj_review_service.contracts.review import FieldObservation, FieldStatus
+from forj_review_service.evidence.comparison.aggregate import (
     aggregate_by_authority,
     aggregate_field,
 )
-from forj_review_assistant.evidence.comparison.evidence_values import batch_observations
+from forj_review_service.evidence.comparison.evidence_values import batch_observations
 
 
 def observation(
@@ -558,7 +558,7 @@ def test_uncertain_message_distinguishes_retried_evidence() -> None:
 
 
 def test_batch_observations_marks_evidence_from_a_retried_image() -> None:
-    batch = AgentBatchResult(
+    batch = RecognitionBatchResult(
         observations=[
             FieldObservation(
                 field="old_vehicle.vin",
@@ -598,7 +598,7 @@ def test_batch_observations_marks_evidence_from_a_retried_image() -> None:
 
 
 def test_batch_observations_does_not_mark_untouched_images_as_retried() -> None:
-    batch = AgentBatchResult(
+    batch = RecognitionBatchResult(
         observations=[
             FieldObservation(
                 field="old_vehicle.vin",

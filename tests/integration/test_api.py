@@ -5,9 +5,9 @@ import threading
 
 import pytest
 
-from forj_review_assistant.contracts.review import ReviewRequest
-from forj_review_assistant.observability.logging import configure_log_file
-from forj_review_assistant.runtime.review_service import ReviewService
+from forj_review_service.contracts.review import ReviewRequest
+from forj_review_service.observability.logging import configure_log_file
+from forj_review_service.runtime.review_service import ReviewService
 
 
 @pytest.mark.parametrize("route", ["assist", "jobs", "jobs/urls"])
@@ -46,22 +46,22 @@ def test_review_service_does_not_expose_configuration_tooling(client) -> None:
     catalog = client.get("/api/review/page-catalog")
     assert catalog.status_code == 200
     assert {item["business_type"] for item in catalog.json()["identities"]} == {
-        "scrap_replacement", "consistency", "vehicle_source", "transfer",
+        "scrap_replacement", "vehicle_source", "transfer", "consistency",
     }
 
 
 def test_url_job_api_creates_and_finishes_without_upload(client, monkeypatch):
-    from forj_review_assistant.contracts.recognition import AgentBatchResult
-    from forj_review_assistant.runtime.jobs.manager import ReviewJobManager
+    from forj_review_service.contracts.recognition import RecognitionBatchResult
+    from forj_review_service.runtime.jobs.manager import ReviewJobManager
 
     class Service:
         async def extract_image_async(self, request, image):
             assert "data_url" not in image.model_dump()
             assert image.src == "https://images.example.test/0.jpg"
-            return AgentBatchResult(total_count=1, completed_count=1, completed_image_ids=["url-0"])
+            return RecognitionBatchResult(total_count=1, completed_count=1, completed_image_ids=["url-0"])
 
         async def assist_with_batch_async(self, request, initial_batch):
-            from forj_review_assistant.contracts.review import ReviewResponse
+            from forj_review_service.contracts.review import ReviewResponse
             return ReviewResponse(recommendation="REVIEW_REQUIRED", risk_level="MEDIUM", summary="合成测试"), initial_batch
 
     manager = ReviewJobManager(Service())
@@ -141,7 +141,7 @@ def test_job_api_creates_and_polls_review(client) -> None:
 
 
 def test_url_job_api_can_cancel_a_running_job(client, monkeypatch) -> None:
-    from forj_review_assistant.runtime.jobs.manager import ReviewJobManager
+    from forj_review_service.runtime.jobs.manager import ReviewJobManager
 
     started, stopped = threading.Event(), threading.Event()
 
@@ -256,6 +256,7 @@ def test_collect_manifest_endpoint_serves_fields_groups_and_materials(client) ->
     assert response.status_code == 200
     body = response.json()
     assert body["business_type"] == "scrap_replacement"
+    assert body["ignored_image_labels"] == ["登记证书3、4页", "登记证书3,4页", "登记证书3，4页"]
 
     fields = {item["key"]: item for item in body["fields"]}
     assert fields["old_vehicle.vin"]["aliases"] == ["报废车辆车架号", "旧车车架号", "车架号"]
@@ -273,6 +274,14 @@ def test_collect_manifest_endpoint_serves_fields_groups_and_materials(client) ->
     materials = {item["document_type"]: item for item in body["materials"]}
     assert "回收证明" in materials["scrap_certificate"]["hints"]
     assert materials["identity_card"]["label"] == "居民身份证"
+    assert materials["scrap_certificate"]["slots"] == [["old_vehicle", 3]]
+    assert materials["vehicle_license"]["slots"] == [
+        ["old_vehicle", 1], ["new_vehicle", 1]
+    ]
+    assert materials["registration_certificate"]["slots"] == [
+        ["old_vehicle", 2], ["new_vehicle", 2]
+    ]
+    assert materials["invoice"]["slots"] == [["new_vehicle", 3]]
 
 
 def test_collect_manifest_resolves_page_identity_even_without_region_or_version(client) -> None:
@@ -302,7 +311,7 @@ def test_configure_log_file_is_noop_without_env(client, monkeypatch) -> None:
     测的是"哪儿都没配"这一种真实情形。
     """
     monkeypatch.delenv("REVIEW_LOG_DIR", raising=False)
-    monkeypatch.setattr("forj_review_assistant.observability.logging.load_dotenv", lambda *_a, **_k: None)
+    monkeypatch.setattr("forj_review_service.observability.logging.load_dotenv", lambda *_a, **_k: None)
     target = logging.getLogger("uvicorn.error.test_noop")
     configure_log_file(target)
     assert target.handlers == []
@@ -320,7 +329,7 @@ def test_configure_log_file_loads_env_file_before_reading_it(client, tmp_path, m
     def fake_load_dotenv(*_args, **_kwargs) -> None:
         os.environ["REVIEW_LOG_DIR"] = str(tmp_path)
 
-    monkeypatch.setattr("forj_review_assistant.observability.logging.load_dotenv", fake_load_dotenv)
+    monkeypatch.setattr("forj_review_service.observability.logging.load_dotenv", fake_load_dotenv)
     target = logging.getLogger("uvicorn.error.test_dotenv_first")
     try:
         configure_log_file(target)
@@ -343,7 +352,7 @@ def test_configure_log_file_writes_daily_rotated_file(client, tmp_path, monkeypa
         assert len(target.handlers) == 1
         target.info("review log file probe")
         target.handlers[0].flush()
-        written = list(tmp_path.glob("review-agent.log*"))
+        written = list(tmp_path.glob("review-service.log*"))
         assert len(written) == 1
         assert "review log file probe" in written[0].read_text(encoding="utf-8")
         # 重复调用不得叠加处理器：否则同一条日志会写两遍。

@@ -1,16 +1,16 @@
 import pytest
 
-from forj_review_assistant.businesses.profiles import TRANSFER_DEFAULT
-from forj_review_assistant.capabilities.business_rules import (
+from forj_review_service.businesses.profiles import TRANSFER_DEFAULT
+from forj_review_service.capabilities.business_rules import (
     BusinessRuleRegistry,
     UnknownBusinessRule,
 )
-from forj_review_assistant.capabilities.specs import (
+from forj_review_service.capabilities.specs import (
     ReviewExecutionContext,
     RuleExecutionResult,
 )
-from forj_review_assistant.contracts.recognition import AgentBatchResult, CheckResult
-from forj_review_assistant.contracts.review import ReviewRequest
+from forj_review_service.contracts.recognition import CheckResult, RecognitionBatchResult
+from forj_review_service.contracts.review import ReviewRequest
 
 
 def context():
@@ -21,7 +21,7 @@ def context():
             region="default",
         ),
         profile=TRANSFER_DEFAULT,
-        batch=AgentBatchResult(),
+        batch=RecognitionBatchResult(),
         observations=(),
     )
 

@@ -2,14 +2,14 @@
 
 import pytest
 
-from forj_review_assistant.contracts.recognition import AgentBatchResult
-from forj_review_assistant.contracts.review import (
+from forj_review_service.contracts.recognition import RecognitionBatchResult
+from forj_review_service.contracts.review import (
     FieldObservation,
     FieldStatus,
     ReviewRequest,
 )
-from forj_review_assistant.presentation.routing import build_review_tasks
-from forj_review_assistant.runtime.review_service import ReviewService
+from forj_review_service.presentation.routing import build_review_tasks
+from forj_review_service.runtime.review_service import ReviewService
 
 FIELD = "scrap_certificate.certificate_no"
 PAGE_NUMBER = "HS-SYNTHETIC-2026-001"
@@ -24,7 +24,7 @@ def response(page_value, material_value, *, mapped=True):
             "control_type": "text", "editable": True, "order": 1, "section": "old_vehicle",
         }],
     )
-    batch = AgentBatchResult(observations=[FieldObservation(
+    batch = RecognitionBatchResult(observations=[FieldObservation(
         field=FIELD, value=material_value, source_type="image", source_id="synthetic-proof",
         image_id="synthetic-proof", document_type="scrap_certificate", business_scope="old_vehicle",
     )])

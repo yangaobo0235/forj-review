@@ -2,11 +2,11 @@
 
 import pytest
 
-from forj_review_assistant.businesses.packs.vehicle_source import LICENSE_FIELDS
-from forj_review_assistant.contracts.evidence import FieldObservation
-from forj_review_assistant.contracts.recognition import AgentBatchResult, RecognizedDocument
-from forj_review_assistant.contracts.review import ReviewFieldSnapshot, ReviewRequest
-from forj_review_assistant.runtime.review_service import ReviewService
+from forj_review_service.businesses.packs.vehicle_source import LICENSE_FIELDS
+from forj_review_service.contracts.evidence import FieldObservation
+from forj_review_service.contracts.recognition import RecognitionBatchResult, RecognizedDocument
+from forj_review_service.contracts.review import ReviewFieldSnapshot, ReviewRequest
+from forj_review_service.runtime.review_service import ReviewService
 
 
 @pytest.mark.asyncio
@@ -27,7 +27,7 @@ async def test_source_workflow_keeps_only_nine_review_items_and_never_chooses_sa
                           document_type="vehicle_nameplate", business_scope="vehicle") for field, value in (
             ("vehicle.announcement_model", "MODEL100A80"), ("vehicle.engine_model", "ENGINE42-E6"))],
     ])
-    batch = AgentBatchResult(total_count=2, completed_count=2, observations=observations,
+    batch = RecognitionBatchResult(total_count=2, completed_count=2, observations=observations,
         recognized_documents=[RecognizedDocument(target_id=id, image_index=i, document_type=kind,
             business_scope="vehicle") for i, (id, kind) in enumerate([
                 ("license", "vehicle_license"), ("plate", "vehicle_nameplate")])])

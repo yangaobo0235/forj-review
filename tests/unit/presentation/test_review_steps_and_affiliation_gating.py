@@ -1,15 +1,15 @@
 import pytest
 
-from forj_review_assistant.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
-from forj_review_assistant.businesses.rules.affiliation import run_affiliation_subject
-from forj_review_assistant.contracts.recognition import AgentBatchResult
-from forj_review_assistant.contracts.review import (
+from forj_review_service.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
+from forj_review_service.businesses.rules.affiliation import run_affiliation_subject
+from forj_review_service.contracts.recognition import RecognitionBatchResult
+from forj_review_service.contracts.review import (
     FieldComparison,
     FieldObservation,
     FieldStatus,
     ReviewRequest,
 )
-from forj_review_assistant.runtime.workflow.capability_execution import execution_context
+from forj_review_service.runtime.workflow.capability_execution import execution_context
 
 
 def EvidenceFact(field: str, value: str, source_id: str, document_type: str) -> FieldObservation:
@@ -46,7 +46,7 @@ def test_affiliation_actions_follow_confirmed_subject_types_even_if_auxiliary_cu
     state = {
         "request": request,
         "profile": SCRAP_REPLACEMENT_QINGDAO,
-        "batch": AgentBatchResult(
+        "batch": RecognitionBatchResult(
             observations=[
                 EvidenceFact("identity_card.name", "张三", "id-front", "identity_card"),
                 EvidenceFact("identity_card.side", "FRONT", "id-front", "identity_card"),
@@ -70,10 +70,7 @@ def test_affiliation_actions_follow_confirmed_subject_types_even_if_auxiliary_cu
     assert {item.check_id: item.status for item in result.checks[1:]} == {
         "AFFILIATION-AUX-CUSTOMER-NAME": "CONFLICT",
     }
-    assert [item.owner_type for item in result.page_action_candidates] == [
-        "PERSONAL",
-        "PERSONAL",
-    ]
+    assert result.page_action_intents == ()
 
 
 @pytest.mark.parametrize("ocr_vin", ["vin-new", "WRONG-VIN", "", None])
@@ -89,7 +86,7 @@ def test_affiliation_actions_ignore_ocr_vin_and_accept_company_labels(ocr_vin) -
     state = {
         "request": request,
         "profile": SCRAP_REPLACEMENT_QINGDAO,
-        "batch": AgentBatchResult(
+        "batch": RecognitionBatchResult(
             observations=[
                 EvidenceFact(
                     "business_license.company_name",
@@ -116,7 +113,4 @@ def test_affiliation_actions_ignore_ocr_vin_and_accept_company_labels(ocr_vin) -
 
     assert [item.status for item in result.checks] == ["MATCH", "MATCH"]
     assert all("VIN" not in item.check_id for item in result.checks)
-    assert [action.field for action in result.page_action_candidates] == [
-        "old_vehicle.affiliation",
-        "new_vehicle.affiliation",
-    ]
+    assert result.page_action_intents == ()

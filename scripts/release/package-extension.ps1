@@ -8,9 +8,9 @@ $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "release-common.ps1")
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
-$extensionDirectory = Join-Path $projectRoot "apps/extension"
+$extensionDirectory = Join-Path $projectRoot "apps/review-extension"
 $distDirectory = Join-Path $extensionDirectory "dist"
-$outputDirectory = Join-Path $projectRoot ".tmp"
+$outputDirectory = Join-Path $projectRoot "release/extension"
 $outputName = if ($Local) { "forj-review-extension-local.zip" } else { "forj-review-extension-public.zip" }
 $outputZip = Join-Path $outputDirectory $outputName
 $buildScript = if ($Local) { "build" } else { "build:public" }
@@ -64,7 +64,7 @@ Write-Host "Frontend package completed." -ForegroundColor Green
 Write-Host "ZIP: $outputZip"
 Write-Host "Size: $sizeMb MB"
 if ($Local) {
-    Write-Host "Mode: local (127.0.0.1:8010)"
+    Write-Host "Mode: local (127.0.0.1:26101)"
 } else {
     Write-Host "Mode: public (Tencent Cloud server)"
 }

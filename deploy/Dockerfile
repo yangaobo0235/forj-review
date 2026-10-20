@@ -15,7 +15,6 @@ COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 COPY src ./src
-COPY review-pages ./review-pages
 RUN uv sync --frozen --no-dev
 
 
@@ -31,18 +30,18 @@ ENV PATH="/app/.venv/bin:${PATH}" \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends tzdata \
     && rm -rf /var/lib/apt/lists/* \
-    && groupadd --gid 10001 review-agent \
-    && useradd --uid 10001 --gid review-agent --home-dir /app --no-create-home review-agent
+    && groupadd --gid 10001 review-service \
+    && useradd --uid 10001 --gid review-service --home-dir /app --no-create-home review-service
 
 WORKDIR /app
 
-COPY --from=builder --chown=review-agent:review-agent /app /app
+COPY --from=builder --chown=review-service:review-service /app /app
 
-USER review-agent
+USER review-service
 
 ARG RELEASE_ID=development
 ENV REVIEW_RELEASE_ID=${RELEASE_ID}
 
-EXPOSE 8010
+EXPOSE 26101
 
-CMD ["uvicorn", "forj_review_assistant.main:app", "--host", "0.0.0.0", "--port", "8010", "--no-access-log"]
+CMD ["uvicorn", "forj_review_service.main:app", "--host", "0.0.0.0", "--port", "26101", "--no-access-log"]

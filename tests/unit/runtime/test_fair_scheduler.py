@@ -3,7 +3,7 @@ import threading
 import time
 from collections import defaultdict
 
-from forj_review_assistant.runtime.scheduling.fair_scheduler import FairAsyncScheduler
+from forj_review_service.runtime.scheduling.fair_scheduler import FairAsyncScheduler
 
 
 def test_scheduler_enforces_global_and_per_job_limits() -> None:

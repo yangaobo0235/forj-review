@@ -8,16 +8,16 @@ import logging
 
 import pytest
 
-from forj_review_assistant.businesses.profiles import TRANSFER_DEFAULT
-from forj_review_assistant.capabilities.registry import CapabilityRegistry
-from forj_review_assistant.capabilities.specs import (
+from forj_review_service.businesses.profiles import TRANSFER_DEFAULT
+from forj_review_service.capabilities.registry import CapabilityRegistry
+from forj_review_service.capabilities.specs import (
     CapabilityResult,
     CapabilitySpec,
     ReviewExecutionContext,
 )
-from forj_review_assistant.contracts.recognition import AgentBatchResult
-from forj_review_assistant.contracts.review import ReviewRequest
-from forj_review_assistant.runtime.workflow.planner import CapabilityPlanItem
+from forj_review_service.contracts.recognition import RecognitionBatchResult
+from forj_review_service.contracts.review import ReviewRequest
+from forj_review_service.runtime.workflow.planner import CapabilityPlanItem
 
 
 def context(trace_id: str = "trace-1") -> ReviewExecutionContext:
@@ -29,7 +29,7 @@ def context(trace_id: str = "trace-1") -> ReviewExecutionContext:
             trace_id=trace_id,
         ),
         profile=TRANSFER_DEFAULT,
-        batch=AgentBatchResult(),
+        batch=RecognitionBatchResult(),
         observations=(),
     )
 
@@ -47,7 +47,7 @@ async def test_successful_capability_logs_its_outcome_with_the_trace_id(caplog) 
         calls.append(inner_spec.capability_id)
         return CapabilityResult(capability_id="demo", status="SUCCEEDED")
 
-    with caplog.at_level(logging.INFO, logger="forj_review_assistant.capabilities.registry"):
+    with caplog.at_level(logging.INFO, logger="forj_review_service.capabilities.registry"):
         result = await registry(spec, handler).execute(
             spec, CapabilityPlanItem("demo", "READY"), context("abc123")
         )
@@ -68,7 +68,7 @@ async def test_capability_that_never_ran_is_still_logged(caplog) -> None:
     async def handler(_context, _spec):
         raise AssertionError("未 READY 的能力不应执行处理器")
 
-    with caplog.at_level(logging.INFO, logger="forj_review_assistant.capabilities.registry"):
+    with caplog.at_level(logging.INFO, logger="forj_review_service.capabilities.registry"):
         result = await registry(spec, handler).execute(
             spec, CapabilityPlanItem("demo", "SKIPPED", "材料缺失"), context()
         )
@@ -85,7 +85,7 @@ async def test_failed_capability_logs_exactly_one_outcome(caplog) -> None:
     async def handler(_context, _spec):
         raise RuntimeError("boom")
 
-    with caplog.at_level(logging.INFO, logger="forj_review_assistant.capabilities.registry"):
+    with caplog.at_level(logging.INFO, logger="forj_review_service.capabilities.registry"):
         result = await registry(spec, handler).execute(
             spec, CapabilityPlanItem("demo", "READY"), context()
         )
@@ -107,7 +107,7 @@ async def test_retried_capability_logs_one_outcome_with_the_attempt_count(caplog
             raise RuntimeError("第一次失败")
         return CapabilityResult(capability_id="demo", status="SUCCEEDED")
 
-    with caplog.at_level(logging.INFO, logger="forj_review_assistant.capabilities.registry"):
+    with caplog.at_level(logging.INFO, logger="forj_review_service.capabilities.registry"):
         result = await registry(spec, handler).execute(
             spec, CapabilityPlanItem("demo", "READY"), context()
         )

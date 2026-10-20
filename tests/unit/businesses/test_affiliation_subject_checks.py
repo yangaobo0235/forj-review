@@ -1,9 +1,9 @@
 import pytest
 
-from forj_review_assistant.businesses.rules.affiliation import (
+from forj_review_service.businesses.rules.affiliation import (
     build_affiliation_subject_check,
 )
-from forj_review_assistant.contracts.review import FieldObservation
+from forj_review_service.contracts.review import FieldObservation
 
 
 def item(field: str, value: str, source_id: str = "source") -> FieldObservation:
@@ -41,7 +41,6 @@ def test_same_person_requires_identity_and_different_people_conflict() -> None:
     assert same.check.status == "MATCH"
     assert same.owner_types == ("PERSONAL", "PERSONAL")
     assert different.check.status == "CONFLICT"
-    assert different.page_actions == ()
 
 
 def test_different_companies_match_only_with_separate_licenses_and_common_legal_representative() -> (
@@ -62,10 +61,6 @@ def test_different_companies_match_only_with_separate_licenses_and_common_legal_
 
     assert result.check.status == "MATCH"
     assert result.owner_types == ("COMPANY", "COMPANY")
-    assert [action.owner_type for action in result.page_actions] == [
-        "COMPANY",
-        "COMPANY",
-    ]
 
 
 def test_mixed_person_company_requires_matching_legal_representative() -> None:
@@ -142,7 +137,6 @@ def test_unreadable_or_non_person_representatives_never_authorize_actions(name):
         "甲运输有限公司", "乙运输有限公司", observations
     )
     assert result.check.status == "INSUFFICIENT"
-    assert result.page_actions == ()
 
 
 @pytest.mark.parametrize(
@@ -169,9 +163,6 @@ def test_subject_direction_and_name_matrix(old, new, legal, expected):
         observations.extend(identity(person, f"id-{index}"))
     result = build_affiliation_subject_check(old, new, observations)
     assert result.check.status == expected
-    assert bool(result.page_actions) == (expected == "MATCH")
-
-
 def test_subject_evidence_keeps_owners_and_relevant_license_sources_only():
     observations = [
         item("old_vehicle.owner", "甲运输有限公司", "old-image"),
@@ -211,7 +202,6 @@ def test_duplicate_matching_license_images_are_insufficient():
     ]
     result = build_affiliation_subject_check("甲运输有限公司", "张三", observations)
     assert result.check.status == "INSUFFICIENT"
-    assert result.page_actions == ()
 
 
 def test_page_owner_type_mismatch_is_reported_in_subject_check_without_false_requirements():

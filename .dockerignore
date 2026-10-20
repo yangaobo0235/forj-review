@@ -13,7 +13,7 @@ tests/
 htmlcov/
 .coverage
 .tmp/
-.review-agent/
+.review-config/
 logs/
 .git/
 .idea/
@@ -21,4 +21,5 @@ apps/
 docs/
 scripts/
 deploy/
+release/
 node_modules/

@@ -3,18 +3,18 @@ import ssl
 import httpx
 import pytest
 
-import forj_review_assistant.integrations.qr.web_verifier as qr_module
-from forj_review_assistant.contracts.recognition import (
-    AgentBatchResult,
+import forj_review_service.integrations.qr.web_verifier as qr_module
+from forj_review_service.contracts.recognition import (
+    RecognitionBatchResult,
     RecognizedDocument,
 )
-from forj_review_assistant.contracts.review import (
+from forj_review_service.contracts.review import (
     FieldObservation,
     FieldStatus,
     ImageInput,
     ReviewRequest,
 )
-from forj_review_assistant.integrations.qr.web_verifier import (
+from forj_review_service.integrations.qr.web_verifier import (
     QrCodeResult,
     QrWebVerifier,
     canonicalize_official_qr_url,
@@ -22,7 +22,7 @@ from forj_review_assistant.integrations.qr.web_verifier import (
     extract_page_fields,
     validate_qr_url,
 )
-from forj_review_assistant.runtime.review_service import ReviewService
+from forj_review_service.runtime.review_service import ReviewService
 
 
 def test_qr_url_requires_exact_official_https_host():
@@ -189,7 +189,7 @@ async def test_transient_connection_failures_retry_and_keep_safe_diagnostics(err
         return httpx.Response(200, text="回收证明编号：A1 车架号：LSVAA123456789012")
 
     verifier = QrWebVerifier(allowed_hosts=["qclt.mofcom.gov.cn"], transport=httpx.MockTransport(handler))
-    with caplog.at_level("INFO", logger="forj_review_assistant"):
+    with caplog.at_level("INFO", logger="forj_review_service"):
         result, attempts = await verifier.verify_with_retry("https://qclt.mofcom.gov.cn/sensitive-token", 4)
     assert result.status == "MATCH"
     assert calls == len(attempts) == 2
@@ -295,7 +295,7 @@ async def test_review_keeps_an_untrusted_qr_for_manual_review():
 
 
 @pytest.mark.asyncio
-async def test_review_scans_image_when_agent_identifies_scrap_certificate():
+async def test_review_scans_image_when_recognition_identifies_scrap_certificate():
     service = ReviewService()
     service.qr_web = QrWebVerifier(
         allowed_hosts=["qclt.mofcom.gov.cn"],
@@ -309,7 +309,7 @@ async def test_review_scans_image_when_agent_identifies_scrap_certificate():
         region="qingdao",
         images=[ImageInput(index=1, src="https://images.example.test/synthetic.jpg", businessScope="old_vehicle")],
     )
-    batch = AgentBatchResult(observations=[FieldObservation(
+    batch = RecognitionBatchResult(observations=[FieldObservation(
         field="vehicle.vin", source_type="image", source_id="1", image_index=1, value="LSVAA123456789012",
         document_type="scrap_certificate",
     )])
@@ -403,6 +403,6 @@ async def test_qr_decodes_original_for_unknown_scope_with_scrap_hint():
 
 
 def decoded_batch(service, index, url):
-    return AgentBatchResult(recognized_documents=[RecognizedDocument(
+    return RecognitionBatchResult(recognized_documents=[RecognizedDocument(
         target_id=str(index), image_index=index, document_type="scrap_certificate", qr_codes=[url],
     )])

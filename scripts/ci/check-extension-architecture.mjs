@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const extension = path.join(root, "apps/extension");
+const extension = path.join(root, "apps/review-extension");
 const src = path.join(extension, "src");
 const require = createRequire(path.join(extension, "package.json"));
 const ts = require("typescript");
@@ -29,7 +29,7 @@ function scriptSource(file) {
 
 // Keep both independently built frontends on Vue SFCs and plain TypeScript.
 const forbiddenFramework = /^(react(?:-dom|-test-renderer|-refresh)?|@types\/react(?:-dom)?|@vitejs\/plugin-react(?:-swc)?|@vitejs\/plugin-vue-jsx|@vue\/babel-plugin-jsx)(?:\/|$)/;
-for (const app of ["extension", "configuration-web"]) {
+for (const app of ["review-extension", "review-config-web"]) {
   const directory = path.join(root, "apps", app);
   const manifest = JSON.parse(fs.readFileSync(path.join(directory, "package.json"), "utf8"));
   for (const dependency of Object.keys({...manifest.dependencies, ...manifest.devDependencies})) {
@@ -97,7 +97,7 @@ for (const file of walk(src)) {
   visit(source);
 }
 
-const webSrc = path.join(root, "apps/configuration-web/src");
+const webSrc = path.join(root, "apps/review-config-web/src");
 if (fs.existsSync(webSrc)) {
   for (const file of walk(webSrc)) {
     const relative = path.relative(webSrc, file).replaceAll("\\", "/");

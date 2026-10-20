@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from forj_review_assistant.businesses.field_policies import field_policy
-from forj_review_assistant.evidence.fields.normalize import (
+from forj_review_service.businesses.field_policies import field_policy
+from forj_review_service.evidence.fields.normalize import (
     declared_normalizer,
     normalize_value,
 )

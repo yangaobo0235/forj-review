@@ -2,13 +2,13 @@
 
 import pytest
 
-from forj_review_assistant.businesses.completeness import evaluate_extracted, evaluate_presence
-from forj_review_assistant.businesses.profiles import (
+from forj_review_service.businesses.completeness import evaluate_extracted, evaluate_presence
+from forj_review_service.businesses.profiles import (
     SCRAP_REPLACEMENT_CHANGCHUN,
     SCRAP_REPLACEMENT_QINGDAO,
 )
-from forj_review_assistant.contracts.recognition import AgentBatchResult, DocumentClassification
-from forj_review_assistant.contracts.review import ReviewRequest
+from forj_review_service.contracts.recognition import DocumentClassification, RecognitionBatchResult
+from forj_review_service.contracts.review import ReviewRequest
 
 
 def material(index, kind, scope, sides=(), *, labelled=True):
@@ -43,7 +43,7 @@ def report(images, batch=None, **diagnostics):
 ])
 def test_complete_uploads_accept_either_subject_option_in_both_cities(profile, subject):
     request = ReviewRequest(page_url="https://example.test", images=[*vehicles(), *subject])
-    result = evaluate_extracted(request, profile, AgentBatchResult())
+    result = evaluate_extracted(request, profile, RecognitionBatchResult())
     assert result.presence.status == "COMPLETE"
     assert all(group.status == "PRESENT" for group in result.presence.groups)
     # 字段、登记证页码均未识别，不影响上传展示，也不伪造质量通过。
@@ -92,7 +92,7 @@ def test_unclassified_images_make_possible_missing_kinds_uncertain(scope):
 
 def test_reliable_content_classification_survives_failed_field_extraction():
     images = [material(0, "unknown", "old_vehicle", labelled=False)]
-    batch = AgentBatchResult(failed_count=1, failed_image_ids=["synthetic-0"], document_classifications=[
+    batch = RecognitionBatchResult(failed_count=1, failed_image_ids=["synthetic-0"], document_classifications=[
         DocumentClassification(target_id="synthetic-0", document_type="scrap_certificate", business_scope="old_vehicle"),
     ])
     result = report(images, batch)
@@ -107,7 +107,7 @@ def test_reliable_content_classification_survives_failed_field_extraction():
 
 def test_classified_identity_has_independent_side_presence():
     images = [material(0, "unknown", "identity", labelled=False)]
-    batch = AgentBatchResult(document_classifications=[DocumentClassification(
+    batch = RecognitionBatchResult(document_classifications=[DocumentClassification(
         target_id="synthetic-0", document_type="identity_card", business_scope="identity", identity_sides=["BACK"],
     )])
     assert [item.status for item in report(images, batch).groups[-1].alternatives[1]] == ["MISSING", "PRESENT"]

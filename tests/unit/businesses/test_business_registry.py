@@ -2,12 +2,12 @@ from dataclasses import replace
 
 import pytest
 
-from forj_review_assistant.businesses.registry import (
+from forj_review_service.businesses.registry import (
     BusinessProfileNotFound,
     BusinessRegistry,
     build_business_registry,
 )
-from forj_review_assistant.contracts.review import BusinessType, Region, ReviewRequest
+from forj_review_service.contracts.review import BusinessType, Region, ReviewRequest
 
 
 def test_registry_resolves_scrap_profile_by_identity() -> None:
@@ -27,11 +27,13 @@ def test_registry_resolves_scrap_profile_by_identity() -> None:
         "scrap_certificate_qr",
         "qingdao_replacement_policy",
         "affiliation_subject",
+        "set_affiliation",
+        "emission_standard",
         "verify_invoice",
         "owner_consistency",
         "vehicle_type_light_duty",
     }
-    assert profile.page_action_ids == ("fill_affiliation_fields",)
+    assert profile.page_action_ids == ("fill_review_fields", "verify_invoice", "set_affiliation")
 
 
 def test_registry_resolves_changchun_profiles_without_fallback() -> None:

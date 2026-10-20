@@ -5,30 +5,26 @@
 锁定声明本身的关键内容——改字段、改材料或改权威链都会在这里失败。
 """
 
-from forj_review_assistant.businesses.field_policies import (
+from forj_review_service.businesses.field_policies import (
     FIELD_EVIDENCE_POLICIES,
     field_policy,
 )
-from forj_review_assistant.businesses.fields import (
-    NEW_VEHICLE_AND_INVOICE_FIELDS,
-    OLD_VEHICLE_FIELDS,
-    PRIMARY_REVIEW_FIELDS,
-)
-from forj_review_assistant.businesses.materials import DOCUMENT_POLICIES
-from forj_review_assistant.businesses.packs import BUSINESS_PACKS
-from forj_review_assistant.businesses.packs import SCRAP_REPLACEMENT_PACK as PACK
-from forj_review_assistant.businesses.page_catalog import identities_for_path
-from forj_review_assistant.businesses.profiles import (
+from forj_review_service.businesses.materials import DOCUMENT_POLICIES
+from forj_review_service.businesses.packs import BUSINESS_PACKS
+from forj_review_service.businesses.packs import SCRAP_REPLACEMENT_PACK as PACK
+from forj_review_service.businesses.page_catalog import identities_for_path
+from forj_review_service.businesses.profiles import (
     SCRAP_REPLACEMENT_CHANGCHUN,
     SCRAP_REPLACEMENT_QINGDAO,
 )
-from forj_review_assistant.contracts.review import BusinessType, Region
+from forj_review_service.contracts.review import BusinessType, Region
 
 SCOPES = ("old_vehicle", "new_vehicle", "transfer", "unknown")
 
 
 def test_required_fields_keep_their_declared_order() -> None:
-    assert OLD_VEHICLE_FIELDS == (
+    sections = PACK.section_field_keys()
+    assert sections["old_vehicle"] == (
         "old_vehicle.type",
         "old_vehicle.recycle_date",
         "scrap_certificate.certificate_no",
@@ -36,8 +32,11 @@ def test_required_fields_keep_their_declared_order() -> None:
         "old_vehicle.plate_no",
         "old_vehicle.owner",
         "old_vehicle.engine_model",
+        "old_vehicle.emission_standard",
+        "old_vehicle.fuel_type",
+        "old_vehicle.is_jiefang",
     )
-    assert NEW_VEHICLE_AND_INVOICE_FIELDS == (
+    assert sections["new_vehicle"] == (
         "new_vehicle.fuel_type",
         "invoice.code",
         "invoice.invoice_no",
@@ -51,7 +50,7 @@ def test_required_fields_keep_their_declared_order() -> None:
         "application.customer_name",
         "application.terminal_phone",
     )
-    assert PRIMARY_REVIEW_FIELDS == OLD_VEHICLE_FIELDS + NEW_VEHICLE_AND_INVOICE_FIELDS
+    assert PACK.required_keys() == sections["old_vehicle"] + sections["new_vehicle"]
 
 
 def test_every_field_is_declared_once_and_has_a_label() -> None:
@@ -212,6 +211,8 @@ def test_shared_capabilities_are_declared_once_for_all_regions() -> None:
         "verify_invoice",
         "owner_consistency",
         "vehicle_type_light_duty",
+        "set_affiliation",
+        "emission_standard",
     }
     # 地区政策能力不在共用清单里，由地区推导。
     assert not any(item.endswith("_replacement_policy") for item in shared)

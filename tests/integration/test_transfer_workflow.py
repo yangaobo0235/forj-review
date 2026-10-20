@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from forj_review_assistant.businesses.completeness import evaluate_extracted
-from forj_review_assistant.businesses.materials import DOCUMENT_POLICIES
-from forj_review_assistant.businesses.packs.model import build_collect_manifest
-from forj_review_assistant.businesses.packs.transfer import (
+from forj_review_service.businesses.completeness import evaluate_extracted
+from forj_review_service.businesses.materials import DOCUMENT_POLICIES
+from forj_review_service.businesses.packs.model import build_collect_manifest
+from forj_review_service.businesses.packs.transfer import (
     NEW_FIELDS,
     NEW_KEYS,
     NEW_PREFIX,
@@ -19,14 +19,14 @@ from forj_review_assistant.businesses.packs.transfer import (
     USED_PREFIX,
     USED_SCOPE,
 )
-from forj_review_assistant.businesses.profiles import TRANSFER_DEFAULT as PROFILE
-from forj_review_assistant.businesses.routing import route_fields
-from forj_review_assistant.businesses.rules.transfer_documents import run_transfer_documents
-from forj_review_assistant.capabilities.specs import ReviewExecutionContext
-from forj_review_assistant.contracts.evidence import FieldObservation
-from forj_review_assistant.contracts.recognition import AgentBatchResult, RecognizedDocument
-from forj_review_assistant.contracts.review import ReviewFieldSnapshot, ReviewRequest
-from forj_review_assistant.runtime.review_service import ReviewService
+from forj_review_service.businesses.profiles import TRANSFER_DEFAULT as PROFILE
+from forj_review_service.businesses.routing import route_fields
+from forj_review_service.businesses.rules.transfer_documents import run_transfer_documents
+from forj_review_service.capabilities.specs import ReviewExecutionContext
+from forj_review_service.contracts.evidence import FieldObservation
+from forj_review_service.contracts.recognition import RecognitionBatchResult, RecognizedDocument
+from forj_review_service.contracts.review import ReviewFieldSnapshot, ReviewRequest
+from forj_review_service.runtime.review_service import ReviewService
 
 
 def fixture():
@@ -75,7 +75,7 @@ def fixture():
                  "businessScope": scope, "documentTypeHint": kind}
                 for i, (kind, scope, _) in enumerate(documents)],
     )
-    batch = AgentBatchResult(
+    batch = RecognitionBatchResult(
         total_count=3, completed_count=3, observations=observations,
         recognized_documents=[RecognizedDocument(
             target_id=f"doc-{i}", image_index=i, document_type=kind, business_scope=scope,
@@ -94,7 +94,7 @@ def special_checks(request, batch):
 def test_manifest_and_material_prompts_keep_the_two_invoices_separate():
     manifest = build_collect_manifest(TRANSFER_PACK)
     assert manifest == json.loads(Path(
-        "apps/extension/tests/fixtures/collect-manifest-transfer.json",
+        "apps/review-extension/tests/fixtures/collect-manifest-transfer.json",
     ).read_text(encoding="utf-8"))
     assert {f["key"] for f in manifest["fields"] if f["reviewable"]} == set(USED_KEYS + NEW_KEYS)
     assert set(manifest["writable_fields"]) == set(USED_KEYS + NEW_KEYS)
@@ -122,7 +122,7 @@ def test_misplaced_invoice_never_routes_to_the_other_vehicle(kind, scope):
 def test_upload_presence_is_independent_of_ocr_and_missing_pages(missing):
     request, batch = fixture()
     request.images = [image for i, image in enumerate(request.images) if i != missing]
-    report = evaluate_extracted(request, PROFILE, AgentBatchResult(failed_count=3))
+    report = evaluate_extracted(request, PROFILE, RecognitionBatchResult(failed_count=3))
     assert report.presence.status == ("COMPLETE" if missing is None else "INCOMPLETE")
     assert len(report.presence.groups) == 3
 

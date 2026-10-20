@@ -1,16 +1,16 @@
 import pytest
 
-from forj_review_assistant.businesses.packs.scrap_replacement import (
+from forj_review_service.businesses.packs.scrap_replacement import (
     CHANGCHUN_REPLACEMENT_POLICY,
     QINGDAO_REPLACEMENT_POLICY,
 )
-from forj_review_assistant.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
-from forj_review_assistant.businesses.rules.replacement_policy import (
+from forj_review_service.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
+from forj_review_service.businesses.rules.replacement_policy import (
     build_replacement_policy_checks,
 )
-from forj_review_assistant.contracts.review import FieldObservation, ReviewRequest
-from forj_review_assistant.presentation.advice import build_final_advice
-from forj_review_assistant.presentation.routing import build_review_tasks
+from forj_review_service.contracts.review import FieldObservation, ReviewRequest
+from forj_review_service.presentation.advice import build_final_advice
+from forj_review_service.presentation.routing import build_review_tasks
 
 
 def observation(field: str, value: str, document_type: str) -> FieldObservation:

@@ -1,14 +1,14 @@
 """新旧车所有人一致性：先比页面原值，再比对材料。"""
 
-from forj_review_assistant.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
-from forj_review_assistant.businesses.rules.owner_consistency import (
+from forj_review_service.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
+from forj_review_service.businesses.rules.owner_consistency import (
     OWNER_CONSISTENCY_CHECK_ID,
     build_owner_consistency_check,
 )
-from forj_review_assistant.capabilities.specs import ReviewExecutionContext
-from forj_review_assistant.contracts.recognition import AgentBatchResult
-from forj_review_assistant.contracts.review import FieldObservation, ReviewRequest
-from forj_review_assistant.presentation.routing import build_review_tasks
+from forj_review_service.capabilities.specs import ReviewExecutionContext
+from forj_review_service.contracts.recognition import RecognitionBatchResult
+from forj_review_service.contracts.review import FieldObservation, ReviewRequest
+from forj_review_service.presentation.routing import build_review_tasks
 
 OLD = "old_vehicle"
 NEW = "new_vehicle"
@@ -49,7 +49,7 @@ def run(page_fields: dict | None = None, observations: list | None = None):
                 page_fields=PAGE if page_fields is None else page_fields,
             ),
             profile=SCRAP_REPLACEMENT_QINGDAO,
-            batch=AgentBatchResult(),
+            batch=RecognitionBatchResult(),
             observations=tuple(all_materials() if observations is None else observations),
         )
     ).checks

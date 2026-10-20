@@ -6,29 +6,29 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from forj_review_assistant.observability.context import current_log_context, log_context
-from forj_review_assistant.observability.http import RequestLoggingMiddleware
-from forj_review_assistant.observability.logging import (
+from forj_review_service.observability.context import current_log_context, log_context
+from forj_review_service.observability.http import RequestLoggingMiddleware
+from forj_review_service.observability.logging import (
     BoundedDailyFileHandler,
     SafeFormatter,
     configured_logging,
 )
-from forj_review_assistant.runtime.scheduling.fair_scheduler import FairAsyncScheduler
+from forj_review_service.runtime.scheduling.fair_scheduler import FairAsyncScheduler
 
 
 def test_production_sinks_include_all_namespaces_once_and_restore(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("REVIEW_LOG_DIR", str(tmp_path))
     monkeypatch.setenv("REVIEW_LOG_REQUIRED", "true")
     monkeypatch.setenv("REVIEW_LOG_LEVEL", "INFO")
-    app = logging.getLogger("forj_review_assistant")
+    app = logging.getLogger("forj_review_service")
     previous = list(app.handlers), app.level, app.propagate
     for run in range(2):
         with configured_logging(), log_context(trace_id=f"trace-{run}", job_id="job-1"):
-            logging.getLogger("forj_review_assistant.runtime.workflow.graph").info("test graph event %d", run)
-            logging.getLogger("forj_review_assistant.capabilities.registry").info("test capability event %d", run)
+            logging.getLogger("forj_review_service.runtime.workflow.graph").info("test graph event %d", run)
+            logging.getLogger("forj_review_service.capabilities.registry").info("test capability event %d", run)
             logging.getLogger("uvicorn.error").info("test server event %d", run)
         assert (app.handlers, app.level, app.propagate) == previous
-    file_text = (tmp_path / "review-agent.log").read_text(encoding="utf-8")
+    file_text = (tmp_path / "review-service.log").read_text(encoding="utf-8")
     console_text = capsys.readouterr().err
     for text in (file_text, console_text):
         for run in range(2):
@@ -56,20 +56,20 @@ def test_formatter_omits_exception_payload_and_bounds_injection():
 
 
 def test_file_rotates_by_size_and_day_with_one_archive_limit(tmp_path):
-    path = tmp_path / "review-agent.log"
+    path = tmp_path / "review-service.log"
     handler = BoundedDailyFileHandler(str(path), max_bytes=160, backup_count=2)
     logger = logging.Logger("rotation")
     logger.addHandler(handler)
     for _ in range(6):
         logger.info("x" * 90)
-    assert len(list(tmp_path.glob("review-agent.log.*"))) == 2
+    assert len(list(tmp_path.glob("review-service.log.*"))) == 2
     # Old daily archives count toward the same limit on the next rotation.
-    (tmp_path / "review-agent.log.2000-01-01").write_text("legacy", encoding="utf-8")
+    (tmp_path / "review-service.log.2000-01-01").write_text("legacy", encoding="utf-8")
     handler.rolloverAt = int(time.time()) - 1
     logger.info("midnight")
     handler.close()
-    assert len(list(tmp_path.glob("review-agent.log.*"))) == 2
-    assert not (tmp_path / "review-agent.log.2000-01-01").exists()
+    assert len(list(tmp_path.glob("review-service.log.*"))) == 2
+    assert not (tmp_path / "review-service.log.2000-01-01").exists()
     assert "midnight" in path.read_text(encoding="utf-8")
 
 
@@ -82,7 +82,7 @@ def test_required_log_failure_is_fatal_but_local_can_degrade(tmp_path, monkeypat
         pass
     monkeypatch.setenv("REVIEW_LOG_REQUIRED", "false")
     with configured_logging():
-        logging.getLogger("forj_review_assistant").info("console remains available")
+        logging.getLogger("forj_review_service").info("console remains available")
 
 
 def test_disk_write_failure_does_not_dump_raw_arguments(tmp_path, monkeypatch, capsys):
@@ -133,7 +133,7 @@ def test_http_logs_routes_and_errors_without_queries_or_noisy_polls(caplog):
     def job(job_id: str):
         return {"status": "RUNNING"}
 
-    with caplog.at_level(logging.INFO, logger="forj_review_assistant"), TestClient(app) as client:
+    with caplog.at_level(logging.INFO, logger="forj_review_service"), TestClient(app) as client:
         client.get("/health?token=SECRET")
         client.get("/api/review/jobs/private-id")
         client.post("/api/review/jobs/private-id?token=SECRET", json={"name": "PRIVATE"})

@@ -1,15 +1,15 @@
 
-from forj_review_assistant.contracts.recognition import AgentBatchResult
-from forj_review_assistant.contracts.review import (
+from forj_review_service.contracts.recognition import RecognitionBatchResult
+from forj_review_service.contracts.review import (
     FieldObservation,
     ReviewRequest,
 )
-from forj_review_assistant.runtime.review_service import ReviewService
+from forj_review_service.runtime.review_service import ReviewService
 
 
 def test_scrap_target_profile_uncertain_observation_forces_review(client) -> None:
     """目标 Profile 保留一票否决：图片 uncertain 时同字段比较强制人工复核。"""
-    batch = AgentBatchResult(
+    batch = RecognitionBatchResult(
         observations=[
             FieldObservation(
                 field="new_vehicle.vin",

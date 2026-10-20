@@ -7,14 +7,14 @@ import numpy as np
 import pytest
 import zxingcpp
 
-from forj_review_assistant.contracts.recognition import (
-    AgentBatchResult,
+from forj_review_service.contracts.recognition import (
+    RecognitionBatchResult,
     RecognizedDocument,
 )
-from forj_review_assistant.contracts.review import ImageInput, ReviewRequest
-from forj_review_assistant.integrations.qr.decoder import QrImageDecoder
-from forj_review_assistant.integrations.qr.web_verifier import QrWebVerifier
-from forj_review_assistant.runtime.review_service import ReviewService
+from forj_review_service.contracts.review import ImageInput, ReviewRequest
+from forj_review_service.integrations.qr.decoder import QrImageDecoder
+from forj_review_service.integrations.qr.web_verifier import QrWebVerifier
+from forj_review_service.runtime.review_service import ReviewService
 
 
 def qr_png(value: str) -> bytes:
@@ -125,7 +125,7 @@ async def test_qr_decoder_reports_download_failure_without_retry():
 async def test_review_uses_local_decoder_when_model_document_has_no_qr_code():
     class Decoder:
         async def decode(self, image_url):
-            from forj_review_assistant.integrations.qr.decoder import QrDecodeResult
+            from forj_review_service.integrations.qr.decoder import QrDecodeResult
             return QrDecodeResult(values=("https://qclt.mofcom.gov.cn/proof/local",), decoder="zxing")
 
     service = ReviewService(qr_decoder=Decoder())
@@ -141,7 +141,7 @@ async def test_review_uses_local_decoder_when_model_document_has_no_qr_code():
         category_hint="scrap_certificate",
         business_scope="old_vehicle",
     )
-    batch = AgentBatchResult(
+    batch = RecognitionBatchResult(
         total_count=1,
         recognized_documents=[
             RecognizedDocument(

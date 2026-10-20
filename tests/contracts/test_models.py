@@ -1,19 +1,19 @@
 import pytest
 from pydantic import ValidationError
 
-from forj_review_assistant.config.settings import load_qwen_config
-from forj_review_assistant.contracts.checks import CheckResultValue
-from forj_review_assistant.contracts.recognition import (
+from forj_review_service.config.settings import load_qwen_config
+from forj_review_service.contracts.checks import CheckResultValue
+from forj_review_service.contracts.recognition import (
     AgentAdvice,
-    AgentBatchResult,
     CheckResult,
     MaterialCompletenessIssue,
     MaterialCompletenessReport,
+    RecognitionBatchResult,
     RecognizedDocument,
     RetryAttempt,
     RetrySummary,
 )
-from forj_review_assistant.contracts.review import (
+from forj_review_service.contracts.review import (
     BusinessType,
     FieldStatus,
     ImageInput,
@@ -60,7 +60,7 @@ def test_response_and_batch_preserve_completeness_and_retry_records() -> None:
         reason_code="low_confidence", strategy="focused_extraction",
         result="succeeded", duration_ms=1200,
     )])
-    batch = AgentBatchResult(
+    batch = RecognitionBatchResult(
         recognized_documents=[RecognizedDocument(
             target_id="transfer-02", document_type="registration_certificate",
             business_scope="transfer", covered_pages=[1, 2],
@@ -71,12 +71,12 @@ def test_response_and_batch_preserve_completeness_and_retry_records() -> None:
 
 
 def test_upload_presence_is_additive_and_survives_job_serialization():
-    from forj_review_assistant.contracts.recognition import QwenClassification
-    from forj_review_assistant.contracts.review import ReviewJobSnapshot
+    from forj_review_service.contracts.recognition import QwenClassification
+    from forj_review_service.contracts.review import ReviewJobSnapshot
 
     legacy = MaterialCompletenessReport(phase="EXTRACTED", status="INCOMPLETE")
     assert legacy.presence is None
-    assert AgentBatchResult().document_classifications == []
+    assert RecognitionBatchResult().document_classifications == []
     assert QwenClassification(document_type="identity_card", confidence=0.9).identity_sides == []
     assert ImageInput(index=0, src="https://example.test/0.jpg").identity_sides_hint == []
     assert ImageInput(index=0, src="https://example.test/0.jpg", identitySidesHint=["BACK"]).identity_sides_hint == ["BACK"]

@@ -1,4 +1,4 @@
-from forj_review_assistant.businesses.routing import (
+from forj_review_service.businesses.routing import (
     normalize_document_type,
     route_fields,
 )
@@ -22,6 +22,14 @@ def test_vehicle_fields_are_mapped_by_business_scope() -> None:
     }
     assert old_limitation is None
     assert new_limitation is None
+
+
+def test_registration_brand_only_routes_to_the_active_jiefang_flag():
+    routed, limitation = route_fields(
+        "old_vehicle", "registration_certificate", {"vehicle.brand": "解放牌"},
+    )
+    assert routed == {"old_vehicle.is_jiefang": "解放牌"}
+    assert limitation is None
 
 
 def test_legacy_vehicle_prefix_is_remapped_to_authoritative_scope() -> None:

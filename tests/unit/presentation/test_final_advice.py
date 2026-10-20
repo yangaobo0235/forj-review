@@ -1,11 +1,11 @@
-from forj_review_assistant.contracts.recognition import CheckResult
-from forj_review_assistant.contracts.review import (
+from forj_review_service.contracts.recognition import CheckResult
+from forj_review_service.contracts.review import (
     EvidenceFact,
     FieldComparison,
     FieldStatus,
     QrCheck,
 )
-from forj_review_assistant.presentation.advice import build_final_advice
+from forj_review_service.presentation.advice import build_final_advice
 
 
 def matched(field: str) -> FieldComparison:

@@ -5,8 +5,8 @@
 同字段比较冲突和二维码官网冲突，业务规则检查结果不抬升风险级别。
 """
 
-from forj_review_assistant.contracts.recognition import AgentBatchResult, CheckResult
-from forj_review_assistant.contracts.review import (
+from forj_review_service.contracts.recognition import CheckResult, RecognitionBatchResult
+from forj_review_service.contracts.review import (
     BusinessType,
     FieldComparison,
     FieldStatus,
@@ -14,7 +14,7 @@ from forj_review_assistant.contracts.review import (
     Region,
     ReviewResponse,
 )
-from forj_review_assistant.presentation.assembly import assemble_review_response
+from forj_review_service.presentation.assembly import assemble_review_response
 
 
 def response_for(
@@ -63,7 +63,7 @@ def test_legacy_comparison_conflict_is_high_with_legacy_summary() -> None:
             Region.DEFAULT,
             comparisons=[comparison("transfer.vin", FieldStatus.CONFLICT)],
         ),
-        AgentBatchResult(),
+        RecognitionBatchResult(),
         business_checks=[],
     )
 
@@ -75,7 +75,7 @@ def test_legacy_comparison_conflict_is_high_with_legacy_summary() -> None:
 def test_legacy_business_check_conflict_does_not_raise_risk_level() -> None:
     assembled = assemble_review_response(
         response_for(BusinessType.TRANSFER, Region.DEFAULT),
-        AgentBatchResult(),
+        RecognitionBatchResult(),
         business_checks=[conflict_business_check()],
     )
 
@@ -91,7 +91,7 @@ def test_legacy_review_required_comparison_is_medium_with_legacy_summary() -> No
             Region.DEFAULT,
             comparisons=[comparison("transfer.vin", FieldStatus.REVIEW_REQUIRED)],
         ),
-        AgentBatchResult(),
+        RecognitionBatchResult(),
         business_checks=[],
     )
 
@@ -106,7 +106,7 @@ def test_legacy_clean_review_is_low_with_legacy_summary() -> None:
             Region.DEFAULT,
             comparisons=[comparison("transfer.vin", FieldStatus.MATCH)],
         ),
-        AgentBatchResult(),
+        RecognitionBatchResult(),
         business_checks=[],
     )
 
@@ -118,7 +118,7 @@ def test_legacy_clean_review_is_low_with_legacy_summary() -> None:
 def test_target_profile_business_conflict_is_high_with_advice_summary() -> None:
     assembled = assemble_review_response(
         response_for(BusinessType.SCRAP_REPLACEMENT, Region.QINGDAO),
-        AgentBatchResult(),
+        RecognitionBatchResult(),
         business_checks=[conflict_business_check()],
     )
 
@@ -134,7 +134,7 @@ def test_target_profile_clean_review_is_low_with_advice_summary() -> None:
             Region.CHANGCHUN,
             comparisons=[comparison("new_vehicle.vin", FieldStatus.MATCH)],
         ),
-        AgentBatchResult(),
+        RecognitionBatchResult(),
         business_checks=[],
     )
 

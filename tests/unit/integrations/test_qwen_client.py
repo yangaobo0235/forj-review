@@ -3,10 +3,10 @@ import json
 import httpx
 import pytest
 
-from forj_review_assistant.businesses.materials import DOCUMENT_POLICIES
-from forj_review_assistant.config.settings import QwenConfig
-from forj_review_assistant.contracts.recognition import QwenExtraction
-from forj_review_assistant.integrations.recognition.client import (
+from forj_review_service.businesses.materials import DOCUMENT_POLICIES
+from forj_review_service.config.settings import QwenConfig
+from forj_review_service.contracts.recognition import QwenExtraction
+from forj_review_service.integrations.recognition.client import (
     QwenClient,
     QwenResponseSchemaError,
     QwenResponseSyntaxError,
@@ -438,7 +438,7 @@ async def test_qwen_client_logs_duration_and_token_usage(caplog) -> None:
         })
 
     client = QwenClient(CONFIG, transport=httpx.MockTransport(handler))
-    with caplog.at_level("INFO", logger="forj_review_assistant"):
+    with caplog.at_level("INFO", logger="forj_review_service"):
         await client.classify_document({**IMAGE, "image_id": "old_vehicle-03"})
 
     lines = [
@@ -467,7 +467,7 @@ async def test_qwen_client_logs_rate_limited_failure_without_leaking_body(caplog
 
     client = QwenClient(CONFIG, transport=httpx.MockTransport(handler))
     with (
-        caplog.at_level("INFO", logger="forj_review_assistant"),
+        caplog.at_level("INFO", logger="forj_review_service"),
         pytest.raises(RuntimeError, match="HTTP 429"),
     ):
         await client.classify_document({**IMAGE, "image_id": "id_card-01"})

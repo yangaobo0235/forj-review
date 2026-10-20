@@ -6,17 +6,17 @@ import json
 import httpx
 import pytest
 
-from forj_review_assistant.businesses.materials import DOCUMENT_POLICIES
-from forj_review_assistant.config.settings import QwenConfig
-from forj_review_assistant.contracts.review import (
+from forj_review_service.businesses.materials import DOCUMENT_POLICIES
+from forj_review_service.config.settings import QwenConfig
+from forj_review_service.contracts.review import (
     FieldStatus,
     ImageInput,
     ReviewRequest,
 )
-from forj_review_assistant.integrations.qr.web_verifier import QrWebVerifier
-from forj_review_assistant.integrations.recognition.client import QwenClient
-from forj_review_assistant.integrations.recognition.extraction import AgentService
-from forj_review_assistant.runtime.review_service import ReviewService
+from forj_review_service.integrations.qr.web_verifier import QrWebVerifier
+from forj_review_service.integrations.recognition.client import QwenClient
+from forj_review_service.integrations.recognition.extraction import RecognitionService
+from forj_review_service.runtime.review_service import ReviewService
 
 IMAGE_URL = "https://images.example.test/original.jpg?signature=synthetic%2Btoken&expires=123"
 QR_URL = "https://qclt.mofcom.gov.cn/deal/scrap/validdata/synthetic"
@@ -46,14 +46,14 @@ async def test_url_extraction_and_qr_verification_reuse_one_model_response(qr_ur
         return httpx.Response(200, text="回收证明编号：SYNTHETIC-1 车架号：LSVAA123456789012")
 
     service = ReviewService()
-    service.agent = AgentService(QwenClient(
+    service.recognition = RecognitionService(QwenClient(
         QwenConfig("synthetic-key", "https://model.example.test/v1", "qwen-test"),
         transport=httpx.MockTransport(model_handler),
     ))
     service.qr_web = QrWebVerifier(allowed_hosts=["qclt.mofcom.gov.cn"], transport=httpx.MockTransport(official_handler))
     image = ImageInput(index=0, image_id="url-0", src=IMAGE_URL,
                        category_hint="scrap_certificate", business_scope="old_vehicle")
-    batch = await service.agent.extract_async([image])
+    batch = await service.recognition.extract_async([image])
     assert batch.completed_count == 1
     checks = await service._collect_qr_checks(
         ReviewRequest(page_url="https://example.test/review", region="qingdao", images=[image]), batch,
@@ -80,8 +80,8 @@ async def test_missing_extraction_is_not_reported_as_a_broken_image_link():
     request = ReviewRequest(page_url="https://example.test/review", region="qingdao", images=[
         ImageInput(index=0, src=IMAGE_URL, category_hint="scrap_certificate", business_scope="old_vehicle"),
     ])
-    from forj_review_assistant.contracts.recognition import AgentBatchResult
-    checks = await service._collect_qr_checks(request, AgentBatchResult())
+    from forj_review_service.contracts.recognition import RecognitionBatchResult
+    checks = await service._collect_qr_checks(request, RecognitionBatchResult())
     assert len(checks) == 1
     assert checks[0].status is FieldStatus.REVIEW_REQUIRED
     assert "材料识别未完成" in checks[0].message
@@ -99,9 +99,9 @@ async def test_url_focused_retry_keeps_original_url(monkeypatch):
         result = {"document_type": "invoice", "fields": {"invoice.invoice_no": "123"}, "confidence": 0.96}
         return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(result)}}]})
 
-    agent = AgentService(QwenClient(QwenConfig("key", "https://model.example.test/v1", "qwen-test"),
+    recognition = RecognitionService(QwenClient(QwenConfig("key", "https://model.example.test/v1", "qwen-test"),
                                     transport=httpx.MockTransport(handler)))
-    await agent._extract_image(
+    await recognition._extract_image(
         ImageInput(index=0, src=IMAGE_URL, category_hint="invoice", business_scope="new_vehicle"),
         retry_reason="uncertain_field:invoice.invoice_no", focus_boxes=[[0.1, 0.2, 0.3, 0.4]],
     )
@@ -124,9 +124,9 @@ async def test_inaccessible_url_records_failure_without_upload_fallback(status):
         calls.append(request)
         return httpx.Response(status, json={"error": "synthetic image access failure"})
 
-    agent = AgentService(QwenClient(QwenConfig("key", "https://model.example.test/v1", "qwen-test"),
+    recognition = RecognitionService(QwenClient(QwenConfig("key", "https://model.example.test/v1", "qwen-test"),
                                     transport=httpx.MockTransport(handler)))
-    batch = await agent.extract_async([
+    batch = await recognition.extract_async([
         ImageInput(index=0, src=IMAGE_URL, category_hint="invoice", business_scope="new_vehicle"),
     ])
     assert batch.failed_count == 1
@@ -141,9 +141,9 @@ async def test_url_model_timeout_keeps_manual_review_outcome():
         await asyncio.sleep(0.1)
         raise AssertionError("request must be cancelled at the image deadline")
 
-    agent = AgentService(QwenClient(QwenConfig("key", "https://model.example.test/v1", "qwen-test"),
+    recognition = RecognitionService(QwenClient(QwenConfig("key", "https://model.example.test/v1", "qwen-test"),
                                     transport=httpx.MockTransport(handler)), image_timeout=0.01)
-    batch = await agent.extract_async([
+    batch = await recognition.extract_async([
         ImageInput(index=0, src=IMAGE_URL, category_hint="invoice", business_scope="new_vehicle"),
     ])
     assert batch.timed_out_count == 1

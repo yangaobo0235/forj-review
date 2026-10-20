@@ -6,7 +6,7 @@ import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-PACKAGE = "forj_review_assistant"
+PACKAGE = "forj_review_service"
 SOURCE = ROOT / "src" / PACKAGE
 GENERIC_WORKFLOW_MODULES = {
     "runtime/workflow/graph.py", "runtime/workflow/capability_execution.py",
@@ -87,49 +87,48 @@ def check_architecture(source: Path = SOURCE) -> list[str]:
                 f"{PACKAGE}.runtime.jobs.manager."
             ):
                 findings.append(f"{relative.as_posix()}:{line}: progress view imports job lifecycle manager: {module}")
-            if relative.parts[:2] == ("businesses", "configuration") and module.startswith((
+            if relative.parts[:2] == ("businesses", "page_config") and module.startswith((
                 f"{PACKAGE}.runtime", f"{PACKAGE}.integrations",
                 f"{PACKAGE}.interfaces", f"{PACKAGE}.bootstrap",
             )):
                 findings.append(f"{relative.as_posix()}:{line}: configuration compiler imports an execution adapter: {module}")
-        if relative.parts[:2] == ("businesses", "configuration"):
+        if relative.parts[:2] == ("businesses", "page_config"):
             for node in ast.walk(tree):
                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in {
                     "eval", "exec", "__import__",
                 }:
                     findings.append(f"{relative.as_posix()}:{node.lineno}: configuration executes dynamic code")
         if relative.as_posix() in GENERIC_WORKFLOW_MODULES:
-            business_ids = {"scrap_certificate_qr", "fill_affiliation_fields", "verify_invoice", "old_vehicle.affiliation", "new_vehicle.affiliation", "scrap_replacement"}
+            business_ids = {"scrap_certificate_qr", "verify_invoice", "old_vehicle.affiliation", "new_vehicle.affiliation", "scrap_replacement"}
             for node in ast.walk(tree):
                 if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value in business_ids:
                     findings.append(f"{relative.as_posix()}:{node.lineno}: workflow embeds business registration: {node.value}")
     if source == SOURCE:
-        findings.extend(check_configuration_agent())
+        findings.extend(check_configuration_service())
     return findings
 
 
-def check_configuration_agent(source: Path | None = None) -> list[str]:
-    source = source or ROOT / "src/forj_configuration_agent"
+def check_configuration_service(source: Path | None = None) -> list[str]:
+    source = source or ROOT / "src/forj_review_config_service"
     findings = []
     shared = (
-        "forj_review_assistant.businesses.configuration.",
-        "forj_review_assistant.businesses.packs.",
-        "forj_review_assistant.businesses.page_catalog.",
-        "forj_review_assistant.businesses.rules.catalog.",
-        "forj_review_assistant.config.configuration_io.",
-        "forj_review_assistant.runtime.configuration.service.",
+        "forj_review_service.businesses.page_config.",
+        "forj_review_service.businesses.packs.",
+        "forj_review_service.businesses.page_catalog.",
+        "forj_review_service.businesses.rules.catalog.",
+        "forj_review_service.runtime.configuration.service.",
     )
     for path in sorted(source.rglob("*.py")):
         relative = path.relative_to(source)
         group = relative.parts[0] if len(relative.parts) > 1 else "entrypoint"
-        package = ".".join(["forj_configuration_agent", *relative.parts[:-1]])
+        package = ".".join(["forj_review_config_service", *relative.parts[:-1]])
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for line, module in runtime_imports(tree, package):
             reason = None
-            if module.startswith("forj_review_assistant"):
+            if module.startswith("forj_review_service"):
                 if relative.parts[:2] != ("integrations", "review_kernel") or not module.startswith(shared):
                     reason = "cross-package access must use the registered review_kernel adapter API"
-            elif module.startswith("forj_configuration_agent."):
+            elif module.startswith("forj_review_config_service."):
                 target = module.split(".")[1]
                 if group in {"contracts", "config"} and target != group:
                     reason = "foundation imports execution"
@@ -138,12 +137,12 @@ def check_configuration_agent(source: Path | None = None) -> list[str]:
                 elif group == "integrations" and target in {"application", "workflow", "interfaces", "bootstrap"}:
                     reason = "adapter imports orchestration"
             if reason:
-                findings.append(f"forj_configuration_agent/{relative.as_posix()}:{line}: {reason}: {module}")
-    # The old package must never depend on the configuration agent.
-    if source == ROOT / "src/forj_configuration_agent":
+                findings.append(f"forj_review_config_service/{relative.as_posix()}:{line}: {reason}: {module}")
+    # The review service must never depend on the configuration service.
+    if source == ROOT / "src/forj_review_config_service":
         for path in SOURCE.rglob("*.py"):
-            if "forj_configuration_agent" in path.read_text(encoding="utf-8"):
-                findings.append(f"{path.name}: audit package depends on configuration agent")
+            if "forj_review_config_service" in path.read_text(encoding="utf-8"):
+                findings.append(f"{path.name}: audit package depends on configuration service")
     return findings
 
 

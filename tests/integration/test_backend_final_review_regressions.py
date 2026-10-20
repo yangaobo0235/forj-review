@@ -2,24 +2,25 @@ from dataclasses import replace
 
 import pytest
 
-from forj_review_assistant.businesses.packs.scrap_replacement import (
+from forj_review_service.businesses.packs.scrap_replacement import (
     CHANGCHUN_REPLACEMENT_POLICY,
     QINGDAO_REPLACEMENT_POLICY,
 )
-from forj_review_assistant.businesses.profiles import (
+from forj_review_service.businesses.profiles import (
     SCRAP_REPLACEMENT_CHANGCHUN,
     SCRAP_REPLACEMENT_QINGDAO,
 )
-from forj_review_assistant.businesses.registry import BusinessRegistry
-from forj_review_assistant.businesses.rules.affiliation import (
+from forj_review_service.businesses.registry import BusinessRegistry
+from forj_review_service.businesses.rules.affiliation import (
     build_affiliation_subject_check,
 )
-from forj_review_assistant.contracts.recognition import AgentBatchResult
-from forj_review_assistant.contracts.review import (
+from forj_review_service.capabilities.specs import CapabilitySpec
+from forj_review_service.contracts.recognition import RecognitionBatchResult
+from forj_review_service.contracts.review import (
     FieldObservation,
     ReviewRequest,
 )
-from forj_review_assistant.runtime.review_service import ReviewService
+from forj_review_service.runtime.review_service import ReviewService
 
 
 @pytest.mark.parametrize(
@@ -58,9 +59,7 @@ def test_known_admin_route_rejects_conflicting_request_and_api(client, path, bus
         ("consistency-qingdao", "consistency", "default"),
     ],
 )
-def test_matching_admin_route_and_unknown_test_url_remain_accepted(
-    path, business, region
-):
+def test_matching_admin_route_and_unknown_test_url_remain_accepted(path, business, region):
     service = ReviewService()
     assert (
         service.resolve_profile(
@@ -106,13 +105,16 @@ def test_matching_admin_route_and_unknown_test_url_remain_accepted(
                 )
             },
         ),
-        (SCRAP_REPLACEMENT_CHANGCHUN, {"rule_groups": ("qingdao_replacement_policy",)}),
+        (
+            SCRAP_REPLACEMENT_CHANGCHUN,
+            {"capability_specs": (CapabilitySpec("qingdao_replacement_policy"),)},
+        ),
         (
             SCRAP_REPLACEMENT_QINGDAO,
             {
-                "rule_groups": (
-                    "qingdao_replacement_policy",
-                    "changchun_replacement_policy",
+                "capability_specs": (
+                    CapabilitySpec("qingdao_replacement_policy"),
+                    CapabilitySpec("changchun_replacement_policy"),
                 )
             },
         ),
@@ -128,7 +130,7 @@ async def run_review(*, region, page_fields, business_type="scrap_replacement"):
     service = ReviewService()
 
     async def extract(*args):
-        return AgentBatchResult()
+        return RecognitionBatchResult()
 
     service._extract_documents = extract
     return await service.assist_async(
@@ -146,8 +148,14 @@ async def run_review(*, region, page_fields, business_type="scrap_replacement"):
 async def test_scrap_profiles_return_valid_display_routes(region):
     result = await run_review(region=region, page_fields={"new_vehicle.vin": "VIN-1"})
     assert all(step.display_target in {"PAGE_FIELD", "ASSISTANT"} for step in result.review_tasks)
-    assert all(step.page_field for step in result.review_tasks if step.display_target == "PAGE_FIELD")
-    assert all(step.page_field is None for step in result.review_tasks if step.display_target == "ASSISTANT")
+    assert all(
+        step.page_field for step in result.review_tasks if step.display_target == "PAGE_FIELD"
+    )
+    assert all(
+        step.page_field is None
+        for step in result.review_tasks
+        if step.display_target == "ASSISTANT"
+    )
 
 
 @pytest.mark.asyncio
@@ -158,9 +166,7 @@ async def test_scrap_runs_route_collected_field_to_page_and_rest_to_assistant(re
     assert [step.sequence for step in result.review_tasks] == list(
         range(1, len(result.review_tasks) + 1)
     )
-    vin_step = next(
-        step for step in result.review_tasks if step.step_id == "FIELD-NEW-VEHICLE-VIN"
-    )
+    vin_step = next(step for step in result.review_tasks if step.step_id == "FIELD-NEW-VEHICLE-VIN")
     assert vin_step.display_target == "ASSISTANT"
     assert vin_step.page_field is None
     # 页面外政策、二维码、挂靠守护与材料异常只能停留在助手面板。
@@ -169,8 +175,6 @@ async def test_scrap_runs_route_collected_field_to_page_and_rest_to_assistant(re
         for step in result.review_tasks
         if step.step_id != "FIELD-NEW-VEHICLE-VIN"
     )
-    # 缺少主体关系证据时不生成任何挂靠填写意图。
-    assert result.page_fill_intent == []
 
 
 def license_observations(source, company, representative, *, uncertain=False):
@@ -192,19 +196,19 @@ def license_observations(source, company, representative, *, uncertain=False):
 
 
 def mixed_licenses(kind):
-    observations = license_observations(
-        "a1", "甲有限公司", "张三"
-    ) + license_observations("b", "乙有限公司", "张三")
+    observations = license_observations("a1", "甲有限公司", "张三") + license_observations(
+        "b", "乙有限公司", "张三"
+    )
     if kind == "uncertain":
         observations += license_observations("a2", "甲有限公司", "李四", uncertain=True)
     elif kind == "same_source_conflict":
-        observations += license_observations(
-            "a2", "甲有限公司", "李四"
-        ) + license_observations("a2", "甲有限公司", "王五")
+        observations += license_observations("a2", "甲有限公司", "李四") + license_observations(
+            "a2", "甲有限公司", "王五"
+        )
     elif kind == "company_name_conflict":
-        observations += license_observations(
-            "a2", "甲有限公司", "李四"
-        ) + license_observations("a2", "丙有限公司", "李四")
+        observations += license_observations("a2", "甲有限公司", "李四") + license_observations(
+            "a2", "丙有限公司", "李四"
+        )
     elif kind == "masked":
         observations += license_observations("a2", "甲有限公司", "张*")
     else:
@@ -233,13 +237,10 @@ def mixed_licenses(kind):
 def test_all_relevant_license_sources_participate_in_sufficiency(kind, old, new):
     result = build_affiliation_subject_check(old, new, mixed_licenses(kind))
     assert result.check.status == "INSUFFICIENT"
-    assert result.page_actions == ()
     assert {item.source_id for item in result.check.evidence} >= {"a1", "a2"}
 
 
-@pytest.mark.parametrize(
-    "kind", ["uncertain", "same_source_conflict", "masked", "clear_conflict"]
-)
+@pytest.mark.parametrize("kind", ["uncertain", "same_source_conflict", "masked", "clear_conflict"])
 @pytest.mark.asyncio
 async def test_graph_blocks_intent_for_additional_bad_license_with_all_auxiliary_checks_matching(
     kind, monkeypatch
@@ -262,7 +263,7 @@ async def test_graph_blocks_intent_for_additional_bad_license_with_all_auxiliary
     service = ReviewService()
 
     async def extract(*args):
-        return AgentBatchResult(observations=observations)
+        return RecognitionBatchResult(observations=observations)
 
     monkeypatch.setattr(service, "_extract_documents", extract)
     result = await service.assist_async(
@@ -282,11 +283,8 @@ async def test_graph_blocks_intent_for_additional_bad_license_with_all_auxiliary
     checks = {item.check_id: item.status for item in result.cross_checks}
     assert checks["AFFILIATION-SUBJECT-001"] == "INSUFFICIENT"
     assert all(
-        status == "MATCH"
-        for key, status in checks.items()
-        if key.startswith("AFFILIATION-AUX")
+        status == "MATCH" for key, status in checks.items() if key.startswith("AFFILIATION-AUX")
     )
-    assert result.page_fill_intent == []
 
 
 @pytest.mark.parametrize(
@@ -300,9 +298,7 @@ async def test_graph_blocks_intent_for_additional_bad_license_with_all_auxiliary
         ("consistency-changchun", "qingdao", "consistency"),
     ],
 )
-def test_transfer_compatibility_does_not_allow_other_route_contexts(
-    path, region, stage
-):
+def test_transfer_compatibility_does_not_allow_other_route_contexts(path, region, stage):
     request = ReviewRequest(
         page_url=f"https://admin.forjtruck.com/{path}/review/1",
         business_type="transfer",
@@ -316,9 +312,16 @@ def test_transfer_compatibility_does_not_allow_other_route_contexts(
 @pytest.mark.parametrize("path", ["consistency-qingdao", "consistency-changchun"])
 def test_consistency_routes_keep_page_identity_separate_from_configured_rules(path):
     service = ReviewService(load_model=False)
-    request = ReviewRequest(page_url=f"https://admin.forjtruck.com/{path}/review/1",
-                            business_type="consistency", region="default")
-    for business, configured in (("vehicle_source", True), ("transfer", True), ("consistency", False)):
+    request = ReviewRequest(
+        page_url=f"https://admin.forjtruck.com/{path}/review/1",
+        business_type="consistency",
+        region="default",
+    )
+    for business, configured in (
+        ("vehicle_source", True),
+        ("transfer", True),
+        ("consistency", False),
+    ):
         profile = service.resolve_profile(request.model_copy(update={"business_type": business}))
         assert profile.rules_configured is configured
         if business == "transfer":
@@ -353,4 +356,3 @@ def test_identical_company_requires_one_unambiguous_matching_license(kind, expec
     )
     result = build_affiliation_subject_check("甲有限公司", "甲有限公司", observations)
     assert result.check.status == expected
-    assert bool(result.page_actions) == (expected == "MATCH")

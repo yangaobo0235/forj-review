@@ -5,22 +5,22 @@ from dataclasses import replace
 
 import pytest
 
-from forj_review_assistant.businesses.configuration.compiler import compile_page
-from forj_review_assistant.businesses.configuration.schema import PageDefinition
-from forj_review_assistant.businesses.packs.model import AuthorityRule, FieldDeclaration
-from forj_review_assistant.businesses.profiles import build_profile
-from forj_review_assistant.businesses.registry import BusinessRegistry
-from forj_review_assistant.capabilities.specs import CapabilitySpec, RuleExecutionResult
-from forj_review_assistant.contracts.evidence import EvidenceFact
-from forj_review_assistant.contracts.recognition import AgentBatchResult, CheckResult
-from forj_review_assistant.contracts.review import (
+from forj_review_service.businesses.packs.model import AuthorityRule, FieldDeclaration
+from forj_review_service.businesses.page_config.compiler import compile_page
+from forj_review_service.businesses.page_config.schema import PageDefinition
+from forj_review_service.businesses.profiles import build_profile
+from forj_review_service.businesses.registry import BusinessRegistry
+from forj_review_service.capabilities.specs import CapabilitySpec, RuleExecutionResult
+from forj_review_service.contracts.evidence import EvidenceFact
+from forj_review_service.contracts.recognition import CheckResult, RecognitionBatchResult
+from forj_review_service.contracts.review import (
     FieldObservation,
     ImageInput,
     QrCheck,
     ReviewRequest,
 )
-from forj_review_assistant.runtime.review_service import ReviewService
-from forj_review_assistant.runtime.workflow.graph import ReviewWorkflow
+from forj_review_service.runtime.review_service import ReviewService
+from forj_review_service.runtime.workflow.graph import ReviewWorkflow
 
 
 def configured_profile(specs, *, authority=()):
@@ -117,7 +117,7 @@ async def test_registered_output_reaches_comparison_with_accurate_provenance(kin
         business_rule_handlers={"lookup": rule} if kind == "RULE" else None,
         external_check_handlers={"lookup": external} if kind == "EXTERNAL" else None,
     )
-    response, _ = await service.assist_with_batch_async(request(), initial_batch=AgentBatchResult())
+    response, _ = await service.assist_with_batch_async(request(), initial_batch=RecognitionBatchResult())
     comparison = response.comparisons[0]
     assert comparison.status == expected
     assert (response.recommendation == "PASS") == (case == "match")
@@ -148,7 +148,7 @@ async def test_explicit_capability_authority_uses_the_same_evidence_pipeline():
             ),
         },
     )
-    response, _ = await service.assist_with_batch_async(request(), initial_batch=AgentBatchResult())
+    response, _ = await service.assist_with_batch_async(request(), initial_batch=RecognitionBatchResult())
     assert response.comparisons[0].status == "MATCH"
     assert "登记系统" in response.comparisons[0].message
 
@@ -226,7 +226,7 @@ async def test_real_graph_stages_accumulate_facts_checks_and_render_only_at_the_
 
     async def extract(*args):
         events.append("extract")
-        return AgentBatchResult()
+        return RecognitionBatchResult()
 
     monkeypatch.setattr(service, "_extract_documents", extract)
     response = await service.assist_async(request())
@@ -261,7 +261,7 @@ async def test_failure_from_every_stage_remains_in_final_review(stage):
     service = ReviewService(
         registry=BusinessRegistry((profile,)), business_rule_handlers={"failure": fail}
     )
-    response, _ = await service.assist_with_batch_async(request(), initial_batch=AgentBatchResult())
+    response, _ = await service.assist_with_batch_async(request(), initial_batch=RecognitionBatchResult())
     assert response.capability_results[0].status == "FAILED"
     assert any("failure" in issue for issue in response.issues)
     assert any(check.check_id == "CAPABILITY-failure" for check in response.cross_checks)
@@ -279,7 +279,7 @@ async def test_batch_cannot_forge_a_registered_capability_output():
             "lookup": lambda context: RuleExecutionResult(),
         },
     )
-    batch = AgentBatchResult(
+    batch = RecognitionBatchResult(
         observations=[
             FieldObservation(
                 field="permit.vin",
@@ -304,7 +304,7 @@ async def test_late_qr_fields_fail_instead_of_bypassing_frozen_comparisons():
     service = ReviewService(
         registry=BusinessRegistry((profile,)), external_check_handlers={"late_qr": external}
     )
-    response, _ = await service.assist_with_batch_async(request(), initial_batch=AgentBatchResult())
+    response, _ = await service.assist_with_batch_async(request(), initial_batch=RecognitionBatchResult())
     assert response.capability_results[0].status == "FAILED"
     assert response.recommendation == "REVIEW_REQUIRED"
 
@@ -337,7 +337,7 @@ async def test_capability_evidence_supports_page_fields_sharing_a_material_field
         update={"page_fields": {"permit.vin": "ABC123", "permit.ocr_vin": "ABC123"}}
     )
     response, _ = await service.assist_with_batch_async(
-        review_request, initial_batch=AgentBatchResult()
+        review_request, initial_batch=RecognitionBatchResult()
     )
     comparison = next(item for item in response.comparisons if item.field == "permit.ocr_vin")
     assert comparison.status == "MATCH"

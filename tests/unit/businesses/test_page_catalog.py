@@ -1,12 +1,12 @@
 """活动页面目录及独立配置的共享地址声明。"""
 
-from forj_review_assistant.businesses.page_catalog import (
+from forj_review_service.businesses.page_catalog import (
     active_identities,
     identities_for_path,
     page_catalog,
     path_matches,
 )
-from forj_review_assistant.contracts.review import BusinessType, Region
+from forj_review_service.contracts.review import BusinessType, Region
 
 
 def test_bundled_extension_catalog_matches_backend_declarations():
@@ -14,9 +14,9 @@ def test_bundled_extension_catalog_matches_backend_declarations():
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[3]
-    source = (root / "apps/extension/src/platform/browser/catalog/bundled-page-catalog.ts").read_text(encoding="utf-8")
+    source = (root / "apps/review-extension/src/platform/browser/catalog/bundled-page-catalog.ts").read_text(encoding="utf-8")
     bundled = json.loads(source.split(" = ", 1)[1].strip().removesuffix(";"))
-    assert bundled == page_catalog(), "运行 scripts/dev/export-page-catalog.py 更新识别目录"
+    assert bundled == page_catalog(), "运行 scripts/dev/export_page_catalog.py 更新识别目录"
 
 
 def test_consistency_paths_keep_all_three_review_steps() -> None:
@@ -42,8 +42,8 @@ def test_unique_paths_look_the_same_as_before() -> None:
 
 
 def test_configured_pages_can_share_route_with_distinct_tabs() -> None:
-    from forj_review_assistant.businesses.configuration.compiler import compile_page
-    from forj_review_assistant.businesses.configuration.schema import PageDefinition
+    from forj_review_service.businesses.page_config.compiler import compile_page
+    from forj_review_service.businesses.page_config.schema import PageDefinition
 
     profiles = tuple(compile_page(PageDefinition.model_validate({
         "page_id": key, "business_type": key, "title": title, "paths": ["/sample-review"],
@@ -99,7 +99,7 @@ def test_catalog_shape_matches_what_the_browser_reads() -> None:
 
 
 def test_scrap_pack_declared_anchors_reach_the_catalog() -> None:
-    from forj_review_assistant.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
+    from forj_review_service.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
     declaration = SCRAP_REPLACEMENT_QINGDAO.pack_declaration.region(Region.QINGDAO)
     identity = next(item for item in active_identities()
                     if item.business_type == BusinessType.SCRAP_REPLACEMENT and item.region == Region.QINGDAO)

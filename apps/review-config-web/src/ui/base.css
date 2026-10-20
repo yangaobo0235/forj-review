@@ -1,0 +1,128 @@
+/* Configuration Web owns these styles; no dependency on extension UI or styles. */
+:root {
+  font-family: Inter,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  font-size: 14px;
+  --accent: #398ec4;
+  --accent-dark: #2478af;
+  --border: #e8ecf0;
+  --muted: #737b85;
+  color: #202124;
+  background: #fff
+}
+
+* {
+  box-sizing: border-box
+}
+
+body {
+  margin: 0;
+  min-width: 390px;
+  background: #fff;
+  color: #202124
+}
+
+button,input,textarea,select {
+  font: inherit
+}
+
+button,a,input,textarea,select {
+  -webkit-tap-highlight-color: transparent
+}
+
+button {
+  cursor: pointer
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: .43
+}
+
+button,select,input,textarea {
+  outline: none
+}
+
+button:focus-visible,a:focus-visible {
+  outline: 2px solid #2478af;
+  outline-offset: 3px
+}
+
+input:focus,textarea:focus,select:focus {
+  border-color: #a7d1ed
+}
+
+button {
+  transition: background .16s,color .16s,border-color .16s,box-shadow .16s
+}
+
+button svg {
+  flex: none
+}
+
+button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: none;
+  color: inherit
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none
+}
+
+h1,h2,h3,p {
+  margin: 0
+}
+
+strong {
+  font-weight: 600
+}
+
+select {
+  max-width: 100%
+}
+
+input[type=checkbox] {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  cursor: pointer;
+  accent-color: #6eafd8
+}
+
+input:not([type=checkbox]),select,textarea {
+  border: 1px solid #e2e2e2;
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px 12px;
+  color: #242629;
+  min-width: 0
+}
+
+textarea {
+  resize: vertical
+}
+
+pre {
+  font: 11px/1.75 Consolas,monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-radius: 8px;
+  padding: 12px;
+  max-height: 320px;
+  overflow: auto;
+  background: #f3f6fa;
+  color: #5e6874
+}
+
+svg {
+  vertical-align: middle;
+  flex: none
+}

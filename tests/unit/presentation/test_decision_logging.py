@@ -8,14 +8,14 @@ from __future__ import annotations
 
 import logging
 
-from forj_review_assistant.contracts.evidence import EvidenceFact
-from forj_review_assistant.contracts.review import (
+from forj_review_service.contracts.evidence import EvidenceFact
+from forj_review_service.contracts.review import (
     FieldComparison,
     FieldStatus,
     Recommendation,
     ReviewResponse,
 )
-from forj_review_assistant.presentation.response import _log_decision
+from forj_review_service.presentation.response import _log_decision
 
 
 def _response(comparisons: list[FieldComparison]) -> ReviewResponse:
@@ -41,7 +41,7 @@ def test_decision_line_lists_every_field_status(caplog) -> None:
             EvidenceFact(source="img", document_type="registration_certificate", value="鲁B99999"),
         ],
     )
-    with caplog.at_level(logging.INFO, logger="forj_review_assistant"):
+    with caplog.at_level(logging.INFO, logger="forj_review_service"):
         _log_decision(_response([comparison]))
     line = next(item for item in caplog.records if "review decision" in item.getMessage())
     assert "trace_id=trace-1" in line.getMessage()
@@ -60,7 +60,7 @@ def test_decision_line_never_carries_business_values(caplog) -> None:
         right_value="LFNAHXMW3SAB49001",
         evidence=[EvidenceFact(source="img", document_type="vehicle_license", value="LFNAHXMW3SAB49001")],
     )
-    with caplog.at_level(logging.INFO, logger="forj_review_assistant"):
+    with caplog.at_level(logging.INFO, logger="forj_review_service"):
         _log_decision(_response([comparison]))
     text = "\n".join(record.getMessage() for record in caplog.records if "review decision" in record.getMessage())
     assert "transfer.vin:MATCH" in text
@@ -78,7 +78,7 @@ def test_uncertain_evidence_is_named_so_a_false_conflict_can_be_traced(caplog) -
             EvidenceFact(source="img", document_type="vehicle_license", value="2026-08-13"),
         ],
     )
-    with caplog.at_level(logging.INFO, logger="forj_review_assistant"):
+    with caplog.at_level(logging.INFO, logger="forj_review_service"):
         _log_decision(_response([comparison]))
     text = "\n".join(record.getMessage() for record in caplog.records if "review decision" in record.getMessage())
     assert "uncertain=transfer.invoice_date:used_car_invoice" in text
@@ -87,7 +87,7 @@ def test_uncertain_evidence_is_named_so_a_false_conflict_can_be_traced(caplog) -
 
 def test_unconfigured_note_is_separate_from_a_real_review(caplog) -> None:
     """未配置与"跑完没冲突"必须能区分，否则回测集会被空响应污染。"""
-    with caplog.at_level(logging.INFO, logger="forj_review_assistant"):
+    with caplog.at_level(logging.INFO, logger="forj_review_service"):
         _log_decision(_response([]), "unconfigured")
     text = "\n".join(record.getMessage() for record in caplog.records if "review decision" in record.getMessage())
     assert "note=unconfigured" in text

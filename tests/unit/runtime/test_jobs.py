@@ -3,15 +3,15 @@ import threading
 
 import pytest
 
-from forj_review_assistant.contracts.recognition import AgentBatchResult
-from forj_review_assistant.contracts.review import (
+from forj_review_service.contracts.recognition import RecognitionBatchResult
+from forj_review_service.contracts.review import (
     JobStatus,
     ReviewJobPhase,
     ReviewRequest,
     ReviewResponse,
 )
-from forj_review_assistant.runtime.jobs.manager import ReviewJobManager
-from forj_review_assistant.runtime.scheduling.fair_scheduler import FairAsyncScheduler
+from forj_review_service.runtime.jobs.manager import ReviewJobManager
+from forj_review_service.runtime.scheduling.fair_scheduler import FairAsyncScheduler
 
 
 class UrlService:
@@ -23,7 +23,7 @@ class UrlService:
         assert image.recognition_source == image.src
         image_id = str(image.image_id or image.index)
         self.extracted_ids.append(image_id)
-        return AgentBatchResult(total_count=1, completed_count=1, completed_image_ids=[image_id])
+        return RecognitionBatchResult(total_count=1, completed_count=1, completed_image_ids=[image_id])
 
     async def assist_with_batch_async(self, request, initial_batch):
         self.final_batches.append(initial_batch.model_copy(deep=True))
@@ -55,9 +55,9 @@ def test_url_job_schedules_each_image_once_and_reuses_batch():
 
 
 def test_presence_survives_partial_image_merge_and_is_visible_before_finalization():
-    from forj_review_assistant.businesses.completeness import evaluate_extracted
-    from forj_review_assistant.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
-    from forj_review_assistant.contracts.recognition import DocumentClassification
+    from forj_review_service.businesses.completeness import evaluate_extracted
+    from forj_review_service.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
+    from forj_review_service.contracts.recognition import DocumentClassification
 
     started = threading.Event()
     release = threading.Event()
@@ -66,8 +66,8 @@ def test_presence_survives_partial_image_merge_and_is_visible_before_finalizatio
         async def extract_image_async(self, request, image):
             image_id = str(image.image_id)
             if image.index == 1:
-                return AgentBatchResult(total_count=1, timed_out_count=1, timed_out_image_ids=[image_id])
-            return AgentBatchResult(total_count=1, failed_count=1, failed_image_ids=[image_id], document_classifications=[
+                return RecognitionBatchResult(total_count=1, timed_out_count=1, timed_out_image_ids=[image_id])
+            return RecognitionBatchResult(total_count=1, failed_count=1, failed_image_ids=[image_id], document_classifications=[
                 DocumentClassification(target_id=image_id, document_type="vehicle_license", business_scope="old_vehicle"),
             ])
 
@@ -127,7 +127,7 @@ def test_collection_errors_are_archived_without_model_call():
 def test_missing_terminal_results_are_partial():
     class Incomplete(UrlService):
         async def extract_image_async(self, request, image):
-            return AgentBatchResult(total_count=1)
+            return RecognitionBatchResult(total_count=1)
     manager = ReviewJobManager(Incomplete())
     created = manager.create(request(1))
     assert manager.wait(created.job_id, 2)
@@ -139,7 +139,7 @@ def test_missing_terminal_results_are_partial():
 def test_timeouts_are_partial_and_retained():
     class Timeout(UrlService):
         async def extract_image_async(self, request, image):
-            return AgentBatchResult(total_count=1, timed_out_count=1, timed_out_image_ids=[str(image.image_id)])
+            return RecognitionBatchResult(total_count=1, timed_out_count=1, timed_out_image_ids=[str(image.image_id)])
     manager = ReviewJobManager(Timeout())
     created = manager.create(request(1))
     assert manager.wait(created.job_id, 2)
@@ -171,7 +171,7 @@ def test_finalization_failure_only_exposes_exception_type(caplog):
         async def assist_with_batch_async(self, request, initial_batch):
             raise AttributeError("private model details")
     manager = ReviewJobManager(Failing())
-    with caplog.at_level("ERROR", logger="forj_review_assistant"):
+    with caplog.at_level("ERROR", logger="forj_review_service"):
         created = manager.create(request(0))
         assert manager.wait(created.job_id, 2)
     snapshot = manager.get(created.job_id)
@@ -194,9 +194,9 @@ def test_groups_use_scope_when_category_hint_disagrees():
 
 
 def test_custom_page_progress_uses_declared_scopes():
-    from forj_review_assistant.businesses.configuration.compiler import compile_page
-    from forj_review_assistant.businesses.configuration.schema import PageDefinition
-    from forj_review_assistant.businesses.registry import BusinessRegistry
+    from forj_review_service.businesses.page_config.compiler import compile_page
+    from forj_review_service.businesses.page_config.schema import PageDefinition
+    from forj_review_service.businesses.registry import BusinessRegistry
 
     profile = compile_page(PageDefinition.model_validate({
         "page_id": "custom", "business_type": "custom", "title": "自定义页面",
@@ -265,7 +265,7 @@ def test_cancel_removes_queued_images_and_never_finalizes():
 
 def test_phase_timing_snapshot_isolation_and_expiry(caplog):
     manager = ReviewJobManager(UrlService(), ttl_seconds=60)
-    with caplog.at_level("INFO", logger="forj_review_assistant"):
+    with caplog.at_level("INFO", logger="forj_review_service"):
         created = manager.create(request(1))
         assert manager.wait(created.job_id, 2)
     lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("review job timing")]
@@ -296,7 +296,7 @@ def test_every_terminal_outcome_logs_timing_once(outcome, caplog):
 
     manager = ReviewJobManager(TerminalService())
     try:
-        with caplog.at_level("INFO", logger="forj_review_assistant"):
+        with caplog.at_level("INFO", logger="forj_review_service"):
             created = manager.create(request(1))
             assert entered.wait(2)
             if outcome == "CANCELLED":

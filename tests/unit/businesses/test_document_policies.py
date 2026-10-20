@@ -1,4 +1,4 @@
-from forj_review_assistant.businesses.materials import (
+from forj_review_service.businesses.materials import (
     DOCUMENT_POLICIES,
     build_classification_prompt,
     build_unknown_extraction_prompt,
@@ -20,7 +20,8 @@ def test_each_supported_document_has_a_specific_allowlist() -> None:
     )
     assert DOCUMENT_POLICIES["registration_certificate"].fields == (
         "vehicle.owner", "vehicle.vin", "vehicle.engine_model", "vehicle.type",
-        "vehicle.fuel_type", "vehicle.registration_date", "registration.covered_pages",
+        "vehicle.fuel_type", "vehicle.emission_standard", "vehicle.brand",
+        "vehicle.registration_date", "registration.covered_pages",
         "vehicle.announcement_model",
         "transfer_registration.vin",
     )
@@ -112,7 +113,7 @@ def test_registration_certificate_prompt_fields_follow_business_scope() -> None:
 
 
 def test_new_owner_allowlist_excludes_registration_certificate() -> None:
-    from forj_review_assistant.businesses.field_policies import field_policy
+    from forj_review_service.businesses.field_policies import field_policy
 
     policy = field_policy("new_vehicle.owner")
     assert policy is not None

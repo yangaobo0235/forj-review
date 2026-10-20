@@ -1,117 +1,64 @@
-# forj-review-assistant
+# FORJ 审核辅助系统
 
-FORJ Review Assistant 是一个面向车辆审核页面的浏览器扩展与审核服务。系统通过统一的 LangGraph（流程图编排框架）主图处理材料采集、文档识别、证据聚合、字段比较、业务规则和审核任务生成；前端只负责页面采集、任务呈现和受控页面操作。
+项目名称：`forj-review`。帮助审核员识别车辆材料、核对证据和执行审核规则，并通过审核配置工作台维护各业务页面的审核方式。审核建议供人工处理；系统不代替审核员提交审批。
 
-当前已配置的审核业务包括青岛和长春的报废置换审核、车源审核和过户审核。一致性审核保留为未配置（`rules_configured=false`）的人工复核入口。
+## 两个功能，四个模块
 
-普通页面和字段调整优先使用[声明式页面配置](docs/指南/声明式页面配置.md)：一份 JSON 可新增页面或继承现有版本，字段的提取白名单、材料映射和采集清单由后端生成，前端不增加业务规则。启用前执行 `uv run forj-review-assistant --check-pages review-pages`，再设置 `REVIEW_PAGES_DIR` 并重启服务。独立的[本地聊天配置 Agent](docs/指南/聊天审核配置Agent.md)已接入，用于通过聊天编辑、验证和确认保存配置；真实业务页完整验收仍需完成。
+| 功能 | 模块 | 代码目录 | 运行位置 |
+| --- | --- | --- | --- |
+| 审核辅助 | 审核浏览器扩展 | `apps/review-extension` | 使用者浏览器；界面开发预览 26199 |
+| 审核辅助 | 审核服务 | `src/forj_review_service` | 服务器；开发时可在本机 26101 运行 |
+| 审核配置 | 审核配置工作台 | `apps/review-config-web` | 本机 26198 |
+| 审核配置 | 审核配置服务 | `src/forj_review_config_service` | 本机 26102 |
 
-当前先在本地使用；有效配置预览、版本差异、离线回放和历史快照见[本地页面配置工作流](docs/指南/本地页面配置工作流.md)。这些命令不启动服务、不调用模型，也不发布到服务器。
+当前配置包括青岛、长春报废置换、车源和过户审核。一致性审核保留未配置的人工复核入口。配置功能仍在本机开发和验收，不包含在服务器上线范围中。
 
 ## 文档入口
 
-- [文档总索引](docs/索引.md)
-- [项目结构与迁移](docs/指南/项目结构与迁移.md)：目录树、职责、命名、旧路径对照与升级步骤
-- [业务底座与遗留审计](docs/参考/业务底座改造与遗留审计.md)：结构判断、已处理耦合及保留的兼容边界
+| 想了解什么 | 阅读文档 |
+| --- | --- |
+| 每个目录做什么、修改功能应去哪里 | [项目结构](docs/项目结构.md) |
+| 安装依赖、配置环境、IDEA 启动与检查 | [本地开发](docs/本地开发.md) |
+| 审核员怎样使用扩展 | [审核辅助使用](docs/审核辅助使用.md) |
+| 如何通过工作台维护审核配置 | [审核配置使用](docs/审核配置使用.md) |
+| 识别、证据、规则、任务与页面动作怎样协作 | [审核执行原理](docs/审核执行原理.md) |
+| 配置格式、离线回放、新增业务与能力 | [审核配置开发](docs/审核配置开发.md) |
+| 打包、上传、PostgreSQL、日志、更新与回滚 | [部署运维](docs/部署运维.md) |
+| 数据表、字段注释、关联、约束与维护约定 | [数据库设计](docs/数据库设计.md) |
 
-## 安装与启动
+具体业务规则：[青岛报废置换](docs/业务/报废置换-青岛.md)、[长春报废置换](docs/业务/报废置换-长春.md)、[车源审核](docs/业务/车源审核.md)、[过户审核](docs/业务/过户审核.md)。新增规则使用[业务文档模板](docs/业务/业务文档模板.md)。协作规范见 [CONTRIBUTING](.github/CONTRIBUTING.md)，安全反馈见 [SECURITY](.github/SECURITY.md)。
 
-本地采用两个前端、两个后端：浏览器扩展负责审核界面和页面采集；独立 Web 负责配置聊天。`.\start-review-local.cmd` 启动审核服务（8010），`.\start-configuration-local.cmd` 启动配置服务（8011），`.\start-configuration-web.cmd` 启动独立 Web（5174）。按需运行，生命周期独立。本机无需凭证或配对，详见[使用指南](docs/指南/聊天审核配置Agent.md)。
+## 本地快速入口
 
-在仓库根目录执行，需要 Python 3.11/3.12、uv、Node.js 22.18 或更新版本：
+需要 Python 3.11/3.12、uv、Node.js 22.18+。先按[本地开发](docs/本地开发.md)准备已有 PostgreSQL 连接和各服务的模型配置，再在仓库根目录执行：
 
 ```powershell
 uv sync --locked
-npm --prefix apps/extension ci
-npm --prefix apps/configuration-web ci
-# 首次使用：在两个后端各自的 .env 填写模型密钥
-Copy-Item src/forj_review_assistant/.env.example src/forj_review_assistant/.env
-Copy-Item src/forj_configuration_agent/.env.example src/forj_configuration_agent/.env
-uv run forj-review-assistant --reload
+npm --prefix apps/review-extension ci
+npm --prefix apps/review-config-web ci
 ```
 
-两个后端只读取自己包下的 `.env`，不自动读取根目录 `.env`。模型凭据分别使用 `DASHSCOPE_API_KEY` 和 `CONFIGURATION_API_KEY`；两份模板的 `REVIEW_PAGES_DIR=../../review-pages` 解析到同一个正式配置目录。本文件内的目录值相对于 `.env` 所在目录解析，进程环境变量仍优先。已有根目录 `.env` 保留但不再加载，请自行按服务迁移需要的值，勿用模板覆盖已有配置。
-
-前端的可选示例位于 `apps/extension/.env.example` 和 `apps/configuration-web/.env.example`，仅包含本地 API 地址，无需模型密钥。IDEA 两个后端的模块、端口和工作目录不变；移除以前手填的模型凭据或 `REVIEW_PAGES_DIR` 环境变量，让各自 `.env` 生效，无需启用 EnvFile 插件。
-
-在另一个终端运行 `npm run build:extension`，在浏览器扩展管理页加载 `apps/extension/dist`。发布构建使用 `npm run build:extension:public`。
-
-使用聊天配置时，另开终端运行 `.\start-configuration-local.cmd` 与 `.\start-configuration-web.cmd`。在扩展点击“采集并打开配置工作台”，自动跳到 [本地配置 Web](http://127.0.0.1:5174/)，再选择范围并聊天。Web 包位于 `apps/configuration-web`，由独立 Vite 进程提供；后端只提供 API。更新本轮代码后需重启配置后端、重载构建后的扩展并刷新业务页。
-
-Windows 一键发布打包入口（在仓库根目录执行）：
+按需在不同终端启动：
 
 ```powershell
-.\package-server.cmd
-.\package-extension.cmd
-# 本地后端版本的插件：.\package-extension.cmd -Local
+uv run forj-review-service --reload
+uv run forj-review-config-service
+npm run dev:configuration
 ```
 
-后端包是 `.tmp/server-release/forj-review-server.tar.gz`，公网插件是 `.tmp/forj-review-extension-public.zip`。服务器脚本和 Compose 在打包生成的 `.tmp/server-deploy/`，首次手动上传一次。日常流程：本机打包 → 服务器 `./stop-review.sh` → 手动覆盖后端包 → `./start-review.sh`。插件包在使用者电脑更新。完整步骤与回滚见[部署指南](docs/指南/部署.md)，日志位置与字段见[日志与排查](docs/参考/日志与排查.md)。
+扩展执行 `npm run build:extension`，在浏览器加载 `apps/review-extension/dist`，随后刷新业务页面。
 
-**想理解系统**
+两个后端仅使用 PostgreSQL，共享私密 `.env.database`，分别读取各自包下的模型 `.env`。本机与服务器统一连接 `forj_review.public`，共享页面配置和车型目录。审核任务与结果暂存内存并过期清理；配置会话、页面快照及车型目录保存在 PostgreSQL。服务启动不会建库或迁移。
 
-- [现有业务完整流程与复现指南](docs/参考/现有业务完整流程与复现指南.md) ★ 全业务操作、前后端、采集、异常与 AI 复现
-- [一次审核的完整链路](docs/概念/一次审核的链路.md) ★ 从这里开始
-- [系统架构与模块边界](docs/概念/系统定位.md)
-- [审核流水线、并发与任务生命周期](docs/概念/审核流水线.md)
-- [规则主图、能力与子图](docs/概念/规则主图与能力.md)
-- [字段与判定规则](docs/概念/字段与判定规则.md)
+数据库实例供多个项目共用，各项目独立建库、共用 `postgres` 账号。本项目连接使用标准 `PGHOST`、`PGPORT`、`PGDATABASE`、`PGUSER`、`PGPASSWORD`、`PGSSLMODE`；实例安装与连接配置见[部署运维](docs/部署运维.md)。
 
-**想动手**
-
-- [新增审核业务与页面](docs/指南/新增业务与页面.md) ★ 加业务照着做
-- [改动与发布准则](docs/指南/改动与发布准则.md)
-- [腾讯云部署](docs/指南/部署.md)
-
-**想查事实**
-
-- [术语表](docs/参考/术语表.md)
-- [审核工作台展示规范](docs/参考/工作台展示.md)
-- [日志与排查](docs/参考/日志与排查.md)
-- [各地区业务规则](docs/业务/)
-- [GitHub 协作规范](CONTRIBUTING.md)
-- [安全边界](SECURITY.md)
-
-## 快速验证
-
-后端：
+## 打包入口
 
 ```powershell
-# 在仓库根目录执行
-uv run ruff check src tests scripts
-uv run python -m compileall -q src
-uv run pytest tests -q
-uv run python scripts/ci/check_architecture.py
+.\scripts\release\package-server.cmd
+.\scripts\release\package-extension.cmd
 ```
 
-前端：
+`package-server.cmd` 只生成 `release/server/forj-review-server.tar.gz`，不导出脚本或配置；扩展安装包输出到 `release/extension/`。
 
-```powershell
-npm --prefix apps/extension install
-npm --prefix apps/extension test
-npm --prefix apps/extension run lint
-npm --prefix apps/extension run build
-npm --prefix apps/extension run build:public
-node scripts/ci/check-extension-architecture.mjs
-npm run test:configuration
-npm run lint:configuration
-npm run build:configuration
-```
-
-扩展构建产物位于 `apps/extension/dist`，Web 产物位于 `apps/configuration-web/dist`。不要直接编辑 `dist`，不要恢复旧的 `apps/extension/public/*.js` 双源码。两个前端仅共享 `packages/configuration-contracts` 的纯类型，不互相导入实现。
-
-## 运行时关系
-
-扩展与后端之间只传递版本化审核协议。页面上的字段名称、CSS 选择器和控件操作属于扩展；材料是否齐全、字段是否一致、地区政策是否满足以及是否需要人工复核属于后端。新增功能时先判断它属于哪一侧，再沿注册表和标准协议接入，避免出现同一规则在两端各写一份。
-
-## 开发入口
-
-两个前端均使用 Vue 3、TypeScript 和 Vite，分别在 `apps/extension` 和 `apps/configuration-web` 独立安装依赖、启动和构建。界面统一使用 `.vue` 单文件组件与组合式 API，普通逻辑使用 `.ts`，不使用 React 或 JSX。两端样式、Logo、组件和运行状态分别维护，仅共享纯协议类型。
-
-后端入口通常从 `src/forj_review_assistant/main.py` 和 API 路由进入，审核流程从 `src/forj_review_assistant/runtime/workflow/graph.py` 进入；业务 Profile 位于 `src/forj_review_assistant/businesses`，能力和规则位于 `src/forj_review_assistant/capabilities`、`src/forj_review_assistant/evidence/comparison` 与 `src/forj_review_assistant/presentation`。前端入口从 `apps/extension/src/main.ts` 开始，页面采集查看 `apps/extension/src/platform/browser`，工作台查看 `apps/extension/src/features/review/ui`，页面写回查看 `apps/extension/src/platform/extension`。遇到不确定的代码归属，先阅读 [系统架构与边界](docs/概念/系统定位.md) 和模块 README。
-
-`apps/extension/src/platform/browser/adapters`（页面适配器）已经接入主流程：`apps/extension/src/platform/browser/identity/business-detector.ts` 通过 `buildPageAdapterRegistry()`（`apps/extension/src/platform/browser/adapters/index.ts`）解析当前页面。普通新增页面通过后端页面目录和采集清单接入，复用通用采集与写回能力；超出现有 DOM 采集能力的特殊控件，再由开发人员扩展浏览器平台。适配器只负责页面身份识别，不执行审核规则。
-
-## 交付标准
-
-一个改动只有在代码、测试、文档和回滚方式都明确时才算完成。不能以“本地页面看起来正常”代替后端契约测试，也不能以“测试通过”代替 Profile、注册表和权限边界审查。
+**首次部署固定文件直接保存在 `deploy/server/`，无需生成。** 将该目录内的固定文件和后端压缩包一起上传到 `/home/ubuntu/forj-review/`，执行 `bash setup-server.sh`、填写密码后运行 `./start-server.sh`。**日常更新只打包、上传后端压缩包**，继续使用服务器原有脚本执行停止和启动。详细步骤见[部署运维](docs/部署运维.md)。
