@@ -4,6 +4,21 @@
     "old_vehicle",
     "new_vehicle"
   ],
+  "ignored_image_labels": [
+    "登记证书3、4页",
+    "登记证书3,4页",
+    "登记证书3，4页"
+  ],
+  "page_sections": [
+    {
+      "key": "old_vehicle",
+      "title": "报废车辆信息"
+    },
+    {
+      "key": "new_vehicle",
+      "title": "新车及发票信息"
+    }
+  ],
   "page_groups": [
     {
       "label": "报废车辆资料",
@@ -80,7 +95,10 @@
       ],
       "section": "old_vehicle",
       "section_required": false,
-      "reviewable": true
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "old_vehicle.recycle_date",
@@ -91,7 +109,10 @@
       ],
       "section": "old_vehicle",
       "section_required": false,
-      "reviewable": true
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "scrap_certificate.certificate_no",
@@ -102,7 +123,10 @@
       ],
       "section": "old_vehicle",
       "section_required": false,
-      "reviewable": true
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "old_vehicle.vin",
@@ -114,7 +138,10 @@
       ],
       "section": "old_vehicle",
       "section_required": true,
-      "reviewable": true
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "old_vehicle.plate_no",
@@ -126,7 +153,10 @@
       ],
       "section": "old_vehicle",
       "section_required": true,
-      "reviewable": true
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "old_vehicle.owner",
@@ -139,7 +169,10 @@
       ],
       "section": "old_vehicle",
       "section_required": true,
-      "reviewable": true
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "old_vehicle.engine_model",
@@ -150,7 +183,50 @@
       ],
       "section": "old_vehicle",
       "section_required": false,
-      "reviewable": true
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
+    },
+    {
+      "key": "old_vehicle.emission_standard",
+      "label": "排放标准",
+      "aliases": [
+        "排放标准"
+      ],
+      "section": "old_vehicle",
+      "section_required": false,
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
+    },
+    {
+      "key": "old_vehicle.fuel_type",
+      "label": "燃料种类",
+      "aliases": [
+        "燃料种类",
+        "燃料类型"
+      ],
+      "section": "old_vehicle",
+      "section_required": false,
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
+    },
+    {
+      "key": "old_vehicle.is_jiefang",
+      "label": "是否解放牌",
+      "aliases": [
+        "是否解放牌"
+      ],
+      "section": "old_vehicle",
+      "section_required": false,
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "new_vehicle.fuel_type",
@@ -160,7 +236,10 @@
       ],
       "section": "new_vehicle",
       "section_required": false,
-      "reviewable": true
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "invoice.code",
@@ -170,7 +249,10 @@
       ],
       "section": "new_vehicle",
       "section_required": false,
-      "reviewable": true
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "invoice.invoice_no",
@@ -180,7 +262,10 @@
       ],
       "section": "new_vehicle",
       "section_required": false,
-      "reviewable": true
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "invoice.amount",
@@ -190,7 +275,10 @@
       ],
       "section": "new_vehicle",
       "section_required": false,
-      "reviewable": true
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "invoice.invoice_date",
@@ -201,7 +289,10 @@
       ],
       "section": "new_vehicle",
       "section_required": false,
-      "reviewable": true
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "new_vehicle.vin",
@@ -212,7 +303,10 @@
       ],
       "section": "new_vehicle",
       "section_required": true,
-      "reviewable": true
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "new_vehicle.plate_no",
@@ -223,7 +317,10 @@
       ],
       "section": "new_vehicle",
       "section_required": true,
-      "reviewable": true
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "new_vehicle.owner",
@@ -235,7 +332,10 @@
       ],
       "section": "new_vehicle",
       "section_required": true,
-      "reviewable": true
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "new_vehicle.registration_date",
@@ -245,7 +345,10 @@
       ],
       "section": "new_vehicle",
       "section_required": false,
-      "reviewable": true
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "application.terminal_certificate_no",
@@ -255,7 +358,10 @@
       ],
       "section": "new_vehicle",
       "section_required": false,
-      "reviewable": true
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "application.customer_name",
@@ -265,7 +371,10 @@
       ],
       "section": "new_vehicle",
       "section_required": false,
-      "reviewable": true
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "application.terminal_phone",
@@ -275,7 +384,10 @@
       ],
       "section": "new_vehicle",
       "section_required": false,
-      "reviewable": true
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "application.id",
@@ -286,7 +398,10 @@
       ],
       "section": "unknown",
       "section_required": false,
-      "reviewable": true
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "application.submitted_at",
@@ -296,7 +411,10 @@
       ],
       "section": "unknown",
       "section_required": false,
-      "reviewable": false
+      "reviewable": false,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "application.owner_type",
@@ -306,7 +424,10 @@
       ],
       "section": "unknown",
       "section_required": false,
-      "reviewable": true
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "application.dealer_name",
@@ -316,7 +437,10 @@
       ],
       "section": "old_vehicle",
       "section_required": false,
-      "reviewable": false
+      "reviewable": false,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     },
     {
       "key": "page_ocr.new_vehicle_vin",
@@ -326,7 +450,10 @@
       ],
       "section": "new_vehicle",
       "section_required": false,
-      "reviewable": true
+      "reviewable": true,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1
     }
   ],
   "writable_fields": [
@@ -337,6 +464,9 @@
     "old_vehicle.plate_no",
     "old_vehicle.owner",
     "old_vehicle.engine_model",
+    "old_vehicle.emission_standard",
+    "old_vehicle.fuel_type",
+    "old_vehicle.is_jiefang",
     "new_vehicle.fuel_type",
     "invoice.code",
     "invoice.invoice_no",
@@ -354,13 +484,24 @@
     "old_vehicle.affiliation",
     "new_vehicle.affiliation"
   ],
-  "writable_control_kinds": [],
+  "writable_control_kinds": [
+    "text",
+    "textarea",
+    "number",
+    "date",
+    "select"
+  ],
   "identity_anchors": [
     "application.id",
     "old_vehicle.vin",
     "new_vehicle.vin",
     "old_vehicle.owner",
     "new_vehicle.owner"
+  ],
+  "record_identity_fields": [
+    "application.id",
+    "old_vehicle.vin",
+    "new_vehicle.vin"
   ],
   "materials": [
     {

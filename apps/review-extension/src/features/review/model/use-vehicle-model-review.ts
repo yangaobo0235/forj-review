@@ -26,7 +26,8 @@ export function useVehicleModelReview(options: Options, query = queryVehicleMode
     disabled: () => options.disabled() || operation.filling,
     onInvalidate: () => { operation.fillMessage = ""; }, onPageFailure: options.onResult,
   }, query);
-  const plan = computed(() => search.selected.value ? modelFillPlan(search.selected.value, options.pageData()?.pageFields) : null);
+  const plan = computed(() => search.selected.value ? modelFillPlan(search.selected.value, options.pageData()?.pageFields,
+    options.pageData()?.actions?.find(a => a.handler_id === "vehicle_model_fill" && a.enabled)?.mappings ?? [], options.pageData()?.fieldLabels) : null);
   const changedCount = computed(() => plan.value?.values.filter(item =>
     String(options.pageData()?.pageFields[item.field] ?? "").trim() !== item.value.trim()).length || 0);
   const fillDisabledReason = computed(() => {

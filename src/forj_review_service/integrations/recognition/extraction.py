@@ -16,7 +16,6 @@ from forj_review_service.businesses.material_policies import (
     RetryPolicy,
 )
 from forj_review_service.businesses.materials import DocumentPolicy
-from forj_review_service.businesses.packs import BUSINESS_PACKS
 from forj_review_service.businesses.routing import (
     normalize_document_type,
 )
@@ -45,29 +44,9 @@ REVIEW_DEADLINE_SECONDS = 55.0
 CLASSIFICATION_CONFIDENCE_THRESHOLD = 0.70
 logger = logging.getLogger(__name__)
 
-# 这些提示是页面业务归属（分区）名称，不是资料类型；不能拿去查资料白名单。
-GENERIC_SCOPE_HINTS = {"", "unknown"} | {
-    scope for pack in BUSINESS_PACKS.values() for scope in pack.scopes
-}
-
-
-def declared_material_types(
-    business_type: Any, *, business: BusinessContext = DEFAULT_BUSINESS
-) -> frozenset[str] | None:
-    """该业务扩展包声明的材料类型集合；没有扩展包时返回 None 表示不限制。
-
-    候选必须限制在本业务自己声明的材料里，避免通用材料关键词
-    命中其他业务的类型，导致读取白名单错误。
-
-    返回 None 而不是空集合：尚未声明扩展包的业务没有这份名单，空集合会把它们
-    全部推进两阶段分类，那是行为回退而不是收紧。
-    """
-    from forj_review_service.businesses.packs import pack_for_business
-
-    pack = business.pack or pack_for_business(business_type)
-    if pack is None:
-        return None
-    return frozenset(material.document_type for material in pack.materials)
+def declared_material_types(business: BusinessContext) -> frozenset[str]:
+    """Material candidates belong to the explicitly selected database page."""
+    return frozenset(business.document_policies)
 
 
 def _expected_document_type(
@@ -83,7 +62,8 @@ def _expected_document_type(
     ):
         hint = str(raw_hint or "").strip()
         active_pack = business.pack
-        if hint in ({"", "unknown", *active_pack.scopes} if active_pack else GENERIC_SCOPE_HINTS):
+        scopes = active_pack.scopes if active_pack else {scope for scope, _ in business.slot_document_types}
+        if hint in {"", "unknown", *scopes}:
             continue
         normalized = normalize_document_type(hint)
         # 命中全局政策表还不够：它还得是本业务声明过的材料，否则就是拿别的

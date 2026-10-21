@@ -1,35 +1,186 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "page_id": "example_permit",
   "business_type": "permit_review",
   "region": "default",
   "version": "1.0",
+  "active": true,
   "title": "示例许可证审核",
-  "paths": ["/example-permit-review"],
-  "anchors": ["许可证资料", "车辆识别代号"],
-  "scopes": ["vehicle"],
-  "sections": [{"key": "vehicle", "title": "车辆信息"}],
+  "paths": [
+    "/example-permit-review"
+  ],
+  "anchors": [
+    "许可证资料",
+    "车辆识别代号"
+  ],
+  "review_tab": null,
+  "scopes": [
+    "vehicle"
+  ],
+  "sections": [
+    {
+      "key": "vehicle",
+      "title": "车辆信息"
+    }
+  ],
   "page_groups": [
-    {"label": "许可证资料", "scope": "vehicle", "title": "许可证资料"}
+    {
+      "label": "许可证资料",
+      "scope": "vehicle",
+      "title": "许可证资料",
+      "occurrence": 0
+    }
   ],
   "materials": [
     {
       "document_type": "permit",
       "label": "车辆许可证",
-      "hints": ["车辆许可证", "许可证"],
+      "hints": [
+        "车辆许可证",
+        "许可证"
+      ],
       "guidance": "读取许可证中的车辆识别代号，保留原文，无法看清时标记不确定。",
-      "required": true
+      "scopes": [
+        "vehicle"
+      ],
+      "required": false,
+      "minimum_count": 1,
+      "required_pages": [],
+      "alternative_group": "",
+      "extra_fields": [],
+      "remove_extra_fields": [],
+      "details": {
+        "scoped_extra_fields": [],
+        "scoped_guidance": [],
+        "scoped_names": [],
+        "scope_independent": false,
+        "scoped_vehicle_fields": [],
+        "slots": [],
+        "derived_field": null
+      }
     }
   ],
   "fields": [
     {
       "key": "permit.vin",
       "label": "车辆识别代号",
-      "aliases": ["车辆识别代号", "车架号"],
+      "section": "vehicle",
+      "aliases": [
+        "车辆识别代号",
+        "车架号"
+      ],
+      "page_section": "unknown",
+      "section_required": false,
+      "reviewable": true,
+      "mode": "PARALLEL",
+      "evidence": [
+        {
+          "material": "permit",
+          "field": "license.vin",
+          "scope": "vehicle",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
       "normalizer": "vin",
-      "evidence": [{"material": "permit", "field": "license.vin"}]
+      "authority": [],
+      "required": true,
+      "writable": false,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
     }
   ],
-  "identity_anchors": ["permit.vin"],
-  "record_identity_fields": ["permit.vin"]
+  "identity_anchors": [
+    "permit.vin"
+  ],
+  "record_identity_fields": [
+    "permit.vin"
+  ],
+  "page_actions": [],
+  "writable_control_kinds": [],
+  "review_declared_fields_only": true,
+  "settings": {
+    "material_policy": {
+      "mode": "enforce",
+      "materials": [
+        {
+          "document_type": "permit",
+          "business_scope": "vehicle",
+          "minimum_count": 1,
+          "required_pages": [],
+          "display_name": "车辆许可证",
+          "alternative_group": "",
+          "identity_side": null,
+          "presence_name": ""
+        }
+      ],
+      "field_sources": [],
+      "presence_groups": [
+        {
+          "key": "required:vehicle:permit",
+          "display_name": "车辆许可证",
+          "alternatives": [
+            [
+              {
+                "document_type": "permit",
+                "business_scope": "vehicle",
+                "minimum_count": 1,
+                "required_pages": [],
+                "display_name": "车辆许可证",
+                "alternative_group": "",
+                "identity_side": null,
+                "presence_name": ""
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "replacement_policy": null,
+    "capability_specs": [
+      {
+        "capability_id": "material_completeness",
+        "kind": "MATERIAL",
+        "version": "1.0",
+        "stage": "EVIDENCE_VALIDATION",
+        "input_facts": [],
+        "output_facts": [],
+        "required": true,
+        "dependencies": [],
+        "timeout_seconds": 30.0,
+        "retries": 0,
+        "failure_policy": "MANUAL_REVIEW"
+      }
+    ],
+    "binding_declarations": [
+      {
+        "capability_id": "material_completeness",
+        "enabled": true,
+        "required": null,
+        "parameters": []
+      }
+    ],
+    "page_field_composites": [],
+    "qr_field_bindings": [],
+    "invoice_verification_field": null,
+    "ignored_image_labels": [],
+    "retry_policy": {
+      "semantic_retry_count": 1,
+      "minimum_retry_window_seconds": 2.0,
+      "qr_web_retry_count": 1
+    },
+    "presentation": {
+      "hidden_fields": [],
+      "hidden_check_prefixes": [],
+      "groups": []
+    }
+  }
 }

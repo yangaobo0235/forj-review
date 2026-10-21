@@ -2,10 +2,6 @@
 
 import pytest
 
-from forj_review_service.businesses.profiles import (
-    SCRAP_REPLACEMENT_CHANGCHUN,
-    SCRAP_REPLACEMENT_QINGDAO,
-)
 from forj_review_service.businesses.rules.vehicle_type_light_duty import (
     VEHICLE_TYPE_LIGHT_DUTY_CHECK_ID,
     build_vehicle_type_light_duty_check,
@@ -20,6 +16,11 @@ from forj_review_service.contracts.review import (
 )
 from forj_review_service.presentation.routing import build_review_tasks
 from forj_review_service.runtime.review_service import ReviewService
+from tests.support.pages import (
+    SCRAP_REPLACEMENT_CHANGCHUN,
+    SCRAP_REPLACEMENT_QINGDAO,
+    business_registry,
+)
 
 PAGE = {"old_vehicle.type": "载货车"}
 
@@ -73,10 +74,12 @@ def test_other_duty_classes_change_nothing(value: str) -> None:
 def test_any_one_material_is_enough() -> None:
     """行驶证写重型、回收证明写轻型：折叠后同为载货汽车，比对判一致，
     所以必须由本规则把轻型点名出来交人工。"""
-    checks = run([
-        observation("重型厢式货车", "vehicle_license", 1),
-        observation("轻型厢式货车", "scrap_certificate", 2),
-    ])
+    checks = run(
+        [
+            observation("重型厢式货车", "vehicle_license", 1),
+            observation("轻型厢式货车", "scrap_certificate", 2),
+        ]
+    )
 
     assert len(checks) == 1
     assert "报废机动车回收证明" in checks[0].reason
@@ -85,10 +88,12 @@ def test_any_one_material_is_enough() -> None:
 
 def test_one_material_submitted_twice_is_named_once() -> None:
     """正反面、重复上传是同一份材料的多次读取，不该点名两遍。"""
-    checks = run([
-        observation("轻型厢式货车", "vehicle_license", 1),
-        observation("轻型厢式货车", "vehicle_license", 2),
-    ])
+    checks = run(
+        [
+            observation("轻型厢式货车", "vehicle_license", 1),
+            observation("轻型厢式货车", "vehicle_license", 2),
+        ]
+    )
 
     assert checks[0].reason.count("机动车行驶证") == 1
 
@@ -130,18 +135,22 @@ def test_check_merges_into_the_vehicle_type_field_task() -> None:
             page_fields=PAGE,
         ),
         profile=SCRAP_REPLACEMENT_QINGDAO,
-        comparisons=[FieldComparison(
-            field="old_vehicle.type",
-            left_value="轻型厢式货车",
-            right_value="载货车",
-            status=FieldStatus.MATCH,
-            message="多个来源字段一致",
-            evidence=[{
-                "source": "图片识别",
-                "image_id": "vehicle_license-1",
-                "value": "轻型厢式货车",
-            }],
-        )],
+        comparisons=[
+            FieldComparison(
+                field="old_vehicle.type",
+                left_value="轻型厢式货车",
+                right_value="载货车",
+                status=FieldStatus.MATCH,
+                message="多个来源字段一致",
+                evidence=[
+                    {
+                        "source": "图片识别",
+                        "image_id": "vehicle_license-1",
+                        "value": "轻型厢式货车",
+                    }
+                ],
+            )
+        ],
         external_checks=[],
         business_checks=list(checks),
         completeness=None,
@@ -166,14 +175,16 @@ async def test_light_duty_reaches_the_workbench_through_the_graph(monkeypatch) -
     三份材料里只有回收证明写了轻型——归一化后同为载货汽车，字段比对判一致，
     这条盲区只能由本规则补上。
     """
-    service = ReviewService()
+    service = ReviewService(registry=business_registry())
 
     async def extract(*args):
-        return RecognitionBatchResult(observations=[
-            observation("重型厢式货车", "vehicle_license", 1),
-            observation("重型厢式货车", "registration_certificate", 2),
-            observation("轻型厢式货车", "scrap_certificate", 3),
-        ])
+        return RecognitionBatchResult(
+            observations=[
+                observation("重型厢式货车", "vehicle_license", 1),
+                observation("重型厢式货车", "registration_certificate", 2),
+                observation("轻型厢式货车", "scrap_certificate", 3),
+            ]
+        )
 
     monkeypatch.setattr(service, "_extract_documents", extract)
     result = await service.assist_async(

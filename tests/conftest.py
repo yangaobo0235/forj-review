@@ -1,10 +1,4 @@
-"""测试收集策略。
-
-历史上这里用一个子串名单把「过户业务」的旧夹具整体跳过。那些测试在扩展包
-收口后已经完全失效（断言的是已改名的方法、已清空的策略和已停用的业务），
-留着只会掩盖真实失败，因此已随本次重构删除。**不要再引入按名字静默跳过的
-机制**——需要停用的测试直接删掉，或写成显式的 `pytest.mark.skip`。
-"""
+"""Shared isolation: synthetic fixtures, per-test schemas, no private database access."""
 
 import asyncio
 import os
@@ -16,7 +10,10 @@ from uuid import uuid4
 
 import psycopg
 import pytest
+import pytest_asyncio
 from psycopg.conninfo import conninfo_to_dict
+
+from tests.support.configuration import settings as settings
 
 # 测试进程不能往开发者的日志文件里写：`configure_log_file` 会读 `.env` 里的
 # `REVIEW_LOG_DIR`，混进去的测试行会污染按天聚合的性能数据。这里先占位成一个
@@ -99,13 +96,13 @@ def database(postgres_url):
 @pytest.fixture(autouse=True)
 def isolate_private_database_settings(tmp_path, monkeypatch, request):
     # Filling the developer's real password must not send ordinary tests to their server.
-    from forj_review_config_service.config import database as configuration_database
-    from forj_review_service.config import database as review_database
+    from forj_review_database import settings as database_settings
 
-    for module in (configuration_database, review_database):
-        monkeypatch.setattr(module, "DEFAULT_DATABASE_FILE", tmp_path / "no-private-database.env")
-        for key in module.SETTING_NAMES:
-            monkeypatch.delenv(key, raising=False)
+    monkeypatch.setattr(
+        database_settings, "DEFAULT_DATABASE_FILE", tmp_path / "no-private-database.env"
+    )
+    for key in ("PGHOST", "PGPORT", "PGDATABASE", "PGUSER", "PGPASSWORD", "PGSSLMODE"):
+        monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("DATABASE_CONFIG_FILE", str(tmp_path / "no-private-database.env"))
     database = request.getfixturevalue("database") if "database" in request.fixturenames else None
     for prefix in ("REVIEW", "CONFIGURATION"):
@@ -116,3 +113,12 @@ def isolate_private_database_settings(tmp_path, monkeypatch, request):
         monkeypatch.setenv(
             prefix + "_DATABASE_SCHEMA", database.schema if database else "test_disabled"
         )
+
+
+@pytest_asyncio.fixture
+async def async_database(database):
+    from forj_review_config_service.integrations.async_database import AsyncDatabase
+
+    async with AsyncDatabase(database) as runtime:
+        await runtime.acquire_executor()
+        yield runtime

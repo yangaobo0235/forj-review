@@ -5,13 +5,13 @@ import pytest
 from forj_review_service.businesses.registry import (
     BusinessProfileNotFound,
     BusinessRegistry,
-    build_business_registry,
 )
 from forj_review_service.contracts.review import BusinessType, Region, ReviewRequest
+from tests.support.pages import business_registry
 
 
 def test_registry_resolves_scrap_profile_by_identity() -> None:
-    profile = build_business_registry().resolve(
+    profile = business_registry().resolve(
         BusinessType.SCRAP_REPLACEMENT,
         Region.QINGDAO,
         "1.0",
@@ -37,7 +37,7 @@ def test_registry_resolves_scrap_profile_by_identity() -> None:
 
 
 def test_registry_resolves_changchun_profiles_without_fallback() -> None:
-    registry = build_business_registry()
+    registry = business_registry()
 
     replacement = registry.resolve(
         BusinessType.SCRAP_REPLACEMENT,
@@ -45,7 +45,9 @@ def test_registry_resolves_changchun_profiles_without_fallback() -> None:
         "1.0",
     )
     assert replacement.region is Region.CHANGCHUN
-    assert "changchun_replacement_policy" in {spec.capability_id for spec in replacement.capabilities}
+    assert "changchun_replacement_policy" in {
+        spec.capability_id for spec in replacement.capabilities
+    }
 
     # 一致性审核不分地区：青岛和长春两个页面地址同一套规则，取默认地区。
     # 拿 changchun 去取它会走近似匹配，取到的仍然是默认地区那一份。
@@ -58,10 +60,8 @@ def test_registry_resolves_changchun_profiles_without_fallback() -> None:
     assert consistency.rules_configured is False
 
 
-
-
 def test_registry_keeps_unconfigured_businesses_out_of_scrap_rules() -> None:
-    profile = build_business_registry().resolve(
+    profile = business_registry().resolve(
         BusinessType.CONSISTENCY,
         Region.QINGDAO,
         "1.0",
@@ -72,7 +72,7 @@ def test_registry_keeps_unconfigured_businesses_out_of_scrap_rules() -> None:
 
 
 def test_registry_uses_only_explicit_default_region_fallback() -> None:
-    profile = build_business_registry().resolve(
+    profile = business_registry().resolve(
         BusinessType.VEHICLE_SOURCE,
         Region.QINGDAO,
         "1.0",
@@ -81,7 +81,7 @@ def test_registry_uses_only_explicit_default_region_fallback() -> None:
     assert profile.region is Region.DEFAULT
 
     with pytest.raises(BusinessProfileNotFound):
-        build_business_registry().resolve(
+        business_registry().resolve(
             BusinessType.SCRAP_REPLACEMENT,
             Region.DEFAULT,
             "1.0",
@@ -93,7 +93,7 @@ def test_region_scoped_request_without_region_cannot_resolve_a_scrap_profile() -
 
     assert request.region is Region.DEFAULT
     with pytest.raises(BusinessProfileNotFound):
-        build_business_registry().resolve(
+        business_registry().resolve(
             request.business_type,
             request.region,
             request.profile_version,
@@ -102,7 +102,7 @@ def test_region_scoped_request_without_region_cannot_resolve_a_scrap_profile() -
 
 def test_registry_rejects_unknown_profile_version() -> None:
     with pytest.raises(BusinessProfileNotFound):
-        build_business_registry().resolve(
+        business_registry().resolve(
             BusinessType.CONSISTENCY,
             Region.QINGDAO,
             "9.9",
@@ -110,12 +110,22 @@ def test_registry_rejects_unknown_profile_version() -> None:
 
 
 def test_registry_keeps_same_business_region_profiles_separate_by_page_id() -> None:
-    base = build_business_registry().resolve(BusinessType.VEHICLE_SOURCE, Region.DEFAULT, "1.0")
+    base = business_registry().resolve(BusinessType.VEHICLE_SOURCE, Region.DEFAULT, "1.0")
     registry = BusinessRegistry(
         (replace(base, page_id="vehicle-source-a"), replace(base, page_id="vehicle-source-b"))
     )
 
-    assert registry.resolve(BusinessType.VEHICLE_SOURCE, Region.DEFAULT, "1.0", page_id="vehicle-source-a").page_id == "vehicle-source-a"
-    assert registry.resolve(BusinessType.VEHICLE_SOURCE, Region.DEFAULT, "1.0", page_id="vehicle-source-b").page_id == "vehicle-source-b"
+    assert (
+        registry.resolve(
+            BusinessType.VEHICLE_SOURCE, Region.DEFAULT, "1.0", page_id="vehicle-source-a"
+        ).page_id
+        == "vehicle-source-a"
+    )
+    assert (
+        registry.resolve(
+            BusinessType.VEHICLE_SOURCE, Region.DEFAULT, "1.0", page_id="vehicle-source-b"
+        ).page_id
+        == "vehicle-source-b"
+    )
     with pytest.raises(BusinessProfileNotFound, match="page_id is required"):
         registry.resolve(BusinessType.VEHICLE_SOURCE, Region.DEFAULT, "1.0")

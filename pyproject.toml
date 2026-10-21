@@ -16,6 +16,8 @@ dependencies = [
     "filelock>=3.20,<4",
     "pillow>=12,<13",
     "psycopg[binary,pool]>=3.2,<4",
+    "sqlalchemy[asyncio]>=2.0.44,<3",
+    "pydantic-settings>=2.10,<3",
     "langgraph-checkpoint-postgres>=3,<4",
 ]
 
@@ -29,6 +31,7 @@ dev = [
 [project.scripts]
 forj-review-service = "forj_review_service.interfaces.cli:main"
 forj-review-config-service = "forj_review_config_service.interfaces.cli:main"
+forj-review-database = "forj_review_service.interfaces.database_tools:main"
 
 [build-system]
 requires = ["hatchling>=1.27"]
@@ -38,7 +41,7 @@ build-backend = "hatchling.build"
 exclude = ["**/.env", "**/.env.*"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/forj_review_service", "src/forj_review_config_service"]
+packages = ["src/forj_review_service", "src/forj_review_config_service", "src/forj_review_database"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]

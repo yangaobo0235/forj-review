@@ -3,11 +3,6 @@ from dataclasses import replace
 import pytest
 from pydantic import ValidationError
 
-from forj_review_service.businesses.profiles import (
-    BUSINESS_PROFILES,
-    SCRAP_REPLACEMENT_CHANGCHUN,
-    SCRAP_REPLACEMENT_QINGDAO,
-)
 from forj_review_service.contracts.evidence import DifferenceRange, EvidenceFact
 from forj_review_service.contracts.recognition import (
     CheckResult,
@@ -24,6 +19,11 @@ from forj_review_service.contracts.review import (
 )
 from forj_review_service.presentation.routing import build_review_tasks
 from forj_review_service.presentation.tasks import prepare_display_tasks
+from tests.support.pages import (
+    BUSINESS_PROFILES,
+    SCRAP_REPLACEMENT_CHANGCHUN,
+    SCRAP_REPLACEMENT_QINGDAO,
+)
 
 
 def make_step(**changes) -> ReviewTask:
@@ -65,14 +65,38 @@ def test_matching_step_rejects_reviewer_action_requirement() -> None:
 @pytest.mark.parametrize("reverse", [False, True])
 @pytest.mark.parametrize("field_first", [False, True])
 def test_all_bound_rules_survive_field_projection(reverse: bool, field_first: bool) -> None:
-    field = make_step(**({"display_target": "ASSISTANT", "page_field": None,
-                         "page_target_field": "new_vehicle.vin"} if field_first else {}))
+    field = make_step(
+        **(
+            {
+                "display_target": "ASSISTANT",
+                "page_field": None,
+                "page_target_field": "new_vehicle.vin",
+            }
+            if field_first
+            else {}
+        )
+    )
     rules = [
-        make_step(step_id="BUSINESS-REQUIRED", sequence=2, category="BUSINESS_RULE",
-                  display_target="ASSISTANT", page_field=None, result_status="CONFLICT",
-                  requires_reviewer_action=True, reason="必要规则存在冲突", check_ids=["REQUIRED"]),
-        make_step(step_id="BUSINESS-SECOND", sequence=3, category="BUSINESS_RULE",
-                  display_target="ASSISTANT", page_field=None, reason="其他规则一致", check_ids=["SECOND"]),
+        make_step(
+            step_id="BUSINESS-REQUIRED",
+            sequence=2,
+            category="BUSINESS_RULE",
+            display_target="ASSISTANT",
+            page_field=None,
+            result_status="CONFLICT",
+            requires_reviewer_action=True,
+            reason="必要规则存在冲突",
+            check_ids=["REQUIRED"],
+        ),
+        make_step(
+            step_id="BUSINESS-SECOND",
+            sequence=3,
+            category="BUSINESS_RULE",
+            display_target="ASSISTANT",
+            page_field=None,
+            reason="其他规则一致",
+            check_ids=["SECOND"],
+        ),
     ]
     if reverse:
         rules.reverse()
@@ -153,10 +177,14 @@ def test_field_step_counts_only_unique_material_images_as_evidence() -> None:
         ],
     )
 
-    step = next(item for item in build_steps(
-        page_fields={"old_vehicle.type": "牵引车"},
-        comparisons=[comparison],
-    ) if item.step_id == "FIELD-old_vehicle.type")
+    step = next(
+        item
+        for item in build_steps(
+            page_fields={"old_vehicle.type": "牵引车"},
+            comparisons=[comparison],
+        )
+        if item.step_id == "FIELD-old_vehicle.type"
+    )
 
     assert step.evidence_count == 3
     assert len(step.evidence) == 3
@@ -308,13 +336,11 @@ def test_date_rules_land_under_their_field(check_id: str, field: str) -> None:
     """
     steps = build_steps(business_checks=[date_rule(check_id)])
 
-    assert not any(
-        item.step_id == f"BUSINESS-{check_id}" for item in steps
-    ), f"{check_id} 不应再单独成卡"
+    assert not any(item.step_id == f"BUSINESS-{check_id}" for item in steps), (
+        f"{check_id} 不应再单独成卡"
+    )
     backed = next(item for item in steps if item.page_target_field == field)
     assert check_id in backed.details["check_ids"]
-
-
 
 
 @pytest.mark.parametrize(
@@ -349,15 +375,17 @@ def test_present_affiliation_safeguard_routes_to_its_page_field(
 def test_owner_type_control_is_a_non_writable_system_field() -> None:
     steps = build_steps(
         page_fields={"application.owner_type": "个人"},
-        review_fields=[ReviewFieldSnapshot(
-            field="application.owner_type",
-            label="车辆所有人类型",
-            value="个人",
-            control_type="select",
-            editable=True,
-            order=1,
-            section="申请信息",
-        )],
+        review_fields=[
+            ReviewFieldSnapshot(
+                field="application.owner_type",
+                label="车辆所有人类型",
+                value="个人",
+                control_type="select",
+                editable=True,
+                order=1,
+                section="申请信息",
+            )
+        ],
     )
 
     step = next(item for item in steps if item.step_id == "FIELD-application.owner_type")
@@ -382,15 +410,26 @@ def test_external_check_routes_to_assistant() -> None:
     assert steps[0].page_field is None
 
 
-@pytest.mark.parametrize("profile", [p for p in BUSINESS_PROFILES if p.rules_configured],
-                         ids=lambda p: f"{p.business_type}:{p.region}")
+@pytest.mark.parametrize(
+    "profile",
+    [p for p in BUSINESS_PROFILES if p.rules_configured],
+    ids=lambda p: f"{p.business_type}:{p.region}",
+)
 @pytest.mark.parametrize("page_interaction", [False, True])
 @pytest.mark.parametrize("status", ["COMPLETE", "INCOMPLETE", "UNCERTAIN"])
-def test_material_report_does_not_create_display_tasks(profile, page_interaction: bool, status: str) -> None:
+def test_material_report_does_not_create_display_tasks(
+    profile, page_interaction: bool, status: str
+) -> None:
     steps = build_review_tasks(
-        request=ReviewRequest(page_url="https://example.test/review", business_type=profile.business_type, region=profile.region),
+        request=ReviewRequest(
+            page_url="https://example.test/review",
+            business_type=profile.business_type,
+            region=profile.region,
+        ),
         profile=replace(profile, page_interaction=page_interaction),
-        comparisons=[], external_checks=[], limitations=[],
+        comparisons=[],
+        external_checks=[],
+        limitations=[],
         business_checks=[
             CheckResult(
                 check_id="MATERIAL-COMPLETENESS",
@@ -403,14 +442,11 @@ def test_material_report_does_not_create_display_tasks(profile, page_interaction
             phase="EXTRACTED",
             status=status,
             enforced=False,
-        )
+        ),
     )
 
     assert not any(item.category == "MATERIAL" for item in steps)
-    assert not any(
-        item.step_id == "BUSINESS-MATERIAL-COMPLETENESS"
-        for item in steps
-    )
+    assert not any(item.step_id == "BUSINESS-MATERIAL-COMPLETENESS" for item in steps)
     assert [item.sequence for item in steps] == list(range(1, len(steps) + 1))
 
 
@@ -445,10 +481,7 @@ def test_material_issue_and_limitation_do_not_create_display_tasks() -> None:
     material_steps = [item for item in steps if item.category == "MATERIAL"]
 
     assert material_steps == []
-    assert not any(
-        item.step_id == "BUSINESS-MATERIAL-COMPLETENESS"
-        for item in steps
-    )
+    assert not any(item.step_id == "BUSINESS-MATERIAL-COMPLETENESS" for item in steps)
 
 
 def test_non_target_profile_keeps_steps_as_assistant_contracts() -> None:
@@ -459,8 +492,12 @@ def test_non_target_profile_keeps_steps_as_assistant_contracts() -> None:
             region="default",
             page_fields={"permit.vin": "VIN-1"},
         ),
-        profile=replace(SCRAP_REPLACEMENT_QINGDAO, required_fields=("permit.vin",),
-                        field_check_bindings=(), pack_declaration=None),
+        profile=replace(
+            SCRAP_REPLACEMENT_QINGDAO,
+            required_fields=("permit.vin",),
+            field_check_bindings=(),
+            pack_declaration=None,
+        ),
         comparisons=[matching_comparison("permit.vin")],
         external_checks=[],
         business_checks=[],
@@ -476,12 +513,14 @@ def test_non_target_profile_keeps_steps_as_assistant_contracts() -> None:
 def test_a_passing_date_rule_needs_no_reviewer_action():
     steps = build_steps(
         page_fields={"invoice.invoice_date": "2026-06-01"},
-        business_checks=[CheckResult(
-            check_id="POLICY-INVOICE-DATE",
-            label="新车发票日期政策核验",
-            status="MATCH",
-            reason="符合政策",
-        )],
+        business_checks=[
+            CheckResult(
+                check_id="POLICY-INVOICE-DATE",
+                label="新车发票日期政策核验",
+                status="MATCH",
+                reason="符合政策",
+            )
+        ],
     )
     step = next(item for item in steps if item.page_target_field == "invoice.invoice_date")
     assert step.requires_reviewer_action is False
@@ -669,9 +708,7 @@ def test_page_only_field_is_visible_but_never_falsely_marked_as_matching() -> No
     assert step.label == "新车燃料类型"
     assert step.result_status == "INSUFFICIENT"
     assert step.requires_reviewer_action is True
-    assert [(item.source, item.value) for item in step.values] == [
-        ("申请页面字段", "柴油")
-    ]
+    assert [(item.source, item.value) for item in step.values] == [("申请页面字段", "柴油")]
 
 
 def test_derived_emission_task_keeps_manual_fill_enabled_when_page_value_is_empty() -> None:
@@ -718,9 +755,13 @@ def test_derived_emission_task_keeps_manual_fill_enabled_when_page_value_is_empt
 
 
 def test_missing_configured_page_field_becomes_actionable_assistant_step():
-    step = next(item for item in build_steps(
-        comparisons=[matching_comparison("new_vehicle.vin")],
-    ) if item.step_id == "FIELD-NEW-VEHICLE-VIN")
+    step = next(
+        item
+        for item in build_steps(
+            comparisons=[matching_comparison("new_vehicle.vin")],
+        )
+        if item.step_id == "FIELD-NEW-VEHICLE-VIN"
+    )
     assert step.display_target == "ASSISTANT"
     assert step.result_status == "INSUFFICIENT"
     assert step.requires_reviewer_action is True

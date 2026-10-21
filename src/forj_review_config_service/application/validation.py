@@ -16,48 +16,25 @@ def trial_binding(record) -> dict:
     }
 
 
-def evaluate_trial(record, manifest: dict, facts: dict) -> dict:
-    missing = [f["key"] for f in manifest["fields"] if facts.get("fields", {}).get(f["key"]) != 1]
-    writable = set(manifest.get("writable_fields", []))
-    allowed = set(manifest.get("writable_control_kinds", []))
-    invalid = [
-        key for key in sorted(writable) if facts.get("control_kinds", {}).get(key) not in allowed
-    ]
+def evaluate_trial(record, manifest: dict, facts: dict, kernel) -> dict:
     mapping = {
-        d.get("sample_id"): d.get("material")
-        for d in record.decisions
+        d.get("sample_id"): d.get("material") for d in record.decisions
         if d["status"] == "RESOLVED" and d["revision"] == record.revision and d.get("sample_id")
     }
-    missing_samples = [
-        s
-        for s in record.selected_samples
-        if s not in mapping or facts.get("samples", {}).get(s) != mapping[s]
-    ]
-    identity_ok = facts.get("matched_page_id") == record.draft.get("page_id")
-    diagnostics = facts.get("diagnostics", [])
-    return {
-        "ok": not missing
-        and not invalid
-        and not diagnostics
-        and not missing_samples
-        and identity_ok,
-        "missing_or_ambiguous": missing,
-        "unsupported_controls": invalid,
-        "diagnostics": diagnostics,
-        "missing_material_bindings": missing_samples,
-        "page_identity_matched": identity_ok,
-    }
+    return kernel.evaluate_collection(manifest, facts, record.draft.get("page_id"),
+                                      record.selected_samples, mapping)
 
 
-def current_trial(record, preview: dict, result: dict) -> bool:
+def current_trial(record, preview: dict, result: dict, kernel) -> bool:
     if (
         result.get("kind") != "collection_trial"
+        or not kernel.proof_is_current(result)
         or result.get("binding") != trial_binding(record)
         or result.get("candidate_digest") != preview["candidate_digest"]
     ):
         return False
     facts = result.get("facts")
-    return isinstance(facts, dict) and evaluate_trial(record, preview["manifest"], facts)["ok"]
+    return isinstance(facts, dict) and evaluate_trial(record, preview["manifest"], facts, kernel)["ok"]
 
 
 async def validate_candidate(kernel, record):
@@ -94,7 +71,7 @@ async def validate_candidate(kernel, record):
     ):
         blockers.append("存在未解决的业务歧义或能力缺口")
     results = list(record.tool_results.values())
-    if not any(isinstance(r, dict) and current_trial(record, preview, r) for r in results):
+    if not any(isinstance(r, dict) and current_trial(record, preview, r, kernel) for r in results):
         blockers.append("缺少当前候选的浏览器试采集证明")
     replays = [
         r

@@ -5,10 +5,9 @@
 """
 
 from collections import defaultdict
-from pathlib import Path
 from types import MappingProxyType
 
-from forj_review_service.businesses.profiles import BUSINESS_PROFILES, BusinessProfile
+from forj_review_service.businesses.profiles import BusinessProfile
 from forj_review_service.contracts.review import BusinessId, Region, RegionId
 
 
@@ -31,9 +30,9 @@ class BusinessRegistry:
             identity = (page_id, profile.version)
             if identity in identities:
                 raise ValueError(f"页面身份和版本重复：{identity}")
-            owner = (profile.business_type, profile.region)
+            owner = profile.business_type
             if page_id in owners and owners[page_id] != owner:
-                raise ValueError(f"同一 page_id 不能跨版本更换业务或地区：{page_id}")
+                raise ValueError(f"同一 page_id 不能跨版本更换业务：{page_id}")
             owners[page_id] = owner
             identities[identity] = profile
             grouped[(profile.business_type, profile.region, profile.version)].append(profile)
@@ -94,12 +93,3 @@ class BusinessRegistry:
                 "Multiple pages share this business, region and profile version; page_id is required"
             )
         return candidates[0]
-
-
-def build_business_registry(directory: Path | None = None) -> BusinessRegistry:
-    from forj_review_service.businesses.page_config.loader import load_page_profiles
-
-    if directory is None:
-        return BusinessRegistry(BUSINESS_PROFILES)
-    pages = load_page_profiles(directory, BUSINESS_PROFILES)
-    return BusinessRegistry((*BUSINESS_PROFILES, *pages.profiles), active_profiles=pages.active)

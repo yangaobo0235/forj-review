@@ -2,14 +2,15 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 
 from forj_review_service.businesses.packs import build_collect_manifest
 from forj_review_service.businesses.page_catalog import page_catalog
-from forj_review_service.businesses.page_config.files import KERNEL_VERSION
 from forj_review_service.businesses.page_config.inspection import profile_fingerprint
+from forj_review_service.businesses.page_config.kernel import KERNEL_VERSION
 from forj_review_service.businesses.page_config.schema import PageDefinition
 from forj_review_service.businesses.rules.catalog import RULE_DEFINITIONS
+from forj_review_service.contracts.errors import ReviewResourceError
 from forj_review_service.contracts.review import BusinessId
 from forj_review_service.contracts.review_schema import review_contract_schema
 from forj_review_service.interfaces.http.dependencies import get_review_service
@@ -28,12 +29,22 @@ def health() -> dict[str, str]:
 @router.get("/api/review/configuration/loaded")
 def loaded_configuration(request: Request, service: ReviewServiceDependency) -> dict:
     """Report the actual immutable in-memory snapshot, never reread files to claim activation."""
-    return {"kernel_version": KERNEL_VERSION,
-            "process_instance_id": request.app.state.process_instance_id,
-            "directory": request.app.state.configuration_directory,
-            "configuration_source": request.app.state.configuration_source,
-            "pages": [{"page_id": p.page_id, "version": p.version,
-                       "fingerprint": profile_fingerprint(p)} for p in service.registry.active_profiles]}
+    return {
+        "kernel_version": KERNEL_VERSION,
+        **(
+            request.app.state.configuration_loader.status
+            if getattr(request.app.state, "configuration_loader", None)
+            else {}
+        ),
+        "release_id": getattr(service.registry, "release_id", None),
+        "process_instance_id": request.app.state.process_instance_id,
+        "directory": request.app.state.configuration_directory,
+        "configuration_source": request.app.state.configuration_source,
+        "pages": [
+            {"page_id": p.page_id, "version": p.version, "fingerprint": profile_fingerprint(p)}
+            for p in service.registry.active_profiles
+        ],
+    }
 
 
 @router.get("/api/review/schema")
@@ -53,30 +64,40 @@ def collect_manifest(
     """下发页面采集清单：字段别名、图片分组标题和材料分组关键词。
 
     采集清单通常按业务包共用；传入地区、版本或 page_id 时会精确解析对应 Profile，
-    让同业务多页面不会拿错清单。尚未声明清单的业务返回 404，前端退回内置表。
+    让同业务多页面不会拿错清单。尚未声明清单的业务返回 404，前端不启用采集和写回。
     """
     precise = region is not None or profile_version is not None or page_id is not None
     candidates = [
         p
-        for p in (service.registry.profiles if precise else service.registry.active_profiles)
+        for p in (
+            service.registry.profiles
+            if profile_version is not None
+            else service.registry.active_profiles
+        )
         if p.business_type == business_type
         and (region is None or p.region == region)
         and (profile_version is None or p.version == profile_version)
         and (page_id is None or not page_id or p.page_id == page_id)
     ]
     if not candidates:
-        raise HTTPException(status_code=404, detail="该业务地区版本不存在")
+        raise ReviewResourceError("BUSINESS_PROFILE_NOT_FOUND", "该业务地区版本不存在", 404)
     if len(candidates) > 1:
-        # Legacy regions sharing one declaration may still use business-only
-        # requests. Distinct page packs require explicit page/version identity.
-        if any(p.pack_declaration is not candidates[0].pack_declaration for p in candidates[1:]):
-            raise HTTPException(
-                status_code=409, detail="存在多个页面配置，请指定 page_id、地区和版本"
+        # Independently compiled regions may share an identical collection
+        # contract. Distinct manifests require an explicit page identity.
+        manifests = [
+            build_collect_manifest(p.pack_declaration) if p.pack_declaration else None
+            for p in candidates
+        ]
+        if len({p.region for p in candidates}) != len(candidates) or any(
+            manifest != manifests[0] for manifest in manifests[1:]
+        ):
+            raise ReviewResourceError(
+                "AMBIGUOUS_PAGE", "存在多个页面配置，请指定 page_id、地区和版本", 409
             )
     profile = candidates[0]
     pack = profile.pack_declaration
     if pack is None:
-        raise HTTPException(status_code=404, detail="该业务尚未声明采集清单")
+        raise ReviewResourceError("MANIFEST_NOT_FOUND", "该业务尚未声明采集清单", 404)
     result = build_collect_manifest(pack)
     if precise:
         result.update(

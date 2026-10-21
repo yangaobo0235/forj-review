@@ -8,14 +8,19 @@ import pytest
 from forj_review_service.contracts.review import ReviewRequest
 from forj_review_service.observability.logging import configure_log_file
 from forj_review_service.runtime.review_service import ReviewService
+from tests.support.pages import business_registry
 
 
 @pytest.mark.parametrize("route", ["assist", "jobs", "jobs/urls"])
-@pytest.mark.parametrize("case", ["overflow", "duplicate_id", "duplicate_index", "non_http",
-                                  "invalid_port", "credentials"])
+@pytest.mark.parametrize(
+    "case",
+    ["overflow", "duplicate_id", "duplicate_index", "non_http", "invalid_port", "credentials"],
+)
 def test_all_review_entrypoints_reject_invalid_image_lists(client, route, case):
-    images = [{"index": i, "image_id": f"img-{i}", "src": f"https://images.example.test/{i}.png"}
-              for i in range(17 if case == "overflow" else 2)]
+    images = [
+        {"index": i, "image_id": f"img-{i}", "src": f"https://images.example.test/{i}.png"}
+        for i in range(17 if case == "overflow" else 2)
+    ]
     if case == "duplicate_id":
         images[1]["image_id"] = images[0]["image_id"]
     elif case == "duplicate_index":
@@ -26,9 +31,14 @@ def test_all_review_entrypoints_reject_invalid_image_lists(client, route, case):
         images[1]["src"] = "https://images.example.test:invalid/a.png"
     elif case == "credentials":
         images[1]["src"] = "https://user:secret@images.example.test/a.png"
-    response = client.post(f"/api/review/{route}", json={
-        "page_url": "https://example.test/review", "region": "qingdao", "images": images,
-    })
+    response = client.post(
+        f"/api/review/{route}",
+        json={
+            "page_url": "https://example.test/review",
+            "region": "qingdao",
+            "images": images,
+        },
+    )
     assert response.status_code == 422
 
 
@@ -46,30 +56,47 @@ def test_review_service_does_not_expose_configuration_tooling(client) -> None:
     catalog = client.get("/api/review/page-catalog")
     assert catalog.status_code == 200
     assert {item["business_type"] for item in catalog.json()["identities"]} == {
-        "scrap_replacement", "vehicle_source", "transfer", "consistency",
+        "scrap_replacement",
+        "vehicle_source",
+        "transfer",
+        "consistency",
     }
 
 
-def test_url_job_api_creates_and_finishes_without_upload(client, monkeypatch):
+def test_url_job_api_creates_and_finishes_without_upload(client, monkeypatch, request):
     from forj_review_service.contracts.recognition import RecognitionBatchResult
     from forj_review_service.runtime.jobs.manager import ReviewJobManager
 
     class Service:
+        registry = client.app.state.review_service.registry
+
         async def extract_image_async(self, request, image):
             assert "data_url" not in image.model_dump()
             assert image.src == "https://images.example.test/0.jpg"
-            return RecognitionBatchResult(total_count=1, completed_count=1, completed_image_ids=["url-0"])
+            return RecognitionBatchResult(
+                total_count=1, completed_count=1, completed_image_ids=["url-0"]
+            )
 
         async def assist_with_batch_async(self, request, initial_batch):
             from forj_review_service.contracts.review import ReviewResponse
-            return ReviewResponse(recommendation="REVIEW_REQUIRED", risk_level="MEDIUM", summary="合成测试"), initial_batch
+
+            return ReviewResponse(
+                recommendation="REVIEW_REQUIRED", risk_level="MEDIUM", summary="合成测试"
+            ), initial_batch
 
     manager = ReviewJobManager(Service())
+    request.addfinalizer(manager.close)
     monkeypatch.setattr(client.app.state, "review_jobs", manager)
-    created = client.post("/api/review/jobs/urls", json={
-        "page_url": "https://example.test/review", "region": "qingdao",
-        "images": [{"index": 0, "imageId": "url-0", "src": "https://images.example.test/0.jpg"}],
-    })
+    created = client.post(
+        "/api/review/jobs/urls",
+        json={
+            "page_url": "https://example.test/review",
+            "region": "qingdao",
+            "images": [
+                {"index": 0, "imageId": "url-0", "src": "https://images.example.test/0.jpg"}
+            ],
+        },
+    )
     assert created.status_code == 202
     job_id = created.json()["job_id"]
     assert manager.wait(job_id, timeout=2)
@@ -79,10 +106,14 @@ def test_url_job_api_creates_and_finishes_without_upload(client, monkeypatch):
 
 
 def test_url_job_api_rejects_browser_only_image(client):
-    result = client.post("/api/review/jobs/urls", json={
-        "page_url": "https://example.test/review", "region": "qingdao",
-        "images": [{"index": 0, "src": "blob:https://example.test/id"}],
-    })
+    result = client.post(
+        "/api/review/jobs/urls",
+        json={
+            "page_url": "https://example.test/review",
+            "region": "qingdao",
+            "images": [{"index": 0, "src": "blob:https://example.test/id"}],
+        },
+    )
     assert result.status_code == 422
     assert "HTTP" in result.json()["detail"]
 
@@ -115,8 +146,10 @@ def test_assist_returns_review_structure_for_page_data(client) -> None:
     assert len(body["material_completeness"]["checklist"]) == 6
     assert body["material_completeness"]["status"] == "INCOMPLETE"
     assert any(item["check_id"] == "MATERIAL-COMPLETENESS" for item in body["cross_checks"])
-    assert all(item["category"] != "MATERIAL" and item["step_id"] != "BUSINESS-MATERIAL-COMPLETENESS"
-               for item in body["review_tasks"])
+    assert all(
+        item["category"] != "MATERIAL" and item["step_id"] != "BUSINESS-MATERIAL-COMPLETENESS"
+        for item in body["review_tasks"]
+    )
     subject_step = next(
         item
         for item in body["review_tasks"]
@@ -140,12 +173,14 @@ def test_job_api_creates_and_polls_review(client) -> None:
     assert polled.json()["status"] in {"RUNNING", "PARTIAL", "COMPLETED"}
 
 
-def test_url_job_api_can_cancel_a_running_job(client, monkeypatch) -> None:
+def test_url_job_api_can_cancel_a_running_job(client, monkeypatch, request) -> None:
     from forj_review_service.runtime.jobs.manager import ReviewJobManager
 
     started, stopped = threading.Event(), threading.Event()
 
     class Service:
+        registry = client.app.state.review_service.registry
+
         async def assist_with_batch_async(self, request, initial_batch):
             started.set()
             try:
@@ -153,7 +188,9 @@ def test_url_job_api_can_cancel_a_running_job(client, monkeypatch) -> None:
             finally:
                 stopped.set()
 
-    monkeypatch.setattr(client.app.state, "review_jobs", ReviewJobManager(Service()))
+    manager = ReviewJobManager(Service())
+    request.addfinalizer(manager.close)
+    monkeypatch.setattr(client.app.state, "review_jobs", manager)
     created = client.post(
         "/api/review/jobs/urls",
         json={"page_url": "https://example.test/review/cancel", "region": "qingdao", "images": []},
@@ -178,12 +215,14 @@ def test_assist_marks_page_fields_for_manual_review_until_images_are_recognized(
         },
     )
 
-    comparison = next(item for item in response.json()["comparisons"] if item["field"] == "old_vehicle.vin")
+    comparison = next(
+        item for item in response.json()["comparisons"] if item["field"] == "old_vehicle.vin"
+    )
     assert comparison["status"] == "REVIEW_REQUIRED"
 
 
 def test_review_service_reports_context_image_summary_and_collection_errors(client) -> None:
-    service = ReviewService()
+    service = ReviewService(registry=business_registry())
     result = service.assist(
         ReviewRequest(
             page_url="https://example.test/review/1",
@@ -213,7 +252,7 @@ def test_review_service_reports_context_image_summary_and_collection_errors(clie
 
 
 def test_review_service_only_compares_configured_business_fields(client) -> None:
-    service = ReviewService()
+    service = ReviewService(registry=business_registry())
     result = service.assist(
         ReviewRequest(
             page_url="https://example.test/review/1",
@@ -240,8 +279,10 @@ def test_review_service_only_compares_configured_business_fields(client) -> None
 
 
 def test_review_service_includes_missing_required_business_fields(client) -> None:
-    result = ReviewService().assist(
-        ReviewRequest(page_url="https://example.test/review/1", region="qingdao", page_fields={}, images=[])
+    result = ReviewService(registry=business_registry()).assist(
+        ReviewRequest(
+            page_url="https://example.test/review/1", region="qingdao", page_fields={}, images=[]
+        )
     )
 
     compared_fields = {comparison.field for comparison in result.comparisons}
@@ -251,7 +292,9 @@ def test_review_service_includes_missing_required_business_fields(client) -> Non
 
 def test_collect_manifest_endpoint_serves_fields_groups_and_materials(client) -> None:
     """采集清单接口下发前端做字段匹配和图片归组所需的全部数据。"""
-    response = client.get("/api/review/collect-manifest", params={"business_type": "scrap_replacement"})
+    response = client.get(
+        "/api/review/collect-manifest", params={"business_type": "scrap_replacement"}
+    )
 
     assert response.status_code == 200
     body = response.json()
@@ -275,11 +318,10 @@ def test_collect_manifest_endpoint_serves_fields_groups_and_materials(client) ->
     assert "回收证明" in materials["scrap_certificate"]["hints"]
     assert materials["identity_card"]["label"] == "居民身份证"
     assert materials["scrap_certificate"]["slots"] == [["old_vehicle", 3]]
-    assert materials["vehicle_license"]["slots"] == [
-        ["old_vehicle", 1], ["new_vehicle", 1]
-    ]
+    assert materials["vehicle_license"]["slots"] == [["old_vehicle", 1], ["new_vehicle", 1]]
     assert materials["registration_certificate"]["slots"] == [
-        ["old_vehicle", 2], ["new_vehicle", 2]
+        ["old_vehicle", 2],
+        ["new_vehicle", 2],
     ]
     assert materials["invoice"]["slots"] == [["new_vehicle", 3]]
 
@@ -301,8 +343,6 @@ def test_collect_manifest_is_not_available_for_undeclared_businesses(client) -> 
     assert response.status_code == 404
 
 
-
-
 def test_configure_log_file_is_noop_without_env(client, monkeypatch) -> None:
     """环境变量和 `.env` 都没配时，行为必须与现状完全一致：只输出控制台。
 
@@ -311,7 +351,9 @@ def test_configure_log_file_is_noop_without_env(client, monkeypatch) -> None:
     测的是"哪儿都没配"这一种真实情形。
     """
     monkeypatch.delenv("REVIEW_LOG_DIR", raising=False)
-    monkeypatch.setattr("forj_review_service.observability.logging.load_dotenv", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "forj_review_service.observability.logging.load_dotenv", lambda *_a, **_k: None
+    )
     target = logging.getLogger("uvicorn.error.test_noop")
     configure_log_file(target)
     assert target.handlers == []
@@ -382,6 +424,4 @@ def test_configure_log_file_degrades_when_dir_cannot_be_created(
     with caplog.at_level("WARNING", logger="uvicorn.error.test_unwritable"):
         configure_log_file(target)
     assert target.handlers == []
-    assert any(
-        "Review log file disabled" in record.getMessage() for record in caplog.records
-    )
+    assert any("Review log file disabled" in record.getMessage() for record in caplog.records)

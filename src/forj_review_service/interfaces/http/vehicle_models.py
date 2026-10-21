@@ -2,24 +2,22 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Request
 
 from forj_review_service.contracts.vehicle_models import VehicleModelCandidate, VehicleModelSearch
 from forj_review_service.integrations.vehicle_models import (
     VehicleModelCatalog,
-    VehicleModelCatalogUnavailable,
 )
 
 router = APIRouter()
 
 
-def model_catalog():
-    return VehicleModelCatalog()
+def model_catalog(request: Request):
+    return VehicleModelCatalog(getattr(request.app.state, "database", None))
 
 
 @router.post("/api/review/vehicle-models/search", response_model=list[VehicleModelCandidate])
-def search_vehicle_models(query: VehicleModelSearch, catalog: Annotated[VehicleModelCatalog, Depends(model_catalog)]):
-    try:
-        return catalog.search(query)
-    except VehicleModelCatalogUnavailable as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from None
+async def search_vehicle_models(
+    query: VehicleModelSearch, catalog: Annotated[VehicleModelCatalog, Depends(model_catalog)]
+):
+    return await catalog.search(query)

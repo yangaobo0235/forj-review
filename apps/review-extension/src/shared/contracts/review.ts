@@ -64,6 +64,8 @@ export interface ReviewFieldSnapshot {
 }
 
 export interface PageData {
+  actions?: import("@forj/configuration-contracts").ActionBinding[];
+  fieldLabels?: Record<string, string>;
   pageId?: string;
   pageUrl: string;
   sourceTabId: number;

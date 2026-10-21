@@ -21,6 +21,7 @@ from pydantic import (
 
 from forj_review_service.contracts.checks import CheckResultValue
 from forj_review_service.contracts.decisions import ReasonCode
+from forj_review_service.contracts.errors import ReviewInputError
 from forj_review_service.contracts.evidence import (  # noqa: F401 - public export
     EvidenceFact,
     FieldObservation,
@@ -113,9 +114,7 @@ class ImageInput(BaseModel):
     index: int = Field(ge=0)
     src: str
     group: str = "未分类"
-    image_id: str | None = Field(
-        default=None, validation_alias=AliasChoices("image_id", "imageId")
-    )
+    image_id: str | None = Field(default=None, validation_alias=AliasChoices("image_id", "imageId"))
     category_hint: str = Field(
         default="unknown",
         validation_alias=AliasChoices("category_hint", "categoryHint"),
@@ -159,19 +158,19 @@ class ImageInput(BaseModel):
             _ = parsed.port
         except ValueError:
             return None
-        if (parsed.scheme in {"http", "https"} and parsed.hostname
-                and parsed.username is None and parsed.password is None):
+        if (
+            parsed.scheme in {"http", "https"}
+            and parsed.hostname
+            and parsed.username is None
+            and parsed.password is None
+        ):
             return self.src
         return None
 
     @model_validator(mode="before")
     @classmethod
     def derive_legacy_business_scope(cls, value: Any) -> Any:
-        if (
-            not isinstance(value, dict)
-            or "business_scope" in value
-            or "businessScope" in value
-        ):
+        if not isinstance(value, dict) or "business_scope" in value or "businessScope" in value:
             return value
         category = value.get("category_hint", value.get("categoryHint", "unknown"))
         # **这份名单和 `routing.scope_hint_types` 不是同一个集合，不要合并。**
@@ -191,8 +190,6 @@ class ImageInput(BaseModel):
             else "unknown"
         )
         return {**value, "business_scope": scope}
-
-
 
 
 class FieldComparison(BaseModel):
@@ -293,7 +290,9 @@ class ReviewTask(BaseModel):
         # Assistant tasks use page_target_field for controlled DOM location and
         # write-back. ``page_field`` remains reserved for PAGE_FIELD display.
         if self.display_target is ReviewDisplayTarget.ASSISTANT and self.page_field:
-            raise ValueError("ASSISTANT review steps must not bind page_field; use page_target_field")
+            raise ValueError(
+                "ASSISTANT review steps must not bind page_field; use page_target_field"
+            )
         if self.result_status == "MATCH" and self.requires_reviewer_action:
             raise ValueError("MATCH review steps cannot require reviewer action")
         if self.result_status != "MATCH" and not self.requires_reviewer_action:
@@ -304,7 +303,6 @@ class ReviewTask(BaseModel):
 # Backward-compatible import for clients that still use the pre-v2 name.
 # The object is the same validated contract; new code should use ReviewTask.
 ReviewStep = ReviewTask
-
 
 
 class ReviewFieldSnapshot(BaseModel):
@@ -329,11 +327,11 @@ class ReviewFieldSnapshot(BaseModel):
 
 class ReviewRequest(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
-    page_id: str | None = Field(default=None, max_length=160, validation_alias=AliasChoices("page_id", "pageId"))
-
-    page_url: HttpUrl | str = Field(
-        validation_alias=AliasChoices("page_url", "pageUrl")
+    page_id: str | None = Field(
+        default=None, max_length=160, validation_alias=AliasChoices("page_id", "pageId")
     )
+
+    page_url: HttpUrl | str = Field(validation_alias=AliasChoices("page_url", "pageUrl"))
     business_type: BusinessId = Field(
         default=BusinessType.SCRAP_REPLACEMENT,
         validation_alias=AliasChoices("business_type", "businessType"),
@@ -370,24 +368,22 @@ class ReviewRequest(BaseModel):
     images: list[ImageInput] = Field(default_factory=list)
     collection_diagnostics: "CollectionDiagnostics" = Field(
         default_factory=lambda: CollectionDiagnostics(),
-        validation_alias=AliasChoices(
-            "collection_diagnostics", "collectionDiagnostics"
-        ),
+        validation_alias=AliasChoices("collection_diagnostics", "collectionDiagnostics"),
     )
     trace_id: str | None = Field(default=None, validation_alias=AliasChoices("trace_id", "traceId"))
 
     def validate_images(self) -> None:
         """同步审核与后台任务共用的输入约束，也检查构造后被修改的请求。"""
         if len(self.images) > 16:
-            raise ValueError("单次审核最多允许 16 张图片")
+            raise ReviewInputError("单次审核最多允许 16 张图片")
         image_ids = [str(image.image_id or image.index) for image in self.images]
         if len(set(image_ids)) != len(image_ids):
-            raise ValueError("图片清单包含重复标识")
+            raise ReviewInputError("图片清单包含重复标识")
         if len({image.index for image in self.images}) != len(self.images):
-            raise ValueError("图片清单包含重复序号")
+            raise ReviewInputError("图片清单包含重复序号")
         for image in self.images:
             if not image.collection_error and not image.recognition_source:
-                raise ValueError("图片必须提供可由模型访问的 HTTP(S) 地址")
+                raise ReviewInputError("图片必须提供可由模型访问的 HTTP(S) 地址")
 
 
 class CollectionDiagnostics(BaseModel):

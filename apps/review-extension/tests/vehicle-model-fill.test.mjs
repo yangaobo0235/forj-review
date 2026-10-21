@@ -1,3 +1,4 @@
+import sourceManifest from "./fixtures/collect-manifest-vehicle-source.json";
 import { onTestFinished } from "vitest";
 import assert from "node:assert/strict";
 import { test } from "vitest";
@@ -8,6 +9,7 @@ import {modelFillPlan} from "../src/shared/vehicle-model.ts";
 const candidate = {modelId: "39503", modelName: "东风商用车 天龙重卡 启航版 450马力 6X4牵引车(DFH4250A4)(国五)",
   brandId: "6", brandName: "东风商用车", seriesId: "23", seriesName: "东风天龙", typeLevel: "牵引车", sameNameCount: 2,
   warnings: [], config: {driveForm: "6X4", fuelType: "柴油", emissionStandard: "国五", maxHp: "450", engineBrand: "东风雷诺", engineType: "东风雷诺dCi450-51"}};
+const mappings = sourceManifest.actions.find(a => a.handler_id === "vehicle_model_fill").mappings;
 const input = {announcementModel: "DFH4250A4", engineModel: "DCI450-51", pageScope: {
   brandName: "东风商用车", seriesName: "东风天龙", typeLevel: "牵引车"}};
 const request = {modelId: candidate.modelId, searchId: "trusted-search", expectedPageUrl: "http://test.forjtruck.com/consistency-qingdao?showPageModel=1"};
@@ -16,7 +18,7 @@ function fixture(t, changes = {}) {
   const globals = globalThis.chrome, execute = ReviewPageFieldWriter.executeSequence;
   onTestFinished(() => {globalThis.chrome = globals; ReviewPageFieldWriter.executeSequence = execute;});
   const fields = new Map(), nodes = new Map(), queries = [];
-  const values = modelFillPlan(candidate).values;
+  const values = modelFillPlan(candidate, {}, mappings).values;
   for (const item of values) {
     const node = {tagName: item.optionValue ? "SELECT" : "INPUT", value: item.optionValue || item.value,
       isConnected: true, getAttribute: () => null};
@@ -37,7 +39,7 @@ function fixture(t, changes = {}) {
     collect: keys => ({pageFields: Object.fromEntries(keys.map(key => [key,
       key === "vehicle.type" ? nodes.get(key).value : ReviewPageFieldWriter.captureValue(nodes.get(key))?.value || ""])),
       fieldTargets: keys.filter(key => nodes.has(key)).map(field => ({field, element: nodes.get(field)}))}),
-    writableFields: () => new Set(values.map(item => item.field)), controlKinds: () => new Set(["text", "select"]),
+    mappings: () => mappings, writableFields: () => new Set(values.map(item => item.field)), controlKinds: () => new Set(["text", "select"]),
     resolveSearch: async () => ({ok: true, input, candidate}), ...changes};
   globalThis.chrome = {runtime: {sendMessage: async message => {queries.push(message); return {ok: true, candidates: [candidate]};}}};
   return {filler: createVehicleModelFiller(context), context, nodes, fields, queries, current};

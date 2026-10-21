@@ -29,27 +29,33 @@ export function validatedModelInput(input: ModelSearchInput): ModelSearchInput {
   return { announcementModel, engineModel, pageScope };
 }
 
-const SPEC_CONFIG_FIELDS = [
-  ["spec.drive_form", "驱动形式", "driveForm"], ["spec.fuel_type", "燃料种类", "fuelType"],
-  ["spec.emission_standard", "排放标准", "emissionStandard"], ["spec.max_hp", "最大马力", "maxHp"],
-  ["spec.engine_brand", "发动机品牌", "engineBrand"], ["spec.engine_model", "发动机型号", "engineType"],
-] as const;
-export function modelFillPlan(candidate: VehicleModelCandidate, current: Record<string, unknown> = {}): { values: SpecFillValue[]; missing: string[]; warnings: string[] } {
-  const values: SpecFillValue[] = [
-    { field: "spec.brand", label: "品牌", value: candidate.brandName, optionValue: candidate.brandId },
-    { field: "spec.series", label: "车系", value: candidate.seriesName, optionValue: candidate.seriesId },
-    { field: "vehicle.model", label: "车型", value: candidate.modelName, optionValue: candidate.modelId },
-    ...SPEC_CONFIG_FIELDS.map(([field, label, key]) => ({ field, label, value: string(candidate.config[key]) })),
-  ];
-  const cargo = string(candidate.config.packingCaseLength);
-  const hasCargo = Boolean(cargo && Number.isFinite(Number(cargo)) && Number(cargo) > 0);
-  if (hasCargo) values.push({ field: "spec.cargo_length", label: "货箱长度", value: cargo });
-  // 选择车型会重建整块表单；显式恢复原有非空值，避免联动把可选货箱长度清掉。
-  const originalCargo = string(current["spec.cargo_length"]);
-  if (!hasCargo && originalCargo) values.push({field: "spec.cargo_length", label: "货箱长度（保留原值）", value: originalCargo});
-  const missing = values.filter(item => !item.value || ["--", "null", "undefined"].includes(item.value)).map(item => item.label);
-  return { values, missing, warnings: [...candidate.warnings, ...(!hasCargo
-    ? [originalCargo ? "车型库未提供货箱长度，联动后保留页面原值" : "车型库未提供货箱长度，本次不改写该字段"] : [])] };
+/** The backend version owns mappings; this function only executes registered converters. */
+export function modelFillPlan(candidate: VehicleModelCandidate, current: Record<string, unknown> = {},
+  mappings: readonly import("@forj/configuration-contracts").ActionMapping[] = [], labels: Record<string, string> = {}): { values: SpecFillValue[]; missing: string[]; warnings: string[] } {
+  const values: SpecFillValue[] = [], missing: string[] = [], warnings = [...candidate.warnings];
+  if (!mappings.length) return {values, missing: ["当前页面未配置车型回填映射"], warnings};
+  const property = (path: string) => path.split(".").reduce<unknown>((value, key) =>
+    value && typeof value === "object" && Object.hasOwn(value, key) ? (value as Record<string, unknown>)[key] : undefined, candidate);
+  const completed = new Set<string>();
+  for (const mapping of [...mappings].sort((a, b) => a.order - b.order)) {
+    if (mapping.source_kind !== "MODEL_CANDIDATE" || mapping.depends_on.some(id => !completed.has(id))) {
+      missing.push("车型回填映射依赖无效"); continue;
+    }
+    let value = string(property(mapping.source_property));
+    let label = labels[mapping.target_field] || mapping.target_field;
+    if (["--", "null", "undefined"].includes(value)) value = "";
+    if (mapping.converter_id === "positive_number" && (!Number.isFinite(Number(value)) || Number(value) <= 0)) value = "";
+    if (!value && mapping.missing_policy === "RESTORE_ORIGINAL") {
+      value = string(current[mapping.target_field]);
+      warnings.push(value ? `车型库未提供${label}，联动后保留页面原值` : `车型库未提供${label}，本次不改写该字段`);
+      if (value) label += "（保留原值）";
+    }
+    if (!value && mapping.missing_policy === "BLOCK") missing.push(label);
+    if (value) values.push({field: mapping.target_field, label, value,
+      ...(mapping.source_option_property ? {optionValue: string(property(mapping.source_option_property))} : {})});
+    completed.add(mapping.mapping_id);
+  }
+  return {values, missing, warnings};
 }
 
 /** 同名记录分别保留；写回器必须按 optionValue 选择并核验真实 ID。 */

@@ -1,0 +1,1280 @@
+{
+  "schema_version": "2.0",
+  "page_id": "transfer:default",
+  "business_type": "transfer",
+  "region": "default",
+  "version": "1.0",
+  "title": "过户审核",
+  "paths": [
+    "/consistency-qingdao",
+    "/consistency-changchun"
+  ],
+  "anchors": [
+    "审核过户凭证",
+    "新车发票信息"
+  ],
+  "review_tab": "过户审核",
+  "scopes": [
+    "transfer_vehicle",
+    "transfer_new"
+  ],
+  "sections": [
+    {
+      "key": "transfer_vehicle",
+      "title": "审核过户凭证"
+    },
+    {
+      "key": "transfer_new",
+      "title": "新车发票信息"
+    }
+  ],
+  "page_groups": [
+    {
+      "label": "过户资料",
+      "scope": "transfer_vehicle",
+      "title": "过户资料",
+      "occurrence": 0
+    },
+    {
+      "label": "新车发票",
+      "scope": "transfer_new",
+      "title": "新车发票",
+      "occurrence": 0
+    }
+  ],
+  "materials": [
+    {
+      "document_type": "registration_certificate",
+      "label": "登记证书1、2页",
+      "hints": [
+        "登记证书1、2页",
+        "登记证书1,2页",
+        "登记证书1，2页",
+        "登记证书"
+      ],
+      "guidance": "只读取旧车登记证书第1、2页的完整车辆识别代号，写入transfer_registration.vin。不根据初始车主推定本次买卖方，不推断过户日期或当前车主。registration.covered_pages仅记录图片明确可见的页码，输出整数数组，不猜测缺页。",
+      "scopes": [
+        "transfer_vehicle"
+      ],
+      "required": false,
+      "minimum_count": 1,
+      "required_pages": [],
+      "alternative_group": "",
+      "extra_fields": [],
+      "remove_extra_fields": [],
+      "details": {
+        "scoped_extra_fields": [
+          [
+            "transfer_vehicle",
+            []
+          ]
+        ],
+        "scoped_guidance": [
+          [
+            "transfer_vehicle",
+            "只读取旧车登记证书第1、2页的完整车辆识别代号，写入transfer_registration.vin。不根据初始车主推定本次买卖方，不推断过户日期或当前车主。registration.covered_pages仅记录图片明确可见的页码，输出整数数组，不猜测缺页。"
+          ]
+        ],
+        "scoped_names": [],
+        "scope_independent": false,
+        "scoped_vehicle_fields": [],
+        "slots": [],
+        "derived_field": null
+      }
+    },
+    {
+      "document_type": "used_car_invoice",
+      "label": "二手车发票",
+      "hints": [
+        "二手车发票",
+        "二手车销售统一发票",
+        "过户发票"
+      ],
+      "guidance": "只读取二手车销售统一发票。buyer_name和buyer_id属于买方；seller_name和seller_id属于卖方；market_name和market_tax_no只读二手车市场及其对应纳税人识别号，不得混用买卖方证件号、经营拍卖单位或其他主体的信息。amount读取车价合计小写金额，不读取税额、不推算金额；brand_model保留票面实际厂牌型号，只有品牌也原样输出，不补全整车型号或销售车型。vin读取完整车辆识别代号，plate_no读取车牌照号。invoice_no保留全部位数和前导零；invoice_date只读开票日期，不提取或核对发票代码。",
+      "scopes": [
+        "transfer_vehicle"
+      ],
+      "required": false,
+      "minimum_count": 1,
+      "required_pages": [],
+      "alternative_group": "",
+      "extra_fields": [],
+      "remove_extra_fields": [],
+      "details": {
+        "scoped_extra_fields": [],
+        "scoped_guidance": [],
+        "scoped_names": [],
+        "scope_independent": false,
+        "scoped_vehicle_fields": [],
+        "slots": [],
+        "derived_field": null
+      }
+    },
+    {
+      "document_type": "invoice",
+      "label": "新车发票",
+      "hints": [
+        "新车发票",
+        "机动车销售统一发票"
+      ],
+      "guidance": "只读取机动车销售统一发票，不读取二手车发票。amount只读价税合计小写金额，不能用不含税价或税额代替。vin只读本张新车发票车辆识别代号，不能取旧车VIN。invoice_no保留全部位数和前导零；invoice_date只读开票日期，不提取或核对发票代码。",
+      "scopes": [
+        "transfer_new"
+      ],
+      "required": false,
+      "minimum_count": 1,
+      "required_pages": [],
+      "alternative_group": "",
+      "extra_fields": [],
+      "remove_extra_fields": [],
+      "details": {
+        "scoped_extra_fields": [
+          [
+            "transfer_new",
+            []
+          ]
+        ],
+        "scoped_guidance": [
+          [
+            "transfer_new",
+            "只读取机动车销售统一发票，不读取二手车发票。amount只读价税合计小写金额，不能用不含税价或税额代替。vin只读本张新车发票车辆识别代号，不能取旧车VIN。invoice_no保留全部位数和前导零；invoice_date只读开票日期，不提取或核对发票代码。"
+          ]
+        ],
+        "scoped_names": [],
+        "scope_independent": false,
+        "scoped_vehicle_fields": [],
+        "slots": [
+          [
+            "transfer_new",
+            1
+          ]
+        ],
+        "derived_field": null
+      }
+    }
+  ],
+  "fields": [
+    {
+      "key": "transfer_invoice.invoice_date",
+      "label": "开票日期",
+      "section": "transfer_vehicle",
+      "aliases": [
+        "开票日期"
+      ],
+      "page_section": "transfer_vehicle",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "used_car_invoice",
+          "field": "transfer_invoice.invoice_date",
+          "scope": "transfer_vehicle",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "date",
+      "authority": [
+        {
+          "source": "image",
+          "label": "二手车发票",
+          "document_types": [
+            "used_car_invoice"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "transfer_invoice.plate_no",
+      "label": "车牌号",
+      "section": "transfer_vehicle",
+      "aliases": [
+        "车牌号",
+        "车牌号码"
+      ],
+      "page_section": "transfer_vehicle",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "used_car_invoice",
+          "field": "transfer_invoice.plate_no",
+          "scope": "transfer_vehicle",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "plate",
+      "authority": [
+        {
+          "source": "image",
+          "label": "二手车发票",
+          "document_types": [
+            "used_car_invoice"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "transfer_invoice.vin",
+      "label": "识别车架号",
+      "section": "transfer_vehicle",
+      "aliases": [
+        "识别车架号"
+      ],
+      "page_section": "transfer_vehicle",
+      "section_required": true,
+      "reviewable": true,
+      "mode": null,
+      "evidence": [
+        {
+          "material": "used_car_invoice",
+          "field": "transfer_invoice.vin",
+          "scope": "transfer_vehicle",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "vin",
+      "authority": [],
+      "required": false,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [
+        "TRANSFER-OLD-VIN"
+      ],
+      "task_projector": ""
+    },
+    {
+      "key": "transfer_invoice.buyer_name",
+      "label": "过户发票买家名称",
+      "section": "transfer_vehicle",
+      "aliases": [
+        "过户发票买家名称"
+      ],
+      "page_section": "transfer_vehicle",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "used_car_invoice",
+          "field": "transfer_invoice.buyer_name",
+          "scope": "transfer_vehicle",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "party_name",
+      "authority": [
+        {
+          "source": "image",
+          "label": "二手车发票",
+          "document_types": [
+            "used_car_invoice"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "transfer_invoice.buyer_id",
+      "label": "证件号",
+      "section": "transfer_vehicle",
+      "aliases": [
+        "证件号"
+      ],
+      "page_section": "transfer_vehicle",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "used_car_invoice",
+          "field": "transfer_invoice.buyer_id",
+          "scope": "transfer_vehicle",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "identifier",
+      "authority": [
+        {
+          "source": "image",
+          "label": "二手车发票",
+          "document_types": [
+            "used_car_invoice"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "transfer_invoice.invoice_no",
+      "label": "发票号码",
+      "section": "transfer_vehicle",
+      "aliases": [
+        "发票号码"
+      ],
+      "page_section": "transfer_vehicle",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "used_car_invoice",
+          "field": "transfer_invoice.invoice_no",
+          "scope": "transfer_vehicle",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "invoice_number",
+      "authority": [
+        {
+          "source": "image",
+          "label": "二手车发票",
+          "document_types": [
+            "used_car_invoice"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "transfer_invoice.amount",
+      "label": "开票金额(含税)",
+      "section": "transfer_vehicle",
+      "aliases": [
+        "开票金额(含税)",
+        "开票金额（含税）"
+      ],
+      "page_section": "transfer_vehicle",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "used_car_invoice",
+          "field": "transfer_invoice.amount",
+          "scope": "transfer_vehicle",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "amount",
+      "authority": [
+        {
+          "source": "image",
+          "label": "二手车发票",
+          "document_types": [
+            "used_car_invoice"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "transfer_invoice.seller_name",
+      "label": "卖方名称",
+      "section": "transfer_vehicle",
+      "aliases": [
+        "卖方名称"
+      ],
+      "page_section": "transfer_vehicle",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "used_car_invoice",
+          "field": "transfer_invoice.seller_name",
+          "scope": "transfer_vehicle",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "party_name",
+      "authority": [
+        {
+          "source": "image",
+          "label": "二手车发票",
+          "document_types": [
+            "used_car_invoice"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "transfer_invoice.seller_id",
+      "label": "卖方证件号",
+      "section": "transfer_vehicle",
+      "aliases": [
+        "卖方证件号"
+      ],
+      "page_section": "transfer_vehicle",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "used_car_invoice",
+          "field": "transfer_invoice.seller_id",
+          "scope": "transfer_vehicle",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "identifier",
+      "authority": [
+        {
+          "source": "image",
+          "label": "二手车发票",
+          "document_types": [
+            "used_car_invoice"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "transfer_invoice.brand_model",
+      "label": "厂牌型号",
+      "section": "transfer_vehicle",
+      "aliases": [
+        "厂牌型号"
+      ],
+      "page_section": "transfer_vehicle",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "used_car_invoice",
+          "field": "transfer_invoice.brand_model",
+          "scope": "transfer_vehicle",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "text",
+      "authority": [
+        {
+          "source": "image",
+          "label": "二手车发票",
+          "document_types": [
+            "used_car_invoice"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "transfer_invoice.transfer_department",
+      "label": "转入地车管所",
+      "section": "transfer_vehicle",
+      "aliases": [
+        "转入地车管所"
+      ],
+      "page_section": "transfer_vehicle",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "used_car_invoice",
+          "field": "transfer_invoice.transfer_department",
+          "scope": "transfer_vehicle",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "text",
+      "authority": [
+        {
+          "source": "image",
+          "label": "二手车发票",
+          "document_types": [
+            "used_car_invoice"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "transfer_invoice.market_name",
+      "label": "二手车市场",
+      "section": "transfer_vehicle",
+      "aliases": [
+        "二手车市场"
+      ],
+      "page_section": "transfer_vehicle",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "used_car_invoice",
+          "field": "transfer_invoice.market_name",
+          "scope": "transfer_vehicle",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "party_name",
+      "authority": [
+        {
+          "source": "image",
+          "label": "二手车发票",
+          "document_types": [
+            "used_car_invoice"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "transfer_invoice.market_tax_no",
+      "label": "纳税人识别号",
+      "section": "transfer_vehicle",
+      "aliases": [
+        "纳税人识别号"
+      ],
+      "page_section": "transfer_vehicle",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "used_car_invoice",
+          "field": "transfer_invoice.market_tax_no",
+          "scope": "transfer_vehicle",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "identifier",
+      "authority": [
+        {
+          "source": "image",
+          "label": "二手车发票",
+          "document_types": [
+            "used_car_invoice"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "transfer_new_invoice.invoice_date",
+      "label": "新车发票开票日期",
+      "section": "transfer_new",
+      "aliases": [
+        "新车发票开票日期",
+        "开票日期"
+      ],
+      "page_section": "transfer_new",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "invoice",
+          "field": "transfer_new_invoice.invoice_date",
+          "scope": "transfer_new",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "date",
+      "authority": [
+        {
+          "source": "image",
+          "label": "新车发票",
+          "document_types": [
+            "invoice"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "transfer_new_invoice.invoice_no",
+      "label": "新车发票号码",
+      "section": "transfer_new",
+      "aliases": [
+        "新车发票号码",
+        "发票号码"
+      ],
+      "page_section": "transfer_new",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "invoice",
+          "field": "transfer_new_invoice.invoice_no",
+          "scope": "transfer_new",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "invoice_number",
+      "authority": [
+        {
+          "source": "image",
+          "label": "新车发票",
+          "document_types": [
+            "invoice"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "transfer_new_invoice.amount",
+      "label": "新车发票价税合计",
+      "section": "transfer_new",
+      "aliases": [
+        "新车发票价税合计",
+        "价税合计"
+      ],
+      "page_section": "transfer_new",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "invoice",
+          "field": "transfer_new_invoice.amount",
+          "scope": "transfer_new",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "amount",
+      "authority": [
+        {
+          "source": "image",
+          "label": "新车发票",
+          "document_types": [
+            "invoice"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "transfer_new_invoice.vin",
+      "label": "新车发票OCR识别VIN",
+      "section": "transfer_new",
+      "aliases": [
+        "新车发票OCR识别VIN",
+        "识别车架号"
+      ],
+      "page_section": "transfer_new",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "invoice",
+          "field": "transfer_new_invoice.vin",
+          "scope": "transfer_new",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "vin",
+      "authority": [
+        {
+          "source": "image",
+          "label": "新车发票",
+          "document_types": [
+            "invoice"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "transfer_registration.vin",
+      "label": "登记证书VIN",
+      "section": "",
+      "aliases": [],
+      "page_section": "unknown",
+      "section_required": false,
+      "reviewable": false,
+      "mode": null,
+      "evidence": [
+        {
+          "material": "registration_certificate",
+          "field": "transfer_registration.vin",
+          "scope": "transfer_vehicle",
+          "group_order": null,
+          "comparison": false
+        }
+      ],
+      "normalizer": "default",
+      "authority": [],
+      "required": false,
+      "writable": false,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "registration.covered_pages",
+      "label": "登记证书可见页码",
+      "section": "",
+      "aliases": [],
+      "page_section": "unknown",
+      "section_required": false,
+      "reviewable": false,
+      "mode": null,
+      "evidence": [
+        {
+          "material": "registration_certificate",
+          "field": "registration.covered_pages",
+          "scope": "transfer_vehicle",
+          "group_order": null,
+          "comparison": false
+        }
+      ],
+      "normalizer": "default",
+      "authority": [],
+      "required": false,
+      "writable": false,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    }
+  ],
+  "identity_anchors": [
+    "transfer_invoice.vin",
+    "transfer_new_invoice.vin"
+  ],
+  "record_identity_fields": [
+    "transfer_invoice.vin",
+    "transfer_new_invoice.vin"
+  ],
+  "page_actions": [
+    "fill_review_fields"
+  ],
+  "writable_control_kinds": [
+    "text",
+    "textarea",
+    "number",
+    "date",
+    "select"
+  ],
+  "review_declared_fields_only": true,
+  "settings": {
+    "material_policy": {
+      "mode": "observe",
+      "materials": [
+        {
+          "document_type": "registration_certificate",
+          "business_scope": "transfer_vehicle",
+          "minimum_count": 1,
+          "required_pages": [
+            1,
+            2
+          ],
+          "display_name": "登记证书1、2页",
+          "alternative_group": "",
+          "identity_side": null,
+          "presence_name": ""
+        },
+        {
+          "document_type": "used_car_invoice",
+          "business_scope": "transfer_vehicle",
+          "minimum_count": 1,
+          "required_pages": [],
+          "display_name": "二手车发票",
+          "alternative_group": "",
+          "identity_side": null,
+          "presence_name": ""
+        },
+        {
+          "document_type": "invoice",
+          "business_scope": "transfer_new",
+          "minimum_count": 1,
+          "required_pages": [],
+          "display_name": "新车发票",
+          "alternative_group": "",
+          "identity_side": null,
+          "presence_name": ""
+        }
+      ],
+      "field_sources": [],
+      "presence_groups": [
+        {
+          "key": "registration",
+          "display_name": "登记证书1、2页",
+          "alternatives": [
+            [
+              {
+                "document_type": "registration_certificate",
+                "business_scope": "transfer_vehicle",
+                "minimum_count": 1,
+                "required_pages": [
+                  1,
+                  2
+                ],
+                "display_name": "登记证书1、2页",
+                "alternative_group": "",
+                "identity_side": null,
+                "presence_name": ""
+              }
+            ]
+          ]
+        },
+        {
+          "key": "used_invoice",
+          "display_name": "二手车发票",
+          "alternatives": [
+            [
+              {
+                "document_type": "used_car_invoice",
+                "business_scope": "transfer_vehicle",
+                "minimum_count": 1,
+                "required_pages": [],
+                "display_name": "二手车发票",
+                "alternative_group": "",
+                "identity_side": null,
+                "presence_name": ""
+              }
+            ]
+          ]
+        },
+        {
+          "key": "new_invoice",
+          "display_name": "新车发票",
+          "alternatives": [
+            [
+              {
+                "document_type": "invoice",
+                "business_scope": "transfer_new",
+                "minimum_count": 1,
+                "required_pages": [],
+                "display_name": "新车发票",
+                "alternative_group": "",
+                "identity_side": null,
+                "presence_name": ""
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "replacement_policy": null,
+    "capability_specs": [
+      {
+        "capability_id": "transfer_documents",
+        "kind": "RULE",
+        "version": "1.0",
+        "stage": "POST_COMPARE",
+        "input_facts": [],
+        "output_facts": [],
+        "required": true,
+        "dependencies": [],
+        "timeout_seconds": 30.0,
+        "retries": 0,
+        "failure_policy": "MANUAL_REVIEW"
+      },
+      {
+        "capability_id": "material_completeness",
+        "kind": "MATERIAL",
+        "version": "1.0",
+        "stage": "EVIDENCE_VALIDATION",
+        "input_facts": [],
+        "output_facts": [],
+        "required": true,
+        "dependencies": [],
+        "timeout_seconds": 30.0,
+        "retries": 0,
+        "failure_policy": "MANUAL_REVIEW"
+      }
+    ],
+    "binding_declarations": [
+      {
+        "capability_id": "transfer_documents",
+        "enabled": true,
+        "required": null,
+        "parameters": []
+      },
+      {
+        "capability_id": "material_completeness",
+        "enabled": true,
+        "required": null,
+        "parameters": []
+      }
+    ],
+    "page_field_composites": [],
+    "qr_field_bindings": [],
+    "invoice_verification_field": null,
+    "ignored_image_labels": [
+      "登记证书3、4页",
+      "登记证书3,4页",
+      "登记证书3，4页"
+    ],
+    "retry_policy": {
+      "semantic_retry_count": 1,
+      "minimum_retry_window_seconds": 2.0,
+      "qr_web_retry_count": 1
+    },
+    "presentation": {
+      "hidden_fields": [],
+      "hidden_check_prefixes": [],
+      "groups": []
+    }
+  },
+  "active": true
+}

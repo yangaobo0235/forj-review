@@ -34,6 +34,13 @@ async function runContent(context) {
     ...context, ...overrides})) {
     if (name !== "globalThis" && name !== "console") vi.stubGlobal(name, value);
   }
+  const register = context.chrome.runtime.onMessage.addListener;
+  const testManifest = JSON.parse(readFileSync(new URL("./fixtures/collect-manifest.json", import.meta.url), "utf8"));
+  const testCatalog = JSON.parse(readFileSync(new URL("./fixtures/page-catalog.json", import.meta.url), "utf8"));
+  context.chrome.runtime.onMessage.addListener = handler => register((message, ...args) => handler(
+    message.type?.startsWith("COLLECT_PAGE") ? {collectManifests: [testManifest], pageCatalog: testCatalog, ...message} : message,
+    ...args,
+  ));
   await import("../src/entrypoints/content.ts");
 }
 

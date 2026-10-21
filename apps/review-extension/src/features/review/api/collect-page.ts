@@ -7,15 +7,13 @@ import { fetchPageCatalog } from "../../../platform/browser/catalog/page-catalog
 import type { PageCatalog } from "../../../platform/browser/catalog/page-catalog.ts";
 import { reviewApiBaseUrl } from "./review-client";
 import {
-  manifestBusinessTypes,
   manualBusinessSelection,
   type BusinessChoice,
 } from "../model/review-panel";
 import type { PageData } from "../../../shared/contracts/review";
 
 /**
- * 拉取各业务的采集清单。某个业务拉不到就跳过——Content Script 会退回内置表，
- * 采集不会因为清单不可用而中断。
+ * 拉取服务目录中各页面的采集清单。缺失页面保持未配置状态。
  */
 async function loadCollectManifests(
   catalog: PageCatalog | null,
@@ -30,9 +28,7 @@ async function loadCollectManifests(
             identity,
           ),
         )
-      : manifestBusinessTypes.map((business) =>
-          fetchCollectManifest(reviewApiBaseUrl, business),
-        ),
+      : [],
   );
   return results.filter((item): item is CollectManifest => item !== null);
 }
@@ -48,15 +44,14 @@ export async function collectPageData(
     throw new Error("没有找到当前页面");
   }
   // 先获取页面目录，再并发拉取目录中各 Profile 的采集清单。
-  // 目录不可用时按内置业务列表降级。
+  // 目录不可用时不恢复随包页面配置。
   const pageCatalog = await fetchPageCatalog(reviewApiBaseUrl);
   const manifests = pageCatalog ? await loadCollectManifests(pageCatalog) : [];
   const pageData = (await chrome.tabs.sendMessage(tab.id, {
     type: "COLLECT_PAGE_MANIFEST",
     businessSelection:
       selection === "AUTO" ? null : manualBusinessSelection(selection),
-    // 后端是字段别名和页面分组标题的唯一来源。拉取失败时下发空数组，
-    // Content Script 会退回内置表，采集照常进行。
+    // 拉取失败时下发空数组，Content Script 清空旧字段及回填权限。
     collectManifests: manifests,
     pageCatalog,
   })) as Omit<PageData, "sourceTabId">;
@@ -74,7 +69,7 @@ export async function collectPageData(
   if (!pageCatalog) {
     applyCollectManifest(null);
     return {...pageData, sourceTabId: tab.id,
-      reviewServiceError: "审核服务未连接，请确认服务已启动后点击“重新读取页面”。页面识别规则仍然保留。"};
+      reviewServiceError: "审核服务未连接，请确认服务已启动后点击“重新读取页面”。"};
   }
   if (pageData.pageId && !selectedManifest) {
     applyCollectManifest(null);
@@ -82,5 +77,6 @@ export async function collectPageData(
       reviewServiceError: "当前页面已识别，但审核采集配置不可用或尚未配置，请检查服务配置后重新读取页面。"};
   }
   applyCollectManifest(selectedManifest);
-  return { ...pageData, sourceTabId: tab.id };
+  return { ...pageData, actions: selectedManifest?.actions ?? [],
+    fieldLabels: Object.fromEntries((selectedManifest?.fields ?? []).map(f => [f.key, f.label])), sourceTabId: tab.id };
 }

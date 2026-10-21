@@ -1,3 +1,4 @@
+import { manifestWritableFields } from "../catalog/collect-manifest.ts";
 import type { DomElement, DomRoot } from "../dom.ts";
 import { antDatePicker, formControlKind, isSelectControl, logicalFormControl, readFormControlValue } from "../form-controls.ts";
 import { calendarDate, selectCalendarDate } from "./date-picker.ts";
@@ -33,14 +34,6 @@ type GroupPreparationFailure = {
 };
 /** Controlled field writes use the current collection and business allowlist. */
 
-const ALLOWED_VALUE_FIELDS = Object.freeze(new Set([
-  "old_vehicle.recycle_date", "scrap_certificate.certificate_no", "old_vehicle.vin", "old_vehicle.plate_no", "old_vehicle.owner", "old_vehicle.engine_model",
-  "invoice.code", "invoice.invoice_no", "invoice.amount", "invoice.invoice_date", "new_vehicle.vin", "new_vehicle.plate_no", "new_vehicle.owner",
-  "page_ocr.new_vehicle_vin", "application.customer_name",
-  "old_vehicle.type", "new_vehicle.fuel_type", "new_vehicle.registration_date",
-  "application.terminal_phone", "application.terminal_certificate_no", "application.owner_type",
-  "old_vehicle.affiliation", "new_vehicle.affiliation",
-]));
 // The production page currently renders Ant Design `a-form-item`, but the
 // same form is deployed in a few shells where the wrapper class is changed
 // (or removed by a micro-frontend).  Keep the framework selectors first and
@@ -317,7 +310,7 @@ async function optionId(control: DomElement, policy?: WritePolicy) {
 }
 
 const fieldAllowed = (field: string, policy: WritePolicy | undefined) =>
-  !policy?.fields ? ALLOWED_VALUE_FIELDS.has(field) : policy.fields.has(field);
+  (policy?.fields ?? manifestWritableFields())?.has(field) ?? false;
 
 const presentationTarget = (control: DomElement) => control.closest?.<DomElement>(
   ".ant-input-affix-wrapper, .ant-input-number, .ant-select, .ant-picker, .el-input, .el-input-number, .el-select, .el-date-editor",
@@ -543,7 +536,6 @@ async function executeSequence(
 }
 
 export const ReviewPageFieldWriter = {
-  defaultWritableFields: ALLOWED_VALUE_FIELDS,
   executeValue: (...args: Parameters<typeof executeValue>) => withPageWrite(args[0], () => executeValue(...args)),
   executeValueGroup: (...args: Parameters<typeof executeValueGroup>) => withPageWrite(args[0], () => executeValueGroup(...args)),
   executeSequence: (...args: Parameters<typeof executeSequence>) => withPageWrite(args[0], () => executeSequence(...args)),

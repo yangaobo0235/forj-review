@@ -15,6 +15,7 @@ from forj_review_service.contracts.review import ImageInput, ReviewRequest
 from forj_review_service.integrations.qr.decoder import QrImageDecoder
 from forj_review_service.integrations.qr.web_verifier import QrWebVerifier
 from forj_review_service.runtime.review_service import ReviewService
+from tests.support.pages import business_registry
 
 
 def qr_png(value: str) -> bytes:
@@ -35,9 +36,9 @@ async def test_qr_decoder_rejects_large_pixel_header_before_native_allocation(mo
         pytest.fail("尺寸校验必须先于原生图片内存分配")
 
     monkeypatch.setattr(cv2, "imdecode", native_decode)
-    result = await QrImageDecoder(transport=httpx.MockTransport(
-        lambda request: httpx.Response(200, content=bytes(payload))
-    )).decode("https://images.example.test/oversize.png")
+    result = await QrImageDecoder(
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, content=bytes(payload)))
+    ).decode("https://images.example.test/oversize.png")
     assert result.error_code == "decoder_error"
 
 
@@ -49,9 +50,9 @@ async def test_qr_decoder_contains_native_decode_errors(monkeypatch):
         raise cv2.error("synthetic native failure")
 
     monkeypatch.setattr(cv2, "imdecode", native_decode)
-    result = await QrImageDecoder(transport=httpx.MockTransport(
-        lambda request: httpx.Response(200, content=payload)
-    )).decode("https://images.example.test/broken.png")
+    result = await QrImageDecoder(
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, content=payload))
+    ).decode("https://images.example.test/broken.png")
     assert result.error_code == "decoder_error"
 
 
@@ -74,6 +75,7 @@ async def test_qr_decoder_reads_url_in_memory_with_zxing_first():
 @pytest.mark.asyncio
 async def test_qr_decoder_uses_opencv_when_zxing_has_no_result(monkeypatch):
     payload = qr_png("https://qclt.mofcom.gov.cn/proof/2")
+
     async def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, content=payload)
 
@@ -89,6 +91,7 @@ async def test_qr_decoder_uses_opencv_when_zxing_has_no_result(monkeypatch):
 @pytest.mark.asyncio
 async def test_qr_decoder_uses_opencv_when_zxing_raises(monkeypatch):
     payload = qr_png("https://qclt.mofcom.gov.cn/proof/3")
+
     async def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, content=payload)
 
@@ -126,9 +129,12 @@ async def test_review_uses_local_decoder_when_model_document_has_no_qr_code():
     class Decoder:
         async def decode(self, image_url):
             from forj_review_service.integrations.qr.decoder import QrDecodeResult
-            return QrDecodeResult(values=("https://qclt.mofcom.gov.cn/proof/local",), decoder="zxing")
 
-    service = ReviewService(qr_decoder=Decoder())
+            return QrDecodeResult(
+                values=("https://qclt.mofcom.gov.cn/proof/local",), decoder="zxing"
+            )
+
+    service = ReviewService(qr_decoder=Decoder(), registry=business_registry())
     service.qr_web = QrWebVerifier(
         allowed_hosts=["qclt.mofcom.gov.cn"],
         transport=httpx.MockTransport(

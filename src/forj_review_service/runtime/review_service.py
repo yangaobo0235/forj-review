@@ -7,6 +7,7 @@
 import asyncio
 import inspect
 import logging
+import threading
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -16,7 +17,6 @@ from forj_review_service.businesses.material_presence import evaluate_presence
 from forj_review_service.businesses.profiles import BusinessProfile
 from forj_review_service.businesses.registry import (
     BusinessRegistry,
-    build_business_registry,
 )
 from forj_review_service.businesses.rules.scrap_certificate_qr import qr_candidates
 from forj_review_service.capabilities.page_actions import PageActionHandler
@@ -24,6 +24,7 @@ from forj_review_service.capabilities.specs import (
     BusinessRuleHandler,
     ExternalCheckHandler,
 )
+from forj_review_service.config.event_loop import new_event_loop
 from forj_review_service.config.settings import image_private_hosts, load_qwen_config
 from forj_review_service.contracts.recognition import (
     MaterialCompletenessReport,
@@ -66,12 +67,19 @@ class ReviewService:
         page_action_handlers: Mapping[str, PageActionHandler] | None = None,
         qr_decoder: QrImageDecoder | None = None,
         load_model: bool = True,
+        database_settings=None,
     ) -> None:
+        self.database_settings = database_settings
+        self._databases = {}
+        self._database_lock = threading.Lock()
         config = load_qwen_config() if load_model else None
         self.qr_web = QrWebVerifier(allowed_hosts=["qclt.mofcom.gov.cn"])
         self.qr_decoder = qr_decoder or QrImageDecoder(private_hosts=image_private_hosts())
         self.qr_workflow = QrVerificationWorkflow()
-        self.registry = registry or build_business_registry()
+        self.registry = registry if registry is not None else BusinessRegistry(())
+        self._handler_overrides = dict(external_check_handlers=external_check_handlers,
+                                       business_rule_handlers=business_rule_handlers,
+                                       page_action_handlers=page_action_handlers)
         self.recognition = RecognitionService(QwenClient(config)) if config and config.available else None
         self.workflow = ReviewWorkflow(
             self,
@@ -80,10 +88,32 @@ class ReviewService:
             page_action_handlers=page_action_handlers,
         )
 
+    async def lookup_engine_emissions(self, models):
+        from forj_review_service.contracts.engine_emissions import EngineEmissionLookupUnavailable
+        from forj_review_service.integrations.database import AsyncDatabase, review_database
+        from forj_review_service.integrations.engine_emissions import lookup_engine_emissions_async
+
+        try:
+            loop = asyncio.get_running_loop()
+            with self._database_lock:
+                database = self._databases.get(loop)
+                if database is None:
+                    database = AsyncDatabase(self.database_settings or review_database())
+                    self._databases[loop] = database
+            return await lookup_engine_emissions_async(models, database=database)
+        except ValueError:
+            raise EngineEmissionLookupUnavailable("发动机排放对应表读取失败，请检查数据库配置") from None
+
     async def aclose(self) -> None:
         """释放当前事件循环的模型连接池，须在该循环停止前调用。"""
-        if self.recognition is not None:
-            await self.recognition.client.aclose()
+        try:
+            if self.recognition is not None:
+                await self.recognition.client.aclose()
+        finally:
+            with self._database_lock:
+                database = self._databases.pop(asyncio.get_running_loop(), None)
+            if database is not None:
+                await database.engine.dispose()
 
     def assist(
         self, request: ReviewRequest, *, business: BusinessContext = DEFAULT_BUSINESS
@@ -95,7 +125,8 @@ class ReviewService:
                 await self.aclose()
 
         # 同步入口拥有临时循环，也必须在 asyncio.run 关闭它之前释放连接。
-        return asyncio.run(run())
+        with asyncio.Runner(loop_factory=new_event_loop) as runner:
+            return runner.run(run())
 
     async def assist_async(
         self,
@@ -197,9 +228,7 @@ class ReviewService:
                 retry_policy=resolved_profile.retry_policy,
                 initial_report=initial_report,
                 # 材料类型候选限制在本业务声明的集合内。
-                allowed_document_types=declared_material_types(
-                    resolved_profile.business_type, business=business
-                ),
+                allowed_document_types=declared_material_types(business),
                 business=business,
             )
 

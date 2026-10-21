@@ -21,7 +21,10 @@ from forj_review_service.businesses.completeness import (
     evaluate_extracted,
 )
 from forj_review_service.businesses.context import DEFAULT_BUSINESS, BusinessContext
-from forj_review_service.businesses.context_validation import validate_request_route
+from forj_review_service.businesses.context_validation import (
+    BusinessContextMismatch,
+    validate_request_route,
+)
 from forj_review_service.businesses.page_config.inspection import profile_fingerprint
 from forj_review_service.businesses.profiles import BusinessProfile
 from forj_review_service.capabilities.page_actions import PageActionHandler
@@ -29,6 +32,7 @@ from forj_review_service.capabilities.specs import (
     BusinessRuleHandler,
     ExternalCheckHandler,
 )
+from forj_review_service.contracts.errors import ReviewInputError
 from forj_review_service.contracts.recognition import (
     RecognitionBatchResult,
 )
@@ -52,8 +56,9 @@ from forj_review_service.evidence.comparison.composite_fields import (
 )
 from forj_review_service.evidence.comparison.review import build_field_comparisons
 from forj_review_service.observability.context import safe_id
+from forj_review_service.observability.decision import log_review_decision
 from forj_review_service.presentation.advice import build_final_advice
-from forj_review_service.presentation.response import _log_decision, response_from_results
+from forj_review_service.presentation.response import response_from_results
 from forj_review_service.presentation.routing import build_review_tasks
 from forj_review_service.runtime.workflow.capability_assembly import WorkflowCapabilities
 from forj_review_service.runtime.workflow.capability_execution import (
@@ -203,7 +208,7 @@ class ReviewWorkflow:
             or profile.region != request.region
             and profile.region is not Region.DEFAULT
         ):
-            raise ValueError("请求业务、地区或版本与显式 Profile 不一致")
+            raise ReviewInputError("请求业务、地区或版本与显式 Profile 不一致")
         return {"request": state["request"], "profile": state["profile"]}
 
     @staticmethod
@@ -222,7 +227,7 @@ class ReviewWorkflow:
         """Validate request/profile compatibility before any external work."""
         try:
             return self._validate_context(state)
-        except (ValueError, LookupError) as exc:
+        except (ReviewInputError, BusinessContextMismatch) as exc:
             return {"validation_error": str(exc)}
 
     @staticmethod
@@ -426,7 +431,7 @@ class ReviewWorkflow:
         )
         # Validate serialized enum values at the API boundary.
         response = ReviewResponse.model_validate(response.model_dump())
-        _log_decision(response, "final")
+        log_review_decision(response, "final")
         return {"response": response}
 
     async def run(

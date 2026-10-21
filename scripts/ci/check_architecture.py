@@ -9,8 +9,10 @@ ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = "forj_review_service"
 SOURCE = ROOT / "src" / PACKAGE
 GENERIC_WORKFLOW_MODULES = {
-    "runtime/workflow/graph.py", "runtime/workflow/capability_execution.py",
-    "runtime/workflow/planner.py", "runtime/workflow/state.py",
+    "runtime/workflow/graph.py",
+    "runtime/workflow/capability_execution.py",
+    "runtime/workflow/planner.py",
+    "runtime/workflow/state.py",
 }
 
 
@@ -45,6 +47,8 @@ def check_architecture(source: Path = SOURCE) -> list[str]:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for line, module in runtime_imports(tree, package):
             parts = module.split(".")
+            if parts[0] == PACKAGE and parts[-1].startswith("_"):
+                findings.append(f"{relative.as_posix()}:{line}: imports private API: {module}")
             reason = None
             if parts[0] in {"tests", "scripts", "app"}:
                 reason = "product code imports repository tooling or a retired package"
@@ -69,42 +73,108 @@ def check_architecture(source: Path = SOURCE) -> list[str]:
                     reason = "evidence decisions import API response rendering"
             if reason:
                 findings.append(f"{relative.as_posix()}:{line}: {reason}: {module}")
-            if relative.as_posix() in GENERIC_WORKFLOW_MODULES and module.startswith(
-                f"{PACKAGE}.businesses.rules."
-            ) and not module.startswith(f"{PACKAGE}.businesses.rules.catalog."):
-                findings.append(f"{relative.as_posix()}:{line}: workflow imports a concrete business rule: {module}")
+            if (
+                relative.as_posix() in GENERIC_WORKFLOW_MODULES
+                and module.startswith(f"{PACKAGE}.businesses.rules.")
+                and not module.startswith(f"{PACKAGE}.businesses.rules.catalog.")
+            ):
+                findings.append(
+                    f"{relative.as_posix()}:{line}: workflow imports a concrete business rule: {module}"
+                )
             if relative.as_posix() in {
-                "runtime/workflow/capability_execution.py", "runtime/workflow/state.py",
-            } and module.startswith((
-                f"{PACKAGE}.runtime.workflow.graph.", f"{PACKAGE}.presentation.",
-            )):
-                findings.append(f"{relative.as_posix()}:{line}: workflow state/execution imports graph or presentation: {module}")
-            if relative.as_posix() == "presentation/task_factory.py" and module.startswith(
-                f"{PACKAGE}."
-            ) and not module.startswith(f"{PACKAGE}.contracts."):
-                findings.append(f"{relative.as_posix()}:{line}: task factory imports execution or business policy: {module}")
+                "runtime/workflow/capability_execution.py",
+                "runtime/workflow/state.py",
+            } and module.startswith(
+                (
+                    f"{PACKAGE}.runtime.workflow.graph.",
+                    f"{PACKAGE}.presentation.",
+                )
+            ):
+                findings.append(
+                    f"{relative.as_posix()}:{line}: workflow state/execution imports graph or presentation: {module}"
+                )
+            if (
+                relative.as_posix() == "presentation/task_factory.py"
+                and module.startswith(f"{PACKAGE}.")
+                and not module.startswith(f"{PACKAGE}.contracts.")
+            ):
+                findings.append(
+                    f"{relative.as_posix()}:{line}: task factory imports execution or business policy: {module}"
+                )
             if relative.as_posix() == "runtime/jobs/progress.py" and module.startswith(
                 f"{PACKAGE}.runtime.jobs.manager."
             ):
-                findings.append(f"{relative.as_posix()}:{line}: progress view imports job lifecycle manager: {module}")
-            if relative.parts[:2] == ("businesses", "page_config") and module.startswith((
-                f"{PACKAGE}.runtime", f"{PACKAGE}.integrations",
-                f"{PACKAGE}.interfaces", f"{PACKAGE}.bootstrap",
-            )):
-                findings.append(f"{relative.as_posix()}:{line}: configuration compiler imports an execution adapter: {module}")
+                findings.append(
+                    f"{relative.as_posix()}:{line}: progress view imports job lifecycle manager: {module}"
+                )
+            if relative.parts[:2] == ("businesses", "page_config") and module.startswith(
+                (
+                    f"{PACKAGE}.runtime",
+                    f"{PACKAGE}.integrations",
+                    f"{PACKAGE}.interfaces",
+                    f"{PACKAGE}.bootstrap",
+                )
+            ):
+                findings.append(
+                    f"{relative.as_posix()}:{line}: configuration compiler imports an execution adapter: {module}"
+                )
         if relative.parts[:2] == ("businesses", "page_config"):
             for node in ast.walk(tree):
-                if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in {
-                    "eval", "exec", "__import__",
-                }:
-                    findings.append(f"{relative.as_posix()}:{node.lineno}: configuration executes dynamic code")
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id
+                    in {
+                        "eval",
+                        "exec",
+                        "__import__",
+                    }
+                ):
+                    findings.append(
+                        f"{relative.as_posix()}:{node.lineno}: configuration executes dynamic code"
+                    )
         if relative.as_posix() in GENERIC_WORKFLOW_MODULES:
-            business_ids = {"scrap_certificate_qr", "verify_invoice", "old_vehicle.affiliation", "new_vehicle.affiliation", "scrap_replacement"}
+            business_ids = {
+                "scrap_certificate_qr",
+                "verify_invoice",
+                "old_vehicle.affiliation",
+                "new_vehicle.affiliation",
+                "scrap_replacement",
+            }
             for node in ast.walk(tree):
-                if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value in business_ids:
-                    findings.append(f"{relative.as_posix()}:{node.lineno}: workflow embeds business registration: {node.value}")
+                if (
+                    isinstance(node, ast.Constant)
+                    and isinstance(node.value, str)
+                    and node.value in business_ids
+                ):
+                    findings.append(
+                        f"{relative.as_posix()}:{node.lineno}: workflow embeds business registration: {node.value}"
+                    )
     if source == SOURCE:
         findings.extend(check_configuration_service())
+        findings.extend(check_database_package())
+    return findings
+
+
+def check_database_package(source: Path | None = None) -> list[str]:
+    """Shared persistence cannot depend on either service or repository tooling."""
+    source = source or ROOT / "src/forj_review_database"
+    findings = []
+    for path in sorted(source.rglob("*.py")):
+        relative = path.relative_to(source)
+        package = ".".join(["forj_review_database", *relative.parts[:-1]])
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for line, module in runtime_imports(tree, package):
+            if module.split(".")[0] in {
+                "forj_review_service",
+                "forj_review_config_service",
+                "tests",
+                "scripts",
+            }:
+                findings.append(
+                    f"forj_review_database/{relative.as_posix()}:{line}: "
+                    f"shared database imports service or repository tooling: {module}"
+                )
     return findings
 
 
@@ -112,11 +182,16 @@ def check_configuration_service(source: Path | None = None) -> list[str]:
     source = source or ROOT / "src/forj_review_config_service"
     findings = []
     shared = (
+        "forj_review_service.contracts.errors.",
         "forj_review_service.businesses.page_config.",
         "forj_review_service.businesses.packs.",
         "forj_review_service.businesses.page_catalog.",
         "forj_review_service.businesses.rules.catalog.",
         "forj_review_service.runtime.configuration.service.",
+        "forj_review_service.runtime.configuration.publication.",
+        "forj_review_service.runtime.configuration.verification.",
+        "forj_review_service.businesses.page_config.state.",
+        "forj_review_service.integrations.storage.",
     )
     for path in sorted(source.rglob("*.py")):
         relative = path.relative_to(source)
@@ -126,18 +201,33 @@ def check_configuration_service(source: Path | None = None) -> list[str]:
         for line, module in runtime_imports(tree, package):
             reason = None
             if module.startswith("forj_review_service"):
-                if relative.parts[:2] != ("integrations", "review_kernel") or not module.startswith(shared):
-                    reason = "cross-package access must use the registered review_kernel adapter API"
+                if relative.parts[:2] != ("integrations", "review_kernel") or not module.startswith(
+                    shared
+                ):
+                    reason = (
+                        "cross-package access must use the registered review_kernel adapter API"
+                    )
             elif module.startswith("forj_review_config_service."):
                 target = module.split(".")[1]
                 if group in {"contracts", "config"} and target != group:
                     reason = "foundation imports execution"
-                elif group in {"application", "workflow", "tools"} and target in {"integrations", "interfaces", "bootstrap"}:
+                elif group in {"application", "workflow", "tools"} and target in {
+                    "integrations",
+                    "interfaces",
+                    "bootstrap",
+                }:
                     reason = "orchestration imports a concrete adapter or entrypoint"
-                elif group == "integrations" and target in {"application", "workflow", "interfaces", "bootstrap"}:
+                elif group == "integrations" and target in {
+                    "application",
+                    "workflow",
+                    "interfaces",
+                    "bootstrap",
+                }:
                     reason = "adapter imports orchestration"
             if reason:
-                findings.append(f"forj_review_config_service/{relative.as_posix()}:{line}: {reason}: {module}")
+                findings.append(
+                    f"forj_review_config_service/{relative.as_posix()}:{line}: {reason}: {module}"
+                )
     # The review service must never depend on the configuration service.
     if source == ROOT / "src/forj_review_config_service":
         for path in SOURCE.rglob("*.py"):

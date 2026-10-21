@@ -1,5 +1,6 @@
 """业务规则组注册与顺序执行。"""
 
+import inspect
 from collections.abc import Mapping
 from types import MappingProxyType
 
@@ -19,19 +20,19 @@ class BusinessRuleRegistry:
     def __init__(self, handlers: Mapping[str, BusinessRuleHandler]) -> None:
         self._handlers = MappingProxyType(dict(handlers))
 
-    def execute(
+    async def execute(
         self,
         rule_group_ids: tuple[str, ...],
         context: ReviewExecutionContext,
     ) -> RuleExecutionResult:
-        checks = []
-        intents = []
-        evidence = []
+        checks, intents, evidence = [], [], []
         for rule_group_id in dict.fromkeys(rule_group_ids):
             handler = self._handlers.get(rule_group_id)
             if handler is None:
                 raise UnknownBusinessRule(f"未注册业务规则：{rule_group_id}")
             result = handler(context)
+            if inspect.isawaitable(result):
+                result = await result
             checks.extend(result.checks)
             intents.extend(result.page_action_intents)
             evidence.extend(result.evidence)

@@ -6,22 +6,17 @@ from forj_review_service.contracts.review import (
     QrCheck,
 )
 from forj_review_service.presentation.advice import build_final_advice
+from tests.support.pages import SCRAP_BUSINESS as TEST_BUSINESS
 
 
 def matched(field: str) -> FieldComparison:
-    return FieldComparison(
-        field=field, left_value="A", right_value="A", status=FieldStatus.MATCH
-    )
+    return FieldComparison(field=field, left_value="A", right_value="A", status=FieldStatus.MATCH)
 
 
 def test_all_matching_checks_produce_pass_advice() -> None:
     cross_checks = [
-        CheckResult(
-            check_id="CROSS-OWNER-001", label="所有人", status="MATCH", reason="一致"
-        ),
-        CheckResult(
-            check_id="CROSS-DATE-001", label="日期", status="MATCH", reason="同年"
-        ),
+        CheckResult(check_id="CROSS-OWNER-001", label="所有人", status="MATCH", reason="一致"),
+        CheckResult(check_id="CROSS-DATE-001", label="日期", status="MATCH", reason="同年"),
     ]
 
     recommendation, advice = build_final_advice(
@@ -31,6 +26,7 @@ def test_all_matching_checks_produce_pass_advice() -> None:
         [],
         [],
         [0.8, 1.0],
+        business=TEST_BUSINESS,
     )
 
     assert recommendation == "PASS"
@@ -50,7 +46,9 @@ def test_field_conflict_produces_review_finding_with_original_sources() -> None:
         ],
     )
 
-    recommendation, advice = build_final_advice([comparison], [], [], [], [], [])
+    recommendation, advice = build_final_advice(
+        [comparison], [], [], [], [], [], business=TEST_BUSINESS
+    )
 
     assert recommendation == "REVIEW_REQUIRED"
     assert advice.title == "建议人工复核"
@@ -71,14 +69,13 @@ def test_missing_qr_result_is_not_invented_without_an_executed_external_check() 
                 status="MATCH",
                 reason="一致",
             ),
-            CheckResult(
-                check_id="CROSS-DATE-001", label="日期", status="MATCH", reason="同年"
-            ),
+            CheckResult(check_id="CROSS-DATE-001", label="日期", status="MATCH", reason="同年"),
         ],
         [],
         [],
         [],
         [],
+        business=TEST_BUSINESS,
     )
 
     assert recommendation == "PASS"
@@ -86,7 +83,7 @@ def test_missing_qr_result_is_not_invented_without_an_executed_external_check() 
 
 
 def test_final_advice_does_not_require_qr_for_transfer() -> None:
-    decision, advice = build_final_advice([], [], [], [], [], [])
+    decision, advice = build_final_advice([], [], [], [], [], [], business=TEST_BUSINESS)
 
     assert decision == "PASS"
     assert advice.findings == []
@@ -99,12 +96,16 @@ def test_insufficient_cross_check_and_qr_failure_are_all_findings() -> None:
         status="INSUFFICIENT",
         reason="基础日期尚未确定",
     )
-    qr_check = QrCheck(
-        status=FieldStatus.REVIEW_REQUIRED, message="二维码网页无法完成核验"
-    )
+    qr_check = QrCheck(status=FieldStatus.REVIEW_REQUIRED, message="二维码网页无法完成核验")
 
     recommendation, advice = build_final_advice(
-        [], [cross_check], [qr_check], ["未采集到审核图片"], ["识别超时"], []
+        [],
+        [cross_check],
+        [qr_check],
+        ["未采集到审核图片"],
+        ["识别超时"],
+        [],
+        business=TEST_BUSINESS,
     )
 
     assert recommendation == "REVIEW_REQUIRED"

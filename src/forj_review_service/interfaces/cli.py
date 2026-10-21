@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import json
+import sys
 from pathlib import Path
 
 import uvicorn
@@ -16,9 +17,8 @@ def main() -> None:
     commands = parser.add_mutually_exclusive_group()
     commands.add_argument("--check-pages", type=Path, metavar="DIRECTORY", help="校验页面配置及运行时能力，不启动服务")
     commands.add_argument("--page-schema", action="store_true", help="输出页面配置 JSON Schema")
-    commands.add_argument("--inspect-pages", type=Path, metavar="DIRECTORY", help="输出继承展开后的有效配置与摘要")
+    commands.add_argument("--inspect-pages", type=Path, metavar="DIRECTORY", help="输出完整页面的有效配置与摘要")
     commands.add_argument("--compare-pages", type=Path, nargs=2, metavar=("BEFORE", "AFTER"), help="比较两个目录的活动页面配置")
-    commands.add_argument("--snapshot-pages", type=Path, metavar="DIRECTORY", help="保存本地配置快照并锁定已记录的版本内容")
     commands.add_argument("--replay-pages", type=Path, metavar="DIRECTORY", help="使用固定识别结果离线回放审核")
     parser.add_argument("--cases", type=Path, metavar="FILE", help="离线回放样例 JSON")
     parser.add_argument("--json", action="store_true", help="配置检查也输出结构化 JSON 诊断")
@@ -31,10 +31,9 @@ def main() -> None:
         print(json.dumps(PageDefinition.model_json_schema(), ensure_ascii=False, indent=2))
         return
     if any((args.check_pages, args.inspect_pages, args.compare_pages,
-            args.snapshot_pages, args.replay_pages)):
-        from forj_review_service.businesses.page_config.history import record_snapshot
+            args.replay_pages)):
         from forj_review_service.businesses.page_config.inspection import compare_configurations
-        from forj_review_service.interfaces.page_tools import (
+        from forj_review_service.runtime.configuration.service import (
             inspect_directory,
             replay_cases,
             validated_configuration,
@@ -49,9 +48,6 @@ def main() -> None:
                 result = inspect_directory(args.inspect_pages)
             elif args.compare_pages:
                 result = compare_configurations(*(inspect_directory(p) for p in args.compare_pages))
-            elif args.snapshot_pages:
-                pages, _ = validated_configuration(args.snapshot_pages)
-                result = {"ok": True, **record_snapshot(args.snapshot_pages, pages)}
             elif args.replay_pages:
                 result = asyncio.run(replay_cases(args.replay_pages, args.cases))
         except (ValueError, LookupError, OSError) as exc:
@@ -70,6 +66,13 @@ def main() -> None:
         return
     uvicorn.run(
         "forj_review_service.main:app", host=args.host, port=args.port, reload=args.reload,
-        reload_dirs=[str(Path(__file__).resolve().parents[1])] if args.reload else None,
+        reload_dirs=[str(Path(__file__).resolve().parents[1]),
+                     str(Path(__file__).resolve().parents[2] / "forj_review_database")]
+                    if args.reload else None,
         access_log=False,
+        loop="asyncio:SelectorEventLoop" if sys.platform == "win32" else "auto",
     )
+
+
+if __name__ == "__main__":
+    main()

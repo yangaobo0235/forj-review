@@ -7,7 +7,7 @@ from types import MappingProxyType
 
 from forj_review_service.businesses.rules.affiliation import run_affiliation_subject
 from forj_review_service.businesses.rules.affiliation_action import run_set_affiliation
-from forj_review_service.businesses.rules.emission_standard import run_emission_standard
+from forj_review_service.businesses.rules.emission_standard import run_emission_standard_async
 from forj_review_service.businesses.rules.invoice_verification import run_verify_invoice
 from forj_review_service.businesses.rules.owner_consistency import (
     OWNER_CONSISTENCY_CHECK_ID,
@@ -21,7 +21,7 @@ from forj_review_service.businesses.rules.vehicle_type_light_duty import (
     run_vehicle_type_light_duty,
 )
 from forj_review_service.capabilities.specs import BusinessRuleHandler, CapabilitySpec
-from forj_review_service.contracts.engine_emissions import EngineEmissionLookup
+from forj_review_service.contracts.engine_emissions import AsyncEngineEmissionLookup
 
 
 @dataclass(frozen=True)
@@ -43,7 +43,12 @@ RULE_DEFINITIONS = MappingProxyType(
         ),
         "vehicle_source_model": RuleDefinition(
             run_vehicle_source_model,
-            ("vehicle.brand_model", "vehicle.announcement_model", "vehicle.engine_model", "vehicle.vin"),
+            (
+                "vehicle.brand_model",
+                "vehicle.announcement_model",
+                "vehicle.engine_model",
+                "vehicle.vin",
+            ),
             ("VEHICLE-SOURCE-BRAND-MODEL", "VEHICLE-SOURCE-MODEL"),
         ),
         "owner_consistency": RuleDefinition(
@@ -73,7 +78,7 @@ RULE_DEFINITIONS = MappingProxyType(
             "FINAL_REVIEW",
         ),
         "emission_standard": RuleDefinition(
-            run_emission_standard,
+            run_emission_standard_async,
             ("old_vehicle.emission_standard", "old_vehicle.engine_model", "old_vehicle.fuel_type"),
             ("EMISSION-STANDARD-001",),
             "POST_COMPARE",
@@ -86,6 +91,12 @@ RULE_HANDLERS = MappingProxyType({key: value.handler for key, value in RULE_DEFI
 RULE_FIELDS = MappingProxyType(
     {key: frozenset(value.fields) for key, value in RULE_DEFINITIONS.items()}
 )
+RULE_OPTIONAL_FIELDS = MappingProxyType({"affiliation_subject": ("application.customer_name",)})
+REPLACEMENT_POLICY_FIELDS = (
+    "invoice.invoice_date",
+    "old_vehicle.recycle_date",
+    "new_vehicle.origin",
+)
 
 # Keep this list in sync with the checks emitted by ``run_replacement_policy``.
 # Page configurations use it to validate field-to-check bindings; omitting a
@@ -94,10 +105,12 @@ RULE_FIELDS = MappingProxyType(
 REPLACEMENT_POLICY_CHECKS = frozenset(
     {"POLICY-INVOICE-DATE", "POLICY-DISPOSAL-DEADLINE", "POLICY-NEW-ORIGIN"}
 )
-TASK_PROJECTOR_RULES = MappingProxyType({
-    "old_vehicle_affiliation": "affiliation_subject",
-    "new_vehicle_affiliation": "affiliation_subject",
-})
+TASK_PROJECTOR_RULES = MappingProxyType(
+    {
+        "old_vehicle_affiliation": "affiliation_subject",
+        "new_vehicle_affiliation": "affiliation_subject",
+    }
+)
 
 
 def rule_spec(rule_id: str) -> CapabilitySpec:
@@ -110,10 +123,12 @@ def rule_spec(rule_id: str) -> CapabilitySpec:
 
 
 def build_rule_handlers(
-    policy_rule_ids: Sequence[str], *, engine_emission_lookup: EngineEmissionLookup | None = None,
+    policy_rule_ids: Sequence[str],
+    *,
+    engine_emission_lookup: AsyncEngineEmissionLookup | None = None,
 ) -> dict[str, BusinessRuleHandler]:
     return {
         **RULE_HANDLERS,
-        "emission_standard": partial(run_emission_standard, lookup=engine_emission_lookup),
+        "emission_standard": partial(run_emission_standard_async, lookup=engine_emission_lookup),
         **{rule_id: run_replacement_policy for rule_id in policy_rule_ids},
     }

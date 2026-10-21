@@ -12,10 +12,12 @@ from forj_review_service.contracts.review import (
 )
 from forj_review_service.runtime.jobs.manager import ReviewJobManager
 from forj_review_service.runtime.scheduling.fair_scheduler import FairAsyncScheduler
+from tests.support.pages import business_registry
 
 
 class UrlService:
     def __init__(self):
+        self.registry = business_registry()
         self.extracted_ids = []
         self.final_batches = []
 
@@ -23,18 +25,32 @@ class UrlService:
         assert image.recognition_source == image.src
         image_id = str(image.image_id or image.index)
         self.extracted_ids.append(image_id)
-        return RecognitionBatchResult(total_count=1, completed_count=1, completed_image_ids=[image_id])
+        return RecognitionBatchResult(
+            total_count=1, completed_count=1, completed_image_ids=[image_id]
+        )
 
     async def assist_with_batch_async(self, request, initial_batch):
         self.final_batches.append(initial_batch.model_copy(deep=True))
-        return ReviewResponse(recommendation="REVIEW_REQUIRED", risk_level="MEDIUM", summary="全部完成"), initial_batch
+        return ReviewResponse(
+            recommendation="REVIEW_REQUIRED", risk_level="MEDIUM", summary="全部完成"
+        ), initial_batch
 
 
 def request(count=2):
-    return ReviewRequest(page_url="https://example.test/review", images=[
-        {"index": i, "image_id": f"image-{i}", "src": f"https://images.example.test/{i}.jpg",
-         "business_scope": "old_vehicle" if i == 0 else "new_vehicle"} for i in range(count)
-    ])
+    return ReviewRequest(
+        region="qingdao",
+        page_id="scrap_replacement:qingdao",
+        page_url="https://example.test/review",
+        images=[
+            {
+                "index": i,
+                "image_id": f"image-{i}",
+                "src": f"https://images.example.test/{i}.jpg",
+                "business_scope": "old_vehicle" if i == 0 else "new_vehicle",
+            }
+            for i in range(count)
+        ],
+    )
 
 
 def test_url_job_schedules_each_image_once_and_reuses_batch():
@@ -56,8 +72,8 @@ def test_url_job_schedules_each_image_once_and_reuses_batch():
 
 def test_presence_survives_partial_image_merge_and_is_visible_before_finalization():
     from forj_review_service.businesses.completeness import evaluate_extracted
-    from forj_review_service.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
     from forj_review_service.contracts.recognition import DocumentClassification
+    from tests.support.pages import SCRAP_REPLACEMENT_QINGDAO
 
     started = threading.Event()
     release = threading.Event()
@@ -66,10 +82,21 @@ def test_presence_survives_partial_image_merge_and_is_visible_before_finalizatio
         async def extract_image_async(self, request, image):
             image_id = str(image.image_id)
             if image.index == 1:
-                return RecognitionBatchResult(total_count=1, timed_out_count=1, timed_out_image_ids=[image_id])
-            return RecognitionBatchResult(total_count=1, failed_count=1, failed_image_ids=[image_id], document_classifications=[
-                DocumentClassification(target_id=image_id, document_type="vehicle_license", business_scope="old_vehicle"),
-            ])
+                return RecognitionBatchResult(
+                    total_count=1, timed_out_count=1, timed_out_image_ids=[image_id]
+                )
+            return RecognitionBatchResult(
+                total_count=1,
+                failed_count=1,
+                failed_image_ids=[image_id],
+                document_classifications=[
+                    DocumentClassification(
+                        target_id=image_id,
+                        document_type="vehicle_license",
+                        business_scope="old_vehicle",
+                    ),
+                ],
+            )
 
         async def assist_with_batch_async(self, request, initial_batch):
             started.set()
@@ -77,8 +104,12 @@ def test_presence_survives_partial_image_merge_and_is_visible_before_finalizatio
                 await asyncio.sleep(0.005)
             result = evaluate_extracted(request, SCRAP_REPLACEMENT_QINGDAO, initial_batch)
             initial_batch.material_completeness = result
-            return ReviewResponse(recommendation="REVIEW_REQUIRED", risk_level="MEDIUM", summary="synthetic",
-                                  material_completeness=result), initial_batch
+            return ReviewResponse(
+                recommendation="REVIEW_REQUIRED",
+                risk_level="MEDIUM",
+                summary="synthetic",
+                material_completeness=result,
+            ), initial_batch
 
     manager = ReviewJobManager(PartialService())
     try:
@@ -100,7 +131,10 @@ def test_presence_survives_partial_image_merge_and_is_visible_before_finalizatio
         manager.close()
 
 
-@pytest.mark.parametrize("src", ["", "blob:https://example.test/id", "data:image/jpeg;base64,AA==", "file:///tmp/image.png"])
+@pytest.mark.parametrize(
+    "src",
+    ["", "blob:https://example.test/id", "data:image/jpeg;base64,AA==", "file:///tmp/image.png"],
+)
 def test_invalid_urls_are_rejected_before_job_creation(src):
     manager = ReviewJobManager(UrlService())
     data = request(1)
@@ -128,6 +162,7 @@ def test_missing_terminal_results_are_partial():
     class Incomplete(UrlService):
         async def extract_image_async(self, request, image):
             return RecognitionBatchResult(total_count=1)
+
     manager = ReviewJobManager(Incomplete())
     created = manager.create(request(1))
     assert manager.wait(created.job_id, 2)
@@ -139,7 +174,10 @@ def test_missing_terminal_results_are_partial():
 def test_timeouts_are_partial_and_retained():
     class Timeout(UrlService):
         async def extract_image_async(self, request, image):
-            return RecognitionBatchResult(total_count=1, timed_out_count=1, timed_out_image_ids=[str(image.image_id)])
+            return RecognitionBatchResult(
+                total_count=1, timed_out_count=1, timed_out_image_ids=[str(image.image_id)]
+            )
+
     manager = ReviewJobManager(Timeout())
     created = manager.create(request(1))
     assert manager.wait(created.job_id, 2)
@@ -156,6 +194,7 @@ def test_model_exception_does_not_lose_other_results():
             if image.index == 0:
                 raise RuntimeError("synthetic failure")
             return await super().extract_image_async(request, image)
+
     manager = ReviewJobManager(Failing())
     created = manager.create(request())
     assert manager.wait(created.job_id, 2)
@@ -170,6 +209,7 @@ def test_finalization_failure_only_exposes_exception_type(caplog):
     class Failing(UrlService):
         async def assist_with_batch_async(self, request, initial_batch):
             raise AttributeError("private model details")
+
     manager = ReviewJobManager(Failing())
     with caplog.at_level("ERROR", logger="forj_review_service"):
         created = manager.create(request(0))
@@ -178,7 +218,9 @@ def test_finalization_failure_only_exposes_exception_type(caplog):
     assert snapshot.status is JobStatus.FAILED
     assert snapshot.phase is ReviewJobPhase.FAILED
     assert snapshot.message == "审核任务失败：AttributeError"
-    assert any(record.exc_info and record.exc_info[0] is AttributeError for record in caplog.records)
+    assert any(
+        record.exc_info and record.exc_info[0] is AttributeError for record in caplog.records
+    )
 
 
 def test_groups_use_scope_when_category_hint_disagrees():
@@ -198,18 +240,37 @@ def test_custom_page_progress_uses_declared_scopes():
     from forj_review_service.businesses.page_config.schema import PageDefinition
     from forj_review_service.businesses.registry import BusinessRegistry
 
-    profile = compile_page(PageDefinition.model_validate({
-        "page_id": "custom", "business_type": "custom", "title": "自定义页面",
-        "paths": ["/custom"], "scopes": ["permit", "attachment"],
-        "fields": [{"key": "custom.name", "label": "名称", "aliases": ["名称"], "mode": "SYSTEM"}],
-    }))
+    profile = compile_page(
+        PageDefinition.model_validate(
+            {
+                "page_id": "custom",
+                "business_type": "custom",
+                "title": "自定义页面",
+                "paths": ["/custom"],
+                "scopes": ["permit", "attachment"],
+                "fields": [
+                    {"key": "custom.name", "label": "名称", "aliases": ["名称"], "mode": "SYSTEM"}
+                ],
+                "settings": {},
+            }
+        )
+    )
     service = UrlService()
     service.registry = BusinessRegistry((profile,))
     manager = ReviewJobManager(service)
     try:
-        data = ReviewRequest(page_id="custom", business_type="custom", page_url="https://example.test/custom", images=[{
-            "index": 0, "src": "https://example.test/synthetic.jpg", "business_scope": "permit",
-        }])
+        data = ReviewRequest(
+            page_id="custom",
+            business_type="custom",
+            page_url="https://example.test/custom",
+            images=[
+                {
+                    "index": 0,
+                    "src": "https://example.test/synthetic.jpg",
+                    "business_scope": "permit",
+                }
+            ],
+        )
         created = manager.create(data)
         assert manager.wait(created.job_id, 2)
         groups = manager.get(created.job_id).groups
@@ -245,14 +306,18 @@ def test_cancel_of_a_completed_job_preserves_the_final_snapshot():
 
 def test_cancel_removes_queued_images_and_never_finalizes():
     started, release = threading.Event(), threading.Event()
+
     class Blocking(UrlService):
         async def extract_image_async(self, request, image):
             started.set()
             while not release.is_set():
                 await asyncio.sleep(0.005)
             return await super().extract_image_async(request, image)
+
     service = Blocking()
-    manager = ReviewJobManager(service, scheduler=FairAsyncScheduler(global_limit=1, per_job_limit=1))
+    manager = ReviewJobManager(
+        service, scheduler=FairAsyncScheduler(global_limit=1, per_job_limit=1)
+    )
     created = manager.create(request(3))
     assert started.wait(2)
     snapshot = manager.cancel(created.job_id)
@@ -268,7 +333,9 @@ def test_phase_timing_snapshot_isolation_and_expiry(caplog):
     with caplog.at_level("INFO", logger="forj_review_service"):
         created = manager.create(request(1))
         assert manager.wait(created.job_id, 2)
-    lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("review job timing")]
+    lines = [
+        r.getMessage() for r in caplog.records if r.getMessage().startswith("review job timing")
+    ]
     assert len(lines) == 1
     assert f"job_id={created.job_id}" in lines[0]
     for part in lines[0].split():
@@ -304,10 +371,41 @@ def test_every_terminal_outcome_logs_timing_once(outcome, caplog):
                 manager.cancel(created.job_id)
             assert manager.wait(created.job_id, 2)
             manager.close()
-        lines = [record.getMessage() for record in caplog.records if "review job timing" in record.getMessage()]
+        lines = [
+            record.getMessage()
+            for record in caplog.records
+            if "review job timing" in record.getMessage()
+        ]
         assert len(lines) == 1
         assert f"status={outcome}" in lines[0]
         assert "trace_id=" in lines[0] and f"job_id={created.job_id}" in lines[0]
         assert manager.get(created.job_id).status.value == outcome
     finally:
+        manager.close()
+
+
+def test_running_job_finishes_with_original_service_after_new_requests_switch():
+    started, release = threading.Event(), threading.Event()
+
+    class Delayed(UrlService):
+        async def extract_image_async(self, request, image):
+            started.set()
+            while not release.is_set():
+                await asyncio.sleep(.005)
+            return await super().extract_image_async(request, image)
+
+    old, new = Delayed(), UrlService()
+    manager = ReviewJobManager(old)
+    try:
+        first = manager.create_urls(request(1))
+        assert started.wait(2)
+        manager.review_service = new
+        second = manager.create_urls(request(1))
+        assert manager.wait(second.job_id, 2)
+        release.set()
+        assert manager.wait(first.job_id, 2)
+        assert len(old.final_batches) == len(new.final_batches) == 1
+        assert old.extracted_ids == new.extracted_ids == ["image-0"]
+    finally:
+        release.set()
         manager.close()

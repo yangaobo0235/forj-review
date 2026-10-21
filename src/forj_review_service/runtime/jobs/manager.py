@@ -16,8 +16,8 @@ from typing import Any
 
 from forj_review_service.businesses.material_policies import MaterialPolicy
 from forj_review_service.businesses.material_presence import evaluate_presence
-from forj_review_service.businesses.packs import pack_for_business
 from forj_review_service.businesses.packs.model import BusinessExtensionPack
+from forj_review_service.contracts.errors import ReviewJobNotFound
 from forj_review_service.contracts.recognition import (
     MaterialCompletenessReport,
     RecognitionBatchResult,
@@ -46,6 +46,7 @@ class _StoredJob:
     snapshot: ReviewJobSnapshot
     done: threading.Event
     updated_at: float
+    service: Any = None
     batch: RecognitionBatchResult = field(default_factory=RecognitionBatchResult)
     pending_count: int = 0
     finalize_started: bool = False
@@ -130,9 +131,11 @@ class ReviewJobManager:
         created_at = datetime.now().astimezone().isoformat()
         now = time.monotonic()
         valid_images = [image for image in request.images if not image.collection_error]
-        pack = self._pack_for_request(request)
+        service = self.review_service
+        pack = self._pack_for_request(request, service)
         stored = _StoredJob(
             request=request,
+            service=service,
             snapshot=ReviewJobSnapshot(
                 job_id=job_id,
                 status=JobStatus.RUNNING,
@@ -147,10 +150,14 @@ class ReviewJobManager:
             batch=RecognitionBatchResult(total_count=len(request.images)),
             pending_count=len(valid_images),
             timeline={"created_at": now},
-            group_scopes=tuple(dict.fromkeys((
-                *(pack.scopes if pack else ()),
-                *(image.business_scope for image in request.images),
-            ))),
+            group_scopes=tuple(
+                dict.fromkeys(
+                    (
+                        *(pack.scopes if pack else ()),
+                        *(image.business_scope for image in request.images),
+                    )
+                )
+            ),
             material_policy=pack.material_policy if pack else None,
         )
         for image in request.images:
@@ -159,8 +166,13 @@ class ReviewJobManager:
         self._refresh_snapshot(stored)
         with self._lock:
             self._jobs[job_id] = stored
-        logger.info("review job created job_id=%s trace_id=%s images=%d collected_failed=%d",
-                    job_id, request.trace_id, len(request.images), len(request.images) - len(valid_images))
+        logger.info(
+            "review job created job_id=%s trace_id=%s images=%d collected_failed=%d",
+            job_id,
+            request.trace_id,
+            len(request.images),
+            len(request.images) - len(valid_images),
+        )
         try:
             for image in valid_images:
                 future = self.scheduler.submit(
@@ -185,7 +197,7 @@ class ReviewJobManager:
         with self._lock:
             stored = self._jobs.get(job_id)
             if stored is None:
-                raise KeyError(job_id)
+                raise ReviewJobNotFound(job_id)
             if stored.snapshot.status is not JobStatus.RUNNING:
                 return stored.snapshot.model_copy(deep=True)
             stored.cancelled = True
@@ -206,7 +218,7 @@ class ReviewJobManager:
         with self._lock:
             stored = self._jobs.get(job_id)
             if stored is None:
-                raise KeyError(job_id)
+                raise ReviewJobNotFound(job_id)
             return stored.snapshot.model_copy(deep=True)
 
     def wait(self, job_id: str, timeout: float | None = None) -> bool:
@@ -214,13 +226,17 @@ class ReviewJobManager:
             stored = self._jobs.get(job_id)
         return bool(stored and stored.done.wait(timeout))
 
-    async def _extract_image_async(self, job_id: str, request: ReviewRequest, image: ImageInput) -> RecognitionBatchResult:
+    async def _extract_image_async(
+        self, job_id: str, request: ReviewRequest, image: ImageInput
+    ) -> RecognitionBatchResult:
         with self._lock:
             stored = self._jobs.get(job_id)
             if stored is not None:
                 stored.timeline.setdefault("recognize_started_at", time.monotonic())
         with log_context(job_id=job_id, trace_id=request.trace_id, image_id=self._image_id(image)):
-            return await self.review_service.extract_image_async(request, image)
+            return await (stored.service if stored else self.review_service).extract_image_async(
+                request, image
+            )
 
     def _image_finished(
         self,
@@ -289,7 +305,7 @@ class ReviewJobManager:
             batch = stored.batch.model_copy(deep=True)
             stored.timeline["finalize_started_at"] = time.monotonic()
         try:
-            response, final_batch = await self.review_service.assist_with_batch_async(
+            response, final_batch = await stored.service.assist_with_batch_async(
                 request,
                 initial_batch=batch,
             )
@@ -341,7 +357,9 @@ class ReviewJobManager:
             stored.request.trace_id,
             stored.snapshot.status.value,
             stored.batch.total_count,
-            stored.batch.completed_count, stored.batch.failed_count, stored.batch.timed_out_count,
+            stored.batch.completed_count,
+            stored.batch.failed_count,
+            stored.batch.timed_out_count,
             stored.batch.retry_summary.total_retries,
             span("created_at", "recognize_started_at"),
             span("recognize_started_at", "last_done_at"),
@@ -355,22 +373,32 @@ class ReviewJobManager:
         presence = evaluate_presence(stored.request, stored.material_policy, stored.batch)
         if presence is not None:
             stored.snapshot.material_completeness = MaterialCompletenessReport(
-                phase="COLLECTED", status="UNCERTAIN", presence=presence,
+                phase="COLLECTED",
+                status="UNCERTAIN",
+                presence=presence,
             )
         stored.snapshot.failed_image_ids = list(dict.fromkeys(stored.batch.failed_image_ids))
         stored.snapshot.timed_out_image_ids = list(dict.fromkeys(stored.batch.timed_out_image_ids))
         stored.snapshot.progress = batch_progress(stored.batch, len(stored.request.images))
         stored.snapshot.groups = scope_progress(
-            stored.request, stored.batch, stored.group_scopes, final=False,
+            stored.request,
+            stored.batch,
+            stored.group_scopes,
+            final=False,
         )
 
-    def _pack_for_request(self, request: ReviewRequest) -> BusinessExtensionPack | None:
-        registry = getattr(self.review_service, "registry", None)
-        return (
-            registry.resolve(request.business_type, request.region, request.profile_version,
-                             page_id=request.page_id).pack_declaration
-            if registry is not None else pack_for_business(request.business_type)
-        )
+    def _pack_for_request(
+        self, request: ReviewRequest, service=None
+    ) -> BusinessExtensionPack | None:
+        registry = getattr(service or self.review_service, "registry", None)
+        if registry is None:
+            raise ValueError("审核执行器必须提供当前数据库配置注册表")
+        return registry.resolve(
+            request.business_type,
+            request.region,
+            request.profile_version,
+            page_id=request.page_id,
+        ).pack_declaration
 
     @staticmethod
     def _image_id(image: ImageInput) -> str:

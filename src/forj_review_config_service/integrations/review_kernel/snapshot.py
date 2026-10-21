@@ -1,66 +1,95 @@
 """Filesystem-independent configuration validation, replay and version publication."""
 
 import asyncio
-import json
 from pathlib import Path
 
 import httpx
+from pydantic import ValidationError
 
 from forj_review_config_service.contracts.models import ConfigurationError, SessionRecord
 from forj_review_service.businesses.packs import build_collect_manifest
-from forj_review_service.businesses.page_catalog import page_catalog
-from forj_review_service.businesses.page_config.files import (
-    KERNEL_VERSION,
-)
-from forj_review_service.businesses.page_config.history import record_snapshot_files
 from forj_review_service.businesses.page_config.inspection import (
-    compare_configurations,
     configuration_snapshot,
     digest,
     effective_configuration,
-    profile_fingerprint,
+)
+from forj_review_service.businesses.page_config.kernel import (
+    KERNEL_VERSION,
+)
+from forj_review_service.businesses.page_config.maintenance import (
+    edit_fields,
+    field_dependencies,
 )
 from forj_review_service.businesses.page_config.schema import PageDefinition
+from forj_review_service.businesses.page_config.state import ConfigurationState
 from forj_review_service.businesses.rules.catalog import RULE_DEFINITIONS
+from forj_review_service.contracts.errors import ConfigurationInputError
 from forj_review_service.runtime.configuration.service import (
     ReplaySuite,
     decision_policy,
     replay_suite,
     validated_snapshot,
 )
+from forj_review_service.runtime.configuration.verification import (
+    evaluate_collection,
+    proof_is_current,
+)
 
 
 class SnapshotKernel:
     """Configuration operations over one isolated in-memory snapshot."""
 
+    @staticmethod
+    def edit_fields(draft, operations):
+        try:
+            return edit_fields(draft, operations)
+        except ConfigurationInputError as exc:
+            raise ConfigurationError("FIELD_MAINTENANCE_ONLY", str(exc), 422) from exc
+        except ValidationError as exc:
+            raise ConfigurationError(
+                "INVALID_CONFIGURATION", "字段配置无效，请检查类型、必填项并保留审核字段", 422
+            ) from exc
+
+    evaluate_collection = staticmethod(evaluate_collection)
+    proof_is_current = staticmethod(proof_is_current)
+
+    @staticmethod
+    def page_options(draft):
+        from forj_review_service.businesses.page_config.row_contract import split_definition
+
+        return split_definition(draft)
+
+    @staticmethod
+    def field_dependencies(draft):
+        return {
+            item["key"]: field_dependencies(draft, item["key"]) for item in draft.get("fields", [])
+        }
+
     def __init__(
         self,
-        files: dict[str, str],
+        configuration: ConfigurationState,
         cases_dir: Path,
         review_url: str,
         local_cases_dir: Path | None = None,
         *,
         configuration_source: str | None = None,
     ):
-        self.files = dict(files)
+        self.configuration = configuration
         self.cases_dir, self.review_url = cases_dir, review_url
         self.local_cases_dir = local_cases_dir or cases_dir
         self.configuration_source = configuration_source
 
     def _configuration(self):
-        return validated_snapshot(self.files)
+        return validated_snapshot(self.configuration)
 
     def _inspect(self):
         _, registry = self._configuration()
         return configuration_snapshot(registry.profiles, registry.active_profiles)
 
     def baseline(self) -> str:
-        files = {
-            name: text
-            for name, text in sorted(self.files.items())
-            if name.endswith(".json") and ("/" not in name or name.startswith(".history/"))
-        }
-        return digest({"kernel": KERNEL_VERSION, "snapshot": self._inspect(), "files": files})
+        from forj_review_service.runtime.configuration.publication import configuration_baseline
+
+        return configuration_baseline(self.configuration)
 
     def context(self, page_id: str | None = None) -> dict:
         pages, registry = self._configuration()
@@ -98,15 +127,28 @@ class SnapshotKernel:
             ),
             None,
         )
+        editable = source
         return {
             "source": source,
+            "editable": editable,
+            "dependencies": {
+                field.key: field_dependencies(editable, field.key)
+                for field in profile.pack_declaration.fields
+            },
             "effective": effective_configuration(profile),
             "reference": {"page_id": profile.page_id, "version": profile.version},
             "manifest": build_collect_manifest(profile.pack_declaration),
         }
 
     def capabilities(self) -> dict:
+        from forj_review_service.businesses.page_config.row_contract import (
+            ActionBinding,
+            RuleBinding,
+        )
+
         return {
+            "rule_binding_schema": RuleBinding.model_json_schema(),
+            "action_binding_schema": ActionBinding.model_json_schema(),
             "schema": PageDefinition.model_json_schema(),
             "kernel_version": KERNEL_VERSION,
             "decision_policy": decision_policy(),
@@ -117,26 +159,12 @@ class SnapshotKernel:
         }
 
     def rollback_draft(self, page_id: str, version: str) -> dict:
-        pages, registry = self._configuration()
-        target = next(
-            (p for p in registry.profiles if p.page_id == page_id and p.version == version), None
-        )
-        if not target:
-            raise ConfigurationError("NOT_FOUND", "历史版本不存在", 404)
-        definition = next(
-            (d for _, d in pages.sources if d.page_id == page_id and d.version == version), None
-        )
-        if definition:
-            return {**definition.model_dump(mode="json", exclude_unset=True), "active": True}
-        return {
-            "page_id": page_id,
-            "version": version,
-            "business_type": str(target.business_type),
-            "region": str(target.region),
-            "title": target.pack_declaration.title,
-            "paths": ["/"],
-            "active": True,
-        }
+        from forj_review_service.runtime.configuration.publication import rollback_definition
+
+        try:
+            return rollback_definition(self.configuration, page_id, version)
+        except ConfigurationInputError as exc:
+            raise ConfigurationError("NOT_FOUND", "历史版本不存在", 404) from exc
 
     def template_members(self, reference: dict | None) -> dict:
         if not reference:
@@ -182,7 +210,9 @@ class SnapshotKernel:
         if not case_set_id or any(
             c not in "abcdefghijklmnopqrstuvwxyz0123456789_-" for c in case_set_id
         ):
-            raise ConfigurationError("INVALID_CASE_ID", "样例 ID 只允许小写字母、数字、下划线和短横线", 422)
+            raise ConfigurationError(
+                "INVALID_CASE_ID", "样例 ID 只允许小写字母、数字、下划线和短横线", 422
+            )
         parsed = ReplaySuite.model_validate(suite)
         target = self.local_cases_dir / f"{case_set_id}.json"
         if target.exists():
@@ -195,65 +225,31 @@ class SnapshotKernel:
             + case_set_id
         }
 
-    def stage(self, record: SessionRecord) -> tuple[PageDefinition, dict[str, str]]:
-        definition = PageDefinition.model_validate(record.draft)
-        if not definition.active:
-            raise ValueError("候选必须明确启用目标新版本")
-        pages, registry = self._configuration()
-        files = dict(self.files)
-        if record.activation_only:
-            if self.rollback_draft(definition.page_id, definition.version) != record.draft:
-                raise ValueError("回退目标内容与历史版本不一致")
-        elif any(
-            p.page_id == definition.page_id and p.version == definition.version
-            for p in registry.profiles
-        ):
-            raise ValueError("新配置必须使用未存在的新版本号")
-        for filename, existing in pages.sources:
-            if existing.page_id == definition.page_id:
-                payload = existing.model_dump(mode="json", exclude_unset=True)
-                payload["active"] = (
-                    record.activation_only and existing.version == definition.version
-                )
-                files[filename] = json.dumps(payload, ensure_ascii=False)
-        if not record.activation_only:
-            files[digest([definition.page_id, definition.version]) + ".json"] = json.dumps(
-                record.draft, ensure_ascii=False, indent=2
+    def stage(self, record: SessionRecord) -> tuple[PageDefinition, ConfigurationState]:
+        from forj_review_service.runtime.configuration.publication import stage_version
+
+        try:
+            return stage_version(
+                self.configuration, record.draft, activation_only=record.activation_only
             )
-        return definition, files
+        except ConfigurationInputError as exc:
+            raise ConfigurationError("INVALID_CONFIGURATION", str(exc), 422) from exc
+        except ValidationError as exc:
+            raise ConfigurationError("INVALID_CONFIGURATION", "候选配置格式无效", 422) from exc
 
     def validate(self, record: SessionRecord) -> dict:
         if self.baseline() != record.baseline_digest:
             raise ConfigurationError("BASELINE_CHANGED", "配置或模板已改变，请重新建立编辑基线")
-        definition, files = self.stage(record)
-        _, registry = validated_snapshot(files)
-        after = configuration_snapshot(registry.profiles, registry.active_profiles)
-        profile = next(
-            p
-            for p in registry.profiles
-            if p.page_id == definition.page_id and p.version == definition.version
-        )
-        return {
-            "candidate_digest": digest(
-                {
-                    "draft": record.draft,
-                    "baseline": record.baseline_digest,
-                    "effective": profile_fingerprint(profile),
-                }
-            ),
-            "effective_digest": profile_fingerprint(profile),
-            "kernel_version": KERNEL_VERSION,
-            "page_catalog": page_catalog(registry.active_profiles),
-            "page_id": definition.page_id,
-            "required_materials": sorted(
-                {m.document_type for m in profile.pack_declaration.material_policy.materials}
+        from forj_review_service.runtime.configuration.publication import preview_version
+
+        try:
+            return preview_version(
+                self.configuration, record.draft, activation_only=record.activation_only
             )
-            if profile.pack_declaration.material_policy
-            and profile.pack_declaration.material_policy.mode == "enforce"
-            else [],
-            "diff": compare_configurations(self._inspect(), after),
-            "manifest": build_collect_manifest(profile.pack_declaration),
-        }
+        except ConfigurationInputError as exc:
+            raise ConfigurationError("INVALID_CONFIGURATION", str(exc), 422) from exc
+        except ValidationError as exc:
+            raise ConfigurationError("INVALID_CONFIGURATION", "候选配置格式无效", 422) from exc
 
     def _prepare_replay(self, record: SessionRecord, case_set_id: str):
         preview = self.validate(record)
@@ -305,31 +301,21 @@ class SnapshotKernel:
         validated = self.validate(record)
         if validated["candidate_digest"] != record.report["candidate_digest"]:
             raise ConfigurationError("STALE_REVISION", "验证后的候选已改变")
-        _, files = self.stage(record)
-        pages, _ = validated_snapshot(files)
-        record_snapshot_files(files, pages)
-        receipt = {
-            "operation_id": operation_id,
-            "page_id": record.draft["page_id"],
-            "version": record.draft["version"],
-            "candidate_digest": validated["candidate_digest"],
-            "effective_digest": validated["effective_digest"],
-            "kernel_version": KERNEL_VERSION,
-            "state": "SAVED_PENDING_RESTART",
-        }
-        files[self._receipt_key(operation_id)] = json.dumps(receipt, ensure_ascii=False)
-        self.files = files
+        from forj_review_service.runtime.configuration.publication import commit_version
+
+        self.configuration, receipt = commit_version(
+            self.configuration,
+            record.draft,
+            operation_id,
+            validated["candidate_digest"],
+            activation_only=record.activation_only,
+        )
         return receipt
 
-    @staticmethod
-    def _receipt_key(operation_id: str) -> str:
-        if not operation_id or not operation_id.isalnum():
-            raise ValueError("保存操作标识无效")
-        return ".receipts/" + operation_id + ".json"
-
     def commit_receipt(self, operation_id: str) -> dict | None:
-        text = self.files.get(self._receipt_key(operation_id))
-        return json.loads(text) if text is not None else None
+        if not operation_id or not operation_id.isalnum():
+            raise ConfigurationError("INVALID_OPERATION_ID", "保存操作标识无效", 422)
+        return self.configuration.receipts.get(operation_id)
 
     async def activation(self, record: SessionRecord) -> dict:
         if not record.receipt:
@@ -348,18 +334,33 @@ class SnapshotKernel:
                 and match["fingerprint"] == record.receipt["effective_digest"]
                 and loaded["kernel_version"] == KERNEL_VERSION
                 and (
+                    not record.receipt.get("release_id")
+                    or loaded.get("release_id") == record.receipt["release_id"]
+                )
+                and (
                     loaded.get("configuration_source") == self.configuration_source
                     if self.configuration_source
                     else False
                 )
             )
             return {
-                "state": "EFFECTIVE" if effective else "SAVED_PENDING_RESTART",
+                "state": (
+                    "EFFECTIVE"
+                    if effective
+                    else "LOAD_FAILED"
+                    if loaded.get("load_error")
+                    else "SUPERSEDED"
+                    if loaded.get("release_id") != record.receipt.get("release_id")
+                    and loaded.get("desired_release_id") == loaded.get("release_id")
+                    else "LOADING"
+                ),
                 "loaded": loaded,
-                "reason": "已核对加载版本" if effective else "审核服务加载目录、版本或摘要不一致",
+                "reason": "已核对加载版本"
+                if effective
+                else "审核服务未加载该发布，请查看目标发布与加载错误",
             }
         except (httpx.HTTPError, ValueError, KeyError):
             return {
-                "state": "SAVED_PENDING_RESTART",
+                "state": "UNAVAILABLE",
                 "reason": "等待审核服务启动并核对实际加载版本",
             }

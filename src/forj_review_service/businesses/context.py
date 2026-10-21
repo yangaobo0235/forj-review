@@ -20,9 +20,7 @@ class BusinessContext:
 
     @cached_property
     def labels(self):
-        from forj_review_service.businesses.fields import PAGE_FIELD_LABELS
-
-        return MappingProxyType(self.pack.labels() if self.pack else dict(PAGE_FIELD_LABELS))
+        return MappingProxyType(self.pack.labels() if self.pack else {})
 
     @cached_property
     def completeness_labels(self):
@@ -32,50 +30,39 @@ class BusinessContext:
 
     @cached_property
     def field_policies(self):
-        from forj_review_service.businesses.field_policies import (
-            FIELD_EVIDENCE_POLICIES,
-            _build_policies,
-        )
+        from forj_review_service.businesses.field_policies import build_policies
 
-        return MappingProxyType(
-            _build_policies(self.pack) if self.pack else dict(FIELD_EVIDENCE_POLICIES)
-        )
+        return MappingProxyType(build_policies(self.pack) if self.pack else {})
 
     @cached_property
     def material_fields(self):
-        from forj_review_service.businesses.field_policies import MATERIAL_FIELD_BY_PAGE_FIELD
-
         return MappingProxyType(
             {f.key: f.material_field for f in self.pack.fields if f.material_field is not None}
             if self.pack
-            else dict(MATERIAL_FIELD_BY_PAGE_FIELD)
+            else {}
         )
 
     @cached_property
     def document_policies(self):
-        from forj_review_service.businesses.materials import DOCUMENT_POLICIES, _merge_material
+        from forj_review_service.businesses.materials import merge_material
 
         return MappingProxyType(
-            {d.document_type: _merge_material(d, None) for d in self.pack.materials}
+            {d.document_type: merge_material(d, None) for d in self.pack.materials}
             if self.pack
-            else dict(DOCUMENT_POLICIES)
+            else {}
         )
 
     @cached_property
     def slot_document_types(self):
-        from forj_review_service.businesses.packs import BUSINESS_PACKS
         from forj_review_service.businesses.packs.model import slot_document_types
 
-        packs = (self.pack,) if self.pack else tuple(BUSINESS_PACKS.values())
-        return MappingProxyType(
-            {key: value for pack in packs for key, value in slot_document_types(pack).items()}
-        )
+        return MappingProxyType(slot_document_types(self.pack) if self.pack else {})
 
     @cached_property
     def composites(self):
-        from forj_review_service.evidence.comparison.composite_fields import _declared_composites
+        from forj_review_service.evidence.comparison.composite_fields import declared_composites
 
-        return _declared_composites((self.pack,) if self.pack else None)
+        return declared_composites((self.pack,)) if self.pack else ()
 
     @cached_property
     def composites_by_member(self):
@@ -88,4 +75,5 @@ class BusinessContext:
         )
 
 
+# An unconfigured context cannot acquire another page's business rules.
 DEFAULT_BUSINESS = BusinessContext()

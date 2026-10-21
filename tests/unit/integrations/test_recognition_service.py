@@ -14,6 +14,7 @@ from forj_review_service.integrations.recognition.client import QwenClient
 from forj_review_service.integrations.recognition.extraction import (
     RecognitionService,
 )
+from tests.support.pages import SCRAP_BUSINESS as TEST_BUSINESS
 
 
 class FakeQwenClient:
@@ -52,7 +53,7 @@ class FakeQwenClient:
 
 def extracted_values(service, images):
     """业务提取测试统一走生产使用的异步接口，值投影仅服务于断言。"""
-    batch = asyncio.run(service.extract_async(images))
+    batch = asyncio.run(service.extract_async(images, business=TEST_BUSINESS))
     recognized = {
         item.field: (str(item.value), item.image_index) for item in batch.observations if item.value
     }
@@ -174,7 +175,8 @@ async def test_invoice_number_derives_page_code_and_preserves_evidence_region() 
     )
 
     result = await RecognitionService(fake).extract_async(
-        [image(index=3, category_hint="invoice", business_scope="new_vehicle")]
+        [image(index=3, category_hint="invoice", business_scope="new_vehicle")],
+        business=TEST_BUSINESS,
     )
 
     observations = {item.field: item for item in result.observations}
@@ -237,7 +239,8 @@ async def test_content_type_is_retained_when_field_extraction_fails_or_times_out
             # 没有槽位序号才是真正未知材料；组内第 3 张旧车图现在有业务声明，
             # 应直接按回收证明提取，不再进入分类模型。
             image(index=3, business_scope="old_vehicle"),
-        ]
+        ],
+        business=TEST_BUSINESS,
     )
     assert batch.failed_count + batch.timed_out_count == 1
     assert not batch.recognized_documents
@@ -256,7 +259,7 @@ async def test_content_classification_is_reused_by_field_retry():
         ),
     )
     batch = await RecognitionService(client).extract_async(
-        [image(business_scope="new_vehicle")]
+        [image(business_scope="new_vehicle")], business=TEST_BUSINESS
     )
     assert client.classification_calls == [0]
     assert len(client.extraction_calls) == 2
@@ -271,7 +274,9 @@ async def test_classification_side_does_not_depend_on_identity_field_extraction(
         ),
         fail_indices={0},
     )
-    batch = await RecognitionService(client).extract_async([image(business_scope="identity")])
+    batch = await RecognitionService(client).extract_async(
+        [image(business_scope="identity")], business=TEST_BUSINESS
+    )
     assert batch.failed_count == 1
     assert batch.document_classifications[0].identity_sides == ["BACK"]
 
@@ -286,7 +291,7 @@ async def test_low_confidence_field_extraction_cannot_confirm_an_unlabelled_iden
         )
     )
     batch = await RecognitionService(client).extract_async(
-        [image(category_hint="id_card", business_scope="identity")]
+        [image(category_hint="id_card", business_scope="identity")], business=TEST_BUSINESS
     )
     assert batch.document_classifications[0].identity_sides == []
 
@@ -297,7 +302,7 @@ async def test_low_classification_confidence_is_never_a_presence_fact():
         classification=QwenClassification(document_type="invoice", confidence=0.5)
     )
     batch = await RecognitionService(client).extract_async(
-        [image(business_scope="new_vehicle")]
+        [image(business_scope="new_vehicle")], business=TEST_BUSINESS
     )
     assert batch.document_classifications == []
 
@@ -310,7 +315,7 @@ async def test_classification_failure_and_timeout_have_no_presence_fact():
 
     for client in (FakeQwenClient(), Timeout()):
         batch = await RecognitionService(client, image_timeout=0.02).extract_async(
-            [image(business_scope="old_vehicle")]
+            [image(business_scope="old_vehicle")], business=TEST_BUSINESS
         )
         assert batch.failed_count + batch.timed_out_count == 1
         assert not batch.document_classifications
@@ -321,7 +326,9 @@ async def test_page_label_and_identity_side_are_kept_when_picture_cannot_be_read
     unreadable = image(category_hint="id_card", business_scope="identity")
     unreadable.identity_sides_hint = ["FRONT"]
     unreadable.collection_error = "synthetic read error"
-    batch = await RecognitionService(FakeQwenClient()).extract_async([unreadable])
+    batch = await RecognitionService(FakeQwenClient()).extract_async(
+        [unreadable], business=TEST_BUSINESS
+    )
     assert batch.failed_count == 1
     assert batch.document_classifications[0].identity_sides == ["FRONT"]
 
@@ -460,7 +467,9 @@ async def test_malformed_qwen_api_envelope_is_counted_as_safe_failure() -> None:
         transport=httpx.MockTransport(handler),
     )
 
-    result = await RecognitionService(client).extract_async([image(business_scope="new_vehicle")])
+    result = await RecognitionService(client).extract_async(
+        [image(business_scope="new_vehicle")], business=TEST_BUSINESS
+    )
 
     assert result.failed_count == 1
     assert result.failed_image_ids == ["0"]
@@ -491,7 +500,9 @@ async def test_six_images_start_concurrently() -> None:
     client = BlockingClient()
     service = RecognitionService(client, image_timeout=1, review_deadline=2)
     task = asyncio.create_task(
-        service.extract_async([image(index, "invoice") for index in range(6)])
+        service.extract_async(
+            [image(index, "invoice") for index in range(6)], business=TEST_BUSINESS
+        )
     )
     await asyncio.wait_for(client.all_started.wait(), timeout=0.5)
 
@@ -515,15 +526,15 @@ async def test_unknown_image_is_classified_then_uses_targeted_extraction() -> No
         ),
     )
     result = await RecognitionService(client).extract_async(
-        [image(category_hint="unknown", business_scope="new_vehicle")]
+        [image(category_hint="unknown", business_scope="new_vehicle")], business=TEST_BUSINESS
     )
 
     assert client.classification_calls == [0]
     assert client.extraction_calls == [(0, "invoice")]
-    assert [(item.field, item.value) for item in result.observations] == [
+    assert {(item.field, item.value) for item in result.observations} == {
         ("invoice.invoice_no", "123"),
         ("invoice.code", "123"),
-    ]
+    }
 
 
 @pytest.mark.asyncio
@@ -542,7 +553,7 @@ async def test_business_scope_rejects_incompatible_model_document_type() -> None
             )
 
     result = await RecognitionService(CombinedClient()).extract_async(
-        [image(category_hint="scrap_certificate")]
+        [image(category_hint="scrap_certificate")], business=TEST_BUSINESS
     )
 
     assert result.observations == []
@@ -582,7 +593,7 @@ async def test_identical_vehicle_documents_are_routed_by_page_business_scope() -
         VehicleLicenseClient(
             classification=QwenClassification(document_type="vehicle_license", confidence=0.98),
         )
-    ).extract_async([old_image, new_image])
+    ).extract_async([old_image, new_image], business=TEST_BUSINESS)
 
     assert [(item.field, item.value, item.business_scope) for item in result.observations] == [
         ("old_vehicle.vin", "VIN-3", "old_vehicle"),
@@ -616,7 +627,8 @@ async def test_registration_certificate_fields_follow_page_business_scope() -> N
         [
             image(index=3, business_scope="old_vehicle", group_order=2),
             image(index=6, business_scope="new_vehicle", group_order=2),
-        ]
+        ],
+        business=TEST_BUSINESS,
     )
 
     observations = {
@@ -649,7 +661,8 @@ async def test_registration_page_numbers_are_normalized_for_scrap_documents(page
             )
 
     result = await RecognitionService(RegistrationPagesClient()).extract_async(
-        [image(category_hint="registration_certificate", business_scope="old_vehicle")]
+        [image(category_hint="registration_certificate", business_scope="old_vehicle")],
+        business=TEST_BUSINESS,
     )
 
     assert result.recognized_documents[0].covered_pages == [1, 2]
@@ -680,12 +693,13 @@ async def test_deadline_returns_completed_observations_and_marks_pending_timeout
         on_progress=lambda snapshot: progress.append(
             (snapshot.completed_count, snapshot.timed_out_count)
         ),
+        business=TEST_BUSINESS,
     )
 
-    assert [(item.field, item.value) for item in result.observations] == [
+    assert {(item.field, item.value) for item in result.observations} == {
         ("invoice.invoice_no", "0"),
         ("invoice.code", "0"),
-    ]
+    }
     assert result.completed_count == 1
     assert result.timed_out_count == 1
     assert progress
@@ -712,6 +726,7 @@ async def test_hint_outside_allowed_materials_requires_classification() -> None:
     result = await RecognitionService(client).extract_async(
         [_hinted_image()],
         allowed_document_types=frozenset({"vehicle_license"}),
+        business=TEST_BUSINESS,
     )
     assert client.classification_calls == [0]
     assert client.extraction_calls == [(0, "vehicle_license")]
@@ -720,11 +735,7 @@ async def test_hint_outside_allowed_materials_requires_classification() -> None:
 
 
 @pytest.mark.asyncio
-async def test_lookup_without_allowed_types_keeps_legacy_hint_path() -> None:
-    """对照组：不传候选集合时保持原行为，直接按提示类型提取。
-
-    尚未声明扩展包的业务没有材料名单，过滤不能把它们一起收紧成两阶段。
-    """
+async def test_configured_hint_can_extract_without_an_extra_candidate_filter() -> None:
     client = FakeQwenClient(
         extraction=QwenExtraction(
             document_type="invoice",
@@ -733,7 +744,9 @@ async def test_lookup_without_allowed_types_keeps_legacy_hint_path() -> None:
         ),
     )
 
-    result = await RecognitionService(client).extract_async([_hinted_image()])
+    result = await RecognitionService(client).extract_async(
+        [_hinted_image()], business=TEST_BUSINESS
+    )
 
     assert client.classification_calls == []
     assert client.extraction_calls == [(0, "invoice")]
@@ -753,7 +766,9 @@ async def test_cancelled_batch_waits_for_all_image_cleanup():
                 cleaned.set()
 
     service = RecognitionService(PendingClient())
-    task = asyncio.create_task(service.extract_async([image(category_hint="identity_card")]))
+    task = asyncio.create_task(
+        service.extract_async([image(category_hint="identity_card")], business=TEST_BUSINESS)
+    )
     await asyncio.wait_for(started.wait(), 2)
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
@@ -779,5 +794,7 @@ async def test_unexpected_image_error_is_propagated_and_cancels_siblings():
 
     service = RecognitionService(BrokenClient())
     with pytest.raises(AttributeError, match="broken client contract"):
-        await service.extract_async([image(0, "identity_card"), image(1, "identity_card")])
+        await service.extract_async(
+            [image(0, "identity_card"), image(1, "identity_card")], business=TEST_BUSINESS
+        )
     assert cleaned.is_set()

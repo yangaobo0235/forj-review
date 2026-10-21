@@ -1,60 +1,48 @@
-"""Configuration service owns its settings; credentials never enter conversation state."""
+"""Typed configuration settings; process variables override the service dotenv file."""
 
 import os
-from dataclasses import dataclass, field
 from pathlib import Path
+
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from forj_review_config_service.config.database import database_url_from_config
 
 DEFAULT_ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
 WORKSPACE_ROOT = DEFAULT_ENV_FILE.parent.parent.parent
-PATH_SETTINGS = {"CONFIGURATION_STATE_DIR", "CONFIGURATION_CASES_DIR"}
 
 
-def _dotenv(path: Path):
-    path = path.resolve()
-    if path.is_file():
-        for raw_line in path.read_text(encoding="utf-8-sig").splitlines():
-            line = raw_line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if line.startswith("export "):
-                line = line[7:].lstrip()
-            key, separator, value = line.partition("=")
-            key, value = key.strip(), value.strip()
-            if not separator or not key:
-                continue
-            if len(value) >= 2 and value[0] == value[-1] and value[0] in {"\"", "'"}:
-                value = value[1:-1]
-            if key in PATH_SETTINGS and value:
-                value = str((path.parent / value).resolve())
-            os.environ.setdefault(key, value)
-
-
-@dataclass(frozen=True)
-class Settings:
-    state_dir: Path = field(default_factory=lambda: Path(".review-config"))
-    cases_dir: Path = field(default_factory=lambda: Path("examples/page-config"))
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="CONFIGURATION_", extra="ignore", frozen=True,
+        env_file_encoding="utf-8-sig", populate_by_name=True, hide_input_in_errors=True)
+    state_dir: Path = WORKSPACE_ROOT / ".review-config"
+    cases_dir: Path = WORKSPACE_ROOT / "examples/page-config"
     review_url: str = "http://127.0.0.1:26101"
-    endpoint: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    endpoint: str = Field(default="https://dashscope.aliyuncs.com/compatible-mode/v1",
+                          validation_alias="CONFIGURATION_MODEL_ENDPOINT")
     model: str = "qwen3.7-plus"
-    api_key: str = field(default="", repr=False)
-    timeout: float = 90
-    max_calls: int = 24
-    database_url: str = field(default="", repr=False)
-    database_schema: str = "public"
+    api_key: str = Field(default="", repr=False)
+    timeout: float = Field(default=90, gt=0)
+    max_calls: int = Field(default=24, ge=1)
+    database_url: str = Field(default="", repr=False)
+    database_schema: str = Field(default="local", pattern=r"^[a-z][a-z0-9_]{0,62}$")
+
+    @field_validator("review_url", "endpoint")
+    @classmethod
+    def strip_trailing_slash(cls, value):
+        return value.rstrip("/")
 
 
 def load_settings(env_file: Path | None = None) -> Settings:
-    _dotenv(env_file if env_file is not None else DEFAULT_ENV_FILE)
-    return Settings(
-        state_dir=Path(os.getenv("CONFIGURATION_STATE_DIR", str(WORKSPACE_ROOT / ".review-config"))).resolve(),
-        cases_dir=Path(os.getenv("CONFIGURATION_CASES_DIR", str(WORKSPACE_ROOT / "examples/page-config"))).resolve(),
-        review_url=os.getenv("CONFIGURATION_REVIEW_URL", "http://127.0.0.1:26101").rstrip("/"),
-        endpoint=os.getenv("CONFIGURATION_MODEL_ENDPOINT", "https://dashscope.aliyuncs.com/compatible-mode/v1").rstrip("/"),
-        model=os.getenv("CONFIGURATION_MODEL", "qwen3.7-plus"),
-        api_key=os.getenv("CONFIGURATION_API_KEY", ""),
-        max_calls=int(os.getenv("CONFIGURATION_MAX_CALLS", "24")),
-        database_url=os.getenv("CONFIGURATION_DATABASE_URL", "").strip() or database_url_from_config(),
-        database_schema=os.getenv("CONFIGURATION_DATABASE_SCHEMA", "public"),
-    )
+    path = (env_file if env_file is not None else DEFAULT_ENV_FILE).resolve()
+    settings = Settings(_env_file=path)
+    updates = {}
+    for name in ("state_dir", "cases_dir"):
+        value = getattr(settings, name)
+        # Only file-provided relative paths are relative to that file.
+        if not value.is_absolute() and "CONFIGURATION_" + name.upper() not in os.environ:
+            value = path.parent / value
+        updates[name] = value.resolve()
+    if not settings.database_url.strip():
+        updates["database_url"] = database_url_from_config()
+    return settings.model_copy(update=updates)

@@ -23,19 +23,25 @@ from forj_review_service.integrations.qr.web_verifier import (
     validate_qr_url,
 )
 from forj_review_service.runtime.review_service import ReviewService
+from tests.support.pages import business_registry
 
 
 def test_qr_url_requires_exact_official_https_host():
-    assert validate_qr_url("https://qclt.mofcom.gov.cn/deal/scrap/validdata/x", ["qclt.mofcom.gov.cn"])
+    assert validate_qr_url(
+        "https://qclt.mofcom.gov.cn/deal/scrap/validdata/x", ["qclt.mofcom.gov.cn"]
+    )
     assert not validate_qr_url("http://qclt.mofcom.gov.cn/deal/x", ["qclt.mofcom.gov.cn"])
     assert not validate_qr_url("https://evil.qclt.mofcom.gov.cn/deal/x", ["qclt.mofcom.gov.cn"])
 
 
 def test_official_http_qr_is_upgraded_to_https_before_access():
-    assert canonicalize_official_qr_url(
-        "http://qclt.mofcom.gov.cn/deal/scrap/validdata/token",
-        ["qclt.mofcom.gov.cn"],
-    ) == "https://qclt.mofcom.gov.cn/deal/scrap/validdata/token"
+    assert (
+        canonicalize_official_qr_url(
+            "http://qclt.mofcom.gov.cn/deal/scrap/validdata/token",
+            ["qclt.mofcom.gov.cn"],
+        )
+        == "https://qclt.mofcom.gov.cn/deal/scrap/validdata/token"
+    )
     assert canonicalize_official_qr_url("http://evil.example/x", ["qclt.mofcom.gov.cn"]) is None
 
 
@@ -79,11 +85,11 @@ def test_extract_recycling_certificate_number_and_vin_from_html():
 
 
 def test_extract_recycling_certificate_fields_from_embedded_json_and_common_aliases():
-    html = '''
+    html = """
     <script type="application/json">
       {"certificateNo":"回收-2026-002","vehicleIdentificationNo":"LSVBB123456789012"}
     </script>
-    '''
+    """
     assert extract_page_fields(html) == {
         "certificate_no": "回收-2026-002",
         "vin": "LSVBB123456789012",
@@ -136,13 +142,15 @@ async def test_verifier_does_not_access_an_untrusted_qr_url():
 
 @pytest.mark.asyncio
 async def test_web_retry_reuses_one_http_client(monkeypatch):
-    responses = iter([
-        httpx.Response(503),
-        httpx.Response(
-            200,
-            text="回收证明编号：A1 车架号：LSVAA123456789012",
-        ),
-    ])
+    responses = iter(
+        [
+            httpx.Response(503),
+            httpx.Response(
+                200,
+                text="回收证明编号：A1 车架号：LSVAA123456789012",
+            ),
+        ]
+    )
     transport = httpx.MockTransport(lambda request: next(responses))
     real_async_client = httpx.AsyncClient
     client_count = 0
@@ -169,8 +177,12 @@ async def test_web_retry_reuses_one_http_client(monkeypatch):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("error", [httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError])
-async def test_transient_connection_failures_retry_and_keep_safe_diagnostics(error, caplog, monkeypatch):
+@pytest.mark.parametrize(
+    "error", [httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError]
+)
+async def test_transient_connection_failures_retry_and_keep_safe_diagnostics(
+    error, caplog, monkeypatch
+):
     calls = 0
     contexts = []
     real_async_client = httpx.AsyncClient
@@ -188,15 +200,23 @@ async def test_transient_connection_failures_retry_and_keep_safe_diagnostics(err
             raise error("sensitive-token-must-not-be-logged", request=request)
         return httpx.Response(200, text="回收证明编号：A1 车架号：LSVAA123456789012")
 
-    verifier = QrWebVerifier(allowed_hosts=["qclt.mofcom.gov.cn"], transport=httpx.MockTransport(handler))
+    verifier = QrWebVerifier(
+        allowed_hosts=["qclt.mofcom.gov.cn"], transport=httpx.MockTransport(handler)
+    )
     with caplog.at_level("INFO", logger="forj_review_service"):
-        result, attempts = await verifier.verify_with_retry("https://qclt.mofcom.gov.cn/sensitive-token", 4)
+        result, attempts = await verifier.verify_with_retry(
+            "https://qclt.mofcom.gov.cn/sensitive-token", 4
+        )
     assert result.status == "MATCH"
     assert calls == len(attempts) == 2
     assert result.http_status == 200
-    assert attempts[0].reason_code == ("timeout" if error is httpx.ReadTimeout else "connection_error")
+    assert attempts[0].reason_code == (
+        "timeout" if error is httpx.ReadTimeout else "connection_error"
+    )
     assert attempts[1].reason_code == "completed"
-    assert attempts[1].strategy == ("official_page" if error is httpx.ReadTimeout else "official_page_tls12")
+    assert attempts[1].strategy == (
+        "official_page" if error is httpx.ReadTimeout else "official_page_tls12"
+    )
     assert len(contexts) == (1 if error is httpx.ReadTimeout else 2)
     if len(contexts) == 2:
         assert contexts[-1].maximum_version == ssl.TLSVersion.TLSv1_2
@@ -216,8 +236,12 @@ async def test_network_failure_has_bounded_retries_and_actionable_message():
         calls += 1
         raise httpx.ConnectError("network failed", request=request)
 
-    verifier = QrWebVerifier(allowed_hosts=["qclt.mofcom.gov.cn"], transport=httpx.MockTransport(handler))
-    result, attempts = await verifier.verify_with_retry("https://qclt.mofcom.gov.cn/proof", retry_count=99)
+    verifier = QrWebVerifier(
+        allowed_hosts=["qclt.mofcom.gov.cn"], transport=httpx.MockTransport(handler)
+    )
+    result, attempts = await verifier.verify_with_retry(
+        "https://qclt.mofcom.gov.cn/proof", retry_count=99
+    )
     assert calls == len(attempts) == 2
     assert result.status == "REVIEW_REQUIRED"
     assert result.accessible is False
@@ -232,9 +256,13 @@ async def test_certificate_failure_is_not_retried_or_hidden():
     def handler(request):
         nonlocal calls
         calls += 1
-        raise httpx.ConnectError("certificate failed", request=request) from ssl.SSLCertVerificationError("bad certificate")
+        raise httpx.ConnectError(
+            "certificate failed", request=request
+        ) from ssl.SSLCertVerificationError("bad certificate")
 
-    verifier = QrWebVerifier(allowed_hosts=["qclt.mofcom.gov.cn"], transport=httpx.MockTransport(handler))
+    verifier = QrWebVerifier(
+        allowed_hosts=["qclt.mofcom.gov.cn"], transport=httpx.MockTransport(handler)
+    )
     result, attempts = await verifier.verify_with_retry("https://qclt.mofcom.gov.cn/proof")
     assert calls == len(attempts) == 1
     assert result.error_code == "tls_certificate_error"
@@ -245,8 +273,10 @@ async def test_certificate_failure_is_not_retried_or_hidden():
 @pytest.mark.asyncio
 @pytest.mark.parametrize("status", [403, 404, 429, 503])
 async def test_http_status_failures_preserve_reason_and_retry_policy(status):
-    verifier = QrWebVerifier(allowed_hosts=["qclt.mofcom.gov.cn"],
-                             transport=httpx.MockTransport(lambda request: httpx.Response(status)))
+    verifier = QrWebVerifier(
+        allowed_hosts=["qclt.mofcom.gov.cn"],
+        transport=httpx.MockTransport(lambda request: httpx.Response(status)),
+    )
     result, attempts = await verifier.verify_with_retry("https://qclt.mofcom.gov.cn/proof")
     assert result.http_status == status
     assert result.error_code == "http_status"
@@ -256,12 +286,23 @@ async def test_http_status_failures_preserve_reason_and_retry_policy(status):
 
 @pytest.mark.asyncio
 async def test_accessible_page_with_missing_fields_does_not_claim_extraction_success():
-    service = ReviewService()
-    service.qr_web = QrWebVerifier(allowed_hosts=["qclt.mofcom.gov.cn"],
-                                 transport=httpx.MockTransport(lambda request: httpx.Response(200, text="回收证明编号：A1")))
-    request = ReviewRequest(page_url="https://example.test", region="qingdao", images=[
-        ImageInput(index=1, src="https://images.example.test/synthetic.jpg", categoryHint="scrap_certificate", businessScope="old_vehicle")
-    ])
+    service = ReviewService(registry=business_registry())
+    service.qr_web = QrWebVerifier(
+        allowed_hosts=["qclt.mofcom.gov.cn"],
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, text="回收证明编号：A1")),
+    )
+    request = ReviewRequest(
+        page_url="https://example.test",
+        region="qingdao",
+        images=[
+            ImageInput(
+                index=1,
+                src="https://images.example.test/synthetic.jpg",
+                categoryHint="scrap_certificate",
+                businessScope="old_vehicle",
+            )
+        ],
+    )
     batch = decoded_batch(service, 1, "https://qclt.mofcom.gov.cn/proof")
     checks = await service._collect_qr_checks(request, batch)
     assert checks[0].accessible is True
@@ -272,7 +313,7 @@ async def test_accessible_page_with_missing_fields_does_not_claim_extraction_suc
 
 @pytest.mark.asyncio
 async def test_review_keeps_an_untrusted_qr_for_manual_review():
-    service = ReviewService()
+    service = ReviewService(registry=business_registry())
     request = ReviewRequest(
         page_url="https://example.test",
         region="qingdao",
@@ -286,7 +327,9 @@ async def test_review_keeps_an_untrusted_qr_for_manual_review():
         ],
     )
 
-    checks = await service._collect_qr_checks(request, decoded_batch(service, 1, "https://evil.example/deal/1"))
+    checks = await service._collect_qr_checks(
+        request, decoded_batch(service, 1, "https://evil.example/deal/1")
+    )
 
     assert len(checks) == 1
     assert checks[0].domain_valid is False
@@ -296,24 +339,42 @@ async def test_review_keeps_an_untrusted_qr_for_manual_review():
 
 @pytest.mark.asyncio
 async def test_review_scans_image_when_recognition_identifies_scrap_certificate():
-    service = ReviewService()
+    service = ReviewService(registry=business_registry())
     service.qr_web = QrWebVerifier(
         allowed_hosts=["qclt.mofcom.gov.cn"],
-        transport=httpx.MockTransport(lambda request: httpx.Response(
-            200,
-            text="回收证明编号：A1 车架号：LSVAA123456789012",
-        )),
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                text="回收证明编号：A1 车架号：LSVAA123456789012",
+            )
+        ),
     )
     request = ReviewRequest(
         page_url="https://example.test",
         region="qingdao",
-        images=[ImageInput(index=1, src="https://images.example.test/synthetic.jpg", businessScope="old_vehicle")],
+        images=[
+            ImageInput(
+                index=1,
+                src="https://images.example.test/synthetic.jpg",
+                businessScope="old_vehicle",
+            )
+        ],
     )
-    batch = RecognitionBatchResult(observations=[FieldObservation(
-        field="vehicle.vin", source_type="image", source_id="1", image_index=1, value="LSVAA123456789012",
-        document_type="scrap_certificate",
-    )])
-    batch.recognized_documents = decoded_batch(service, 1, "http://qclt.mofcom.gov.cn:80/x").recognized_documents
+    batch = RecognitionBatchResult(
+        observations=[
+            FieldObservation(
+                field="vehicle.vin",
+                source_type="image",
+                source_id="1",
+                image_index=1,
+                value="LSVAA123456789012",
+                document_type="scrap_certificate",
+            )
+        ]
+    )
+    batch.recognized_documents = decoded_batch(
+        service, 1, "http://qclt.mofcom.gov.cn:80/x"
+    ).recognized_documents
     checks = await service._collect_qr_checks(request, batch)
     assert len(checks) == 1
     assert checks[0].url == "https://qclt.mofcom.gov.cn/x"
@@ -329,7 +390,7 @@ async def test_one_decoded_qr_does_not_create_missing_results_for_other_old_imag
     additional REVIEW_REQUIRED cards once one QR has been found.
     """
 
-    service = ReviewService()
+    service = ReviewService(registry=business_registry())
     service.qr_web = QrWebVerifier(
         allowed_hosts=["qclt.mofcom.gov.cn"],
         transport=httpx.MockTransport(
@@ -364,7 +425,9 @@ async def test_one_decoded_qr_does_not_create_missing_results_for_other_old_imag
         ],
     )
 
-    checks = await service._collect_qr_checks(request, decoded_batch(service, 3, "http://qclt.mofcom.gov.cn:80/x"))
+    checks = await service._collect_qr_checks(
+        request, decoded_batch(service, 3, "http://qclt.mofcom.gov.cn:80/x")
+    )
 
     assert len(checks) == 1
     assert checks[0].image_index == 3
@@ -373,7 +436,7 @@ async def test_one_decoded_qr_does_not_create_missing_results_for_other_old_imag
 
 @pytest.mark.asyncio
 async def test_qr_decodes_original_for_unknown_scope_with_scrap_hint():
-    service = ReviewService()
+    service = ReviewService(registry=business_registry())
     service.qr_web = QrWebVerifier(
         allowed_hosts=["qclt.mofcom.gov.cn"],
         transport=httpx.MockTransport(
@@ -396,13 +459,22 @@ async def test_qr_decodes_original_for_unknown_scope_with_scrap_hint():
         ],
     )
 
-    checks = await service._collect_qr_checks(request, decoded_batch(service, 4, "http://qclt.mofcom.gov.cn:80/x"))
+    checks = await service._collect_qr_checks(
+        request, decoded_batch(service, 4, "http://qclt.mofcom.gov.cn:80/x")
+    )
 
     assert len(checks) == 1
     assert checks[0].status is FieldStatus.MATCH
 
 
 def decoded_batch(service, index, url):
-    return RecognitionBatchResult(recognized_documents=[RecognizedDocument(
-        target_id=str(index), image_index=index, document_type="scrap_certificate", qr_codes=[url],
-    )])
+    return RecognitionBatchResult(
+        recognized_documents=[
+            RecognizedDocument(
+                target_id=str(index),
+                image_index=index,
+                document_type="scrap_certificate",
+                qr_codes=[url],
+            )
+        ]
+    )

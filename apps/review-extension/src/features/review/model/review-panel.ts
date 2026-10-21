@@ -5,7 +5,6 @@
  */
 
 import { manifestFieldLabels } from "../../../platform/browser/catalog/collect-manifest.ts";
-import { bundledPageCatalog } from "../../../platform/browser/catalog/bundled-page-catalog.ts";
 import type { PageCatalog, PageIdentityDeclaration } from "../../../platform/browser/catalog/page-catalog.ts";
 import type {
   BusinessSelection,
@@ -43,7 +42,7 @@ export function catalogBusinessLabel(identity: PageIdentityDeclaration): string 
 
 /** The catalog is authoritative whenever available, including version 1.0 pages. */
 export function catalogBusinessChoices(catalog: PageCatalog | null): Record<string, string> {
-  const effective = catalog?.identities.length ? catalog : bundledPageCatalog;
+  const effective = catalog ?? {version: "1.0", identities: []};
   return {
     AUTO: businessLabels.AUTO,
     ...Object.fromEntries(effective.identities.map(identity => [
@@ -55,44 +54,6 @@ export function catalogBusinessChoices(catalog: PageCatalog | null): Record<stri
     ])),
   };
 }
-
-/** 区域后缀：业务列表里的键是「业务_区域」，查采集清单时要去掉。 */
-const REGION_SUFFIXES = ["_qingdao", "_changchun", "_default"];
-
-/** 需要向后端查询采集清单的业务类型，由业务列表推导，不另外维护。 */
-export const manifestBusinessTypes: string[] = [
-  ...new Set(
-    Object.keys(businessLabels)
-      .filter((key) => key !== "AUTO")
-      .map((key) => REGION_SUFFIXES.reduce((acc, suffix) => acc.replace(suffix, ""), key)),
-  ),
-];
-
-const fieldLabels: Record<string, string> = {
-  "application.submitted_at": "申请时间",
-  "application.owner_type": "车辆所有人类型",
-  "old_vehicle.type": "报废车辆类型",
-  "old_vehicle.recycle_date": "报废交车日期",
-  "scrap_certificate.certificate_no": "报废证明编号",
-  "application.dealer_name": "经销商",
-  "old_vehicle.vin": "报废车辆车架号",
-  "old_vehicle.plate_no": "报废车辆车牌号",
-  "old_vehicle.owner": "报废车辆所有人",
-  "old_vehicle.engine_model": "报废发动机型号",
-  "new_vehicle.fuel_type": "新车燃料类型",
-  "invoice.code": "发票代码",
-  "invoice.invoice_no": "发票号码",
-  "invoice.amount": "开票金额",
-  "invoice.invoice_date": "开票日期",
-  "new_vehicle.vin": "新车车架号",
-  "page_ocr.new_vehicle_vin": "OCR新车车架号",
-  "new_vehicle.plate_no": "新车车牌号",
-  "new_vehicle.owner": "新车所有人",
-  "new_vehicle.registration_date": "注册日期",
-  "application.terminal_certificate_no": "终端证件号",
-  "application.customer_name": "客户名称",
-  "application.terminal_phone": "终端客户手机号",
-};
 
 export function manualBusinessSelection(
   choice: Exclude<BusinessChoice, "AUTO">,
@@ -139,7 +100,7 @@ export function manualBusinessSelection(
  * 面板自动跟上），清单不可用时退回下面的内置表。
  */
 export function fieldLabel(field: string): string {
-  return manifestFieldLabels()?.[field] ?? fieldLabels[field] ?? field;
+  return manifestFieldLabels()?.[field] ?? field;
 }
 
 export function statusLabel(status: FieldComparison["status"]): string {

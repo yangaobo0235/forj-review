@@ -1,10 +1,10 @@
 from dataclasses import replace
 
-from forj_review_service.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
 from forj_review_service.contracts.review import ReviewRequest
 from forj_review_service.contracts.review_schema import review_contract_schema
 from forj_review_service.runtime.review_service import ReviewService
 from forj_review_service.runtime.workflow.planner import plan_capabilities
+from tests.support.pages import SCRAP_REPLACEMENT_QINGDAO, business_registry
 
 
 def test_profile_bindings_are_planned_in_stage_order() -> None:
@@ -29,7 +29,7 @@ def test_capability_bindings_use_registered_defaults_when_not_overridden() -> No
 
 
 def test_review_response_has_trace_and_contract_schema() -> None:
-    response = ReviewService().assist(
+    response = ReviewService(registry=business_registry()).assist(
         ReviewRequest(page_url="https://example.test/review/1", region="qingdao")
     )
     assert response.trace_id

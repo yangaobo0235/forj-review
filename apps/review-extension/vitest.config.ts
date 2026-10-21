@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [vue()],
   test: {
     maxWorkers: 4,
+    setupFiles: ["./tests/setup.ts"],
     include: ["tests/**/*.test.{mjs,ts}"],
     environment: "node",
     restoreMocks: true,

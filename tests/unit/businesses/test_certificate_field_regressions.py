@@ -10,6 +10,7 @@ from forj_review_service.contracts.review import (
 )
 from forj_review_service.presentation.routing import build_review_tasks
 from forj_review_service.runtime.review_service import ReviewService
+from tests.support.pages import business_registry
 
 FIELD = "scrap_certificate.certificate_no"
 PAGE_NUMBER = "HS-SYNTHETIC-2026-001"
@@ -17,23 +18,45 @@ PAGE_NUMBER = "HS-SYNTHETIC-2026-001"
 
 def response(page_value, material_value, *, mapped=True):
     request = ReviewRequest(
-        page_url="https://example.test/review", region="changchun",
+        page_url="https://example.test/review",
+        region="changchun",
         page_fields={FIELD: page_value} if mapped and page_value is not None else {},
-        review_fields=[{
-            "field": FIELD if mapped else None, "label": "报废证明编号", "value": page_value or "",
-            "control_type": "text", "editable": True, "order": 1, "section": "old_vehicle",
-        }],
+        review_fields=[
+            {
+                "field": FIELD if mapped else None,
+                "label": "报废证明编号",
+                "value": page_value or "",
+                "control_type": "text",
+                "editable": True,
+                "order": 1,
+                "section": "old_vehicle",
+            }
+        ],
     )
-    batch = RecognitionBatchResult(observations=[FieldObservation(
-        field=FIELD, value=material_value, source_type="image", source_id="synthetic-proof",
-        image_id="synthetic-proof", document_type="scrap_certificate", business_scope="old_vehicle",
-    )])
-    service = ReviewService()
+    batch = RecognitionBatchResult(
+        observations=[
+            FieldObservation(
+                field=FIELD,
+                value=material_value,
+                source_type="image",
+                source_id="synthetic-proof",
+                image_id="synthetic-proof",
+                document_type="scrap_certificate",
+                business_scope="old_vehicle",
+            )
+        ]
+    )
+    service = ReviewService(registry=business_registry())
     profile = service.resolve_profile(request)
     result = service._build_response(request, batch, profile=profile)
     result.review_tasks = build_review_tasks(
-        request=request, profile=profile, comparisons=result.comparisons,
-        external_checks=[], business_checks=[], completeness=None, limitations=[],
+        request=request,
+        profile=profile,
+        comparisons=result.comparisons,
+        external_checks=[],
+        business_checks=[],
+        completeness=None,
+        limitations=[],
     )
     return result
 
@@ -62,10 +85,18 @@ def test_unmapped_configured_control_does_not_claim_missing_configuration():
     assert step.result_status == "INSUFFICIENT"
     assert "重新采集" in step.reason
     assert "未配置" not in step.reason
-    assert next(item for item in result.comparisons if item.field == FIELD).status is FieldStatus.REVIEW_REQUIRED
+    assert (
+        next(item for item in result.comparisons if item.field == FIELD).status
+        is FieldStatus.REVIEW_REQUIRED
+    )
 
 
 def test_equal_page_and_material_values_still_pass():
     result = response(PAGE_NUMBER, PAGE_NUMBER)
-    assert next(item for item in result.comparisons if item.field == FIELD).status is FieldStatus.MATCH
-    assert next(item for item in result.review_tasks if item.page_target_field == FIELD).result_status == "MATCH"
+    assert (
+        next(item for item in result.comparisons if item.field == FIELD).status is FieldStatus.MATCH
+    )
+    assert (
+        next(item for item in result.review_tasks if item.page_target_field == FIELD).result_status
+        == "MATCH"
+    )

@@ -37,6 +37,7 @@ try {
     $metadata = [ordered]@{
         release_id = $releaseId; source_revision = $revision; working_tree_dirty = $dirty
         image = $imageName; image_id = $imageId; platform = "linux/amd64"
+        database_storage_version = 4; database_migration = "explicit"
         created_at_utc = (Get-Date).ToUniversalTime().ToString("o")
     }
     [IO.File]::WriteAllText((Join-Path $stage "release.json"), ($metadata | ConvertTo-Json) + "`n", $utf8)
@@ -50,7 +51,8 @@ try {
     New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
     Move-Item -LiteralPath (Join-Path $stage $packageName) -Destination (Join-Path $outputDirectory $packageName) -Force
     Write-Host "Backend package: $(Join-Path $outputDirectory $packageName)" -ForegroundColor Green
-    Write-Host "Routine update: stop-server.sh -> upload ONLY $packageName -> start-server.sh"
+    Write-Host "Routine update: upload $packageName -> start-server.sh (schema preflight runs before container replacement)."
+    Write-Host "For a storage-contract upgrade, upload updated server scripts/Compose and explicitly migrate the target schema first."
     Write-Host "Upload destination: /home/ubuntu/forj-review/ (no manual extraction needed)."
 } finally {
     # Only remove this invocation's staging folder inside the workspace temp root.

@@ -10,14 +10,14 @@
 是二维码核验和图片正文释放，两者都不可见地失败。
 """
 
-from forj_review_service.businesses.packs import BUSINESS_PACKS, pack_for_business
 from forj_review_service.businesses.packs.model import (
     BusinessExtensionPack,
     material_types_for_scope,
 )
-from forj_review_service.businesses.packs.scrap_replacement import OLD_SECTION
 from forj_review_service.businesses.routing import scope_hint_types
 from forj_review_service.contracts.review import BusinessType
+from tests.support.business_values import OLD_SECTION
+from tests.support.pages import BUSINESS_PACKS
 
 # 收敛前的历史值。重构是纯等价替换，所以这里逐字锁定。
 HISTORICAL_OLD_VEHICLE_HINTS = frozenset(
@@ -30,7 +30,7 @@ HISTORICAL_OLD_VEHICLE_MATERIALS = frozenset(
 
 
 def _scrap():
-    pack = pack_for_business(BusinessType.SCRAP_REPLACEMENT)
+    pack = BUSINESS_PACKS[BusinessType.SCRAP_REPLACEMENT]
     assert pack is not None
     return pack
 

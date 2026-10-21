@@ -4,6 +4,7 @@ from forj_review_service.businesses.rules.affiliation import (
     build_affiliation_subject_check,
 )
 from forj_review_service.contracts.review import FieldObservation
+from tests.support.pages import SCRAP_BUSINESS as TEST_BUSINESS
 
 
 def item(field: str, value: str, source_id: str = "source") -> FieldObservation:
@@ -31,10 +32,15 @@ def identity(name: str, source_prefix: str) -> list[FieldObservation]:
 
 
 def test_same_person_requires_identity_and_different_people_conflict() -> None:
-    missing = build_affiliation_subject_check("张三", "张三", [])
-    same = build_affiliation_subject_check("张三", "张三", identity("张三", "id-a"))
+    missing = build_affiliation_subject_check("张三", "张三", [], business=TEST_BUSINESS)
+    same = build_affiliation_subject_check(
+        "张三", "张三", identity("张三", "id-a"), business=TEST_BUSINESS
+    )
     different = build_affiliation_subject_check(
-        "张三", "李四", [*identity("张三", "id-a"), *identity("李四", "id-b")]
+        "张三",
+        "李四",
+        [*identity("张三", "id-a"), *identity("李四", "id-b")],
+        business=TEST_BUSINESS,
     )
 
     assert missing.check.status == "INSUFFICIENT"
@@ -54,9 +60,7 @@ def test_different_companies_match_only_with_separate_licenses_and_common_legal_
     ]
 
     result = build_affiliation_subject_check(
-        "甲运输有限公司",
-        "乙运输有限公司",
-        observations,
+        "甲运输有限公司", "乙运输有限公司", observations, business=TEST_BUSINESS
     )
 
     assert result.check.status == "MATCH"
@@ -72,8 +76,9 @@ def test_mixed_person_company_requires_matching_legal_representative() -> None:
             item("business_license.legal_representative", "张三", "license-a"),
             *identity("张三", "id-a"),
         ],
+        business=TEST_BUSINESS,
     )
-    missing = build_affiliation_subject_check("张三", "甲运输有限公司", [])
+    missing = build_affiliation_subject_check("张三", "甲运输有限公司", [], business=TEST_BUSINESS)
 
     assert matched.check.status == "MATCH"
     assert matched.owner_types == ("PERSONAL", "COMPANY")
@@ -90,6 +95,7 @@ def test_different_companies_require_readable_legal_representatives() -> None:
             item("business_license.company_name", "乙运输有限公司", "license-b"),
             item("business_license.legal_representative", "无法识别", "license-b"),
         ],
+        business=TEST_BUSINESS,
     )
 
     assert result.check.status == "INSUFFICIENT"
@@ -106,6 +112,7 @@ def test_conflicting_values_from_one_license_image_are_insufficient_evidence() -
             item("business_license.company_name", "乙运输有限公司", "license-b"),
             item("business_license.legal_representative", "张三", "license-b"),
         ],
+        business=TEST_BUSINESS,
     )
 
     assert result.check.status == "INSUFFICIENT"
@@ -120,6 +127,7 @@ def test_one_license_source_cannot_support_two_different_companies() -> None:
             item("business_license.company_name", "乙运输有限公司", "license-a"),
             item("business_license.legal_representative", "张三", "license-a"),
         ],
+        business=TEST_BUSINESS,
     )
 
     assert result.check.status == "INSUFFICIENT"
@@ -134,7 +142,7 @@ def test_unreadable_or_non_person_representatives_never_authorize_actions(name):
         item("business_license.legal_representative", name, "license-b"),
     ]
     result = build_affiliation_subject_check(
-        "甲运输有限公司", "乙运输有限公司", observations
+        "甲运输有限公司", "乙运输有限公司", observations, business=TEST_BUSINESS
     )
     assert result.check.status == "INSUFFICIENT"
 
@@ -161,8 +169,10 @@ def test_subject_direction_and_name_matrix(old, new, legal, expected):
         name for name in (old, new) if len(name) in {2, 3, 4} and not name.endswith("公司")
     ):
         observations.extend(identity(person, f"id-{index}"))
-    result = build_affiliation_subject_check(old, new, observations)
+    result = build_affiliation_subject_check(old, new, observations, business=TEST_BUSINESS)
     assert result.check.status == expected
+
+
 def test_subject_evidence_keeps_owners_and_relevant_license_sources_only():
     observations = [
         item("old_vehicle.owner", "甲运输有限公司", "old-image"),
@@ -176,7 +186,7 @@ def test_subject_evidence_keeps_owners_and_relevant_license_sources_only():
         item("invoice.amount", "80000", "invoice"),
     ]
     result = build_affiliation_subject_check(
-        "甲运输有限公司", "乙运输有限公司", observations
+        "甲运输有限公司", "乙运输有限公司", observations, business=TEST_BUSINESS
     )
     assert {e.source_id for e in result.check.evidence} == {
         "old-image",
@@ -200,7 +210,9 @@ def test_duplicate_matching_license_images_are_insufficient():
         item("business_license.legal_representative", "张三", source)
         for source in ("license-a", "license-copy")
     ]
-    result = build_affiliation_subject_check("甲运输有限公司", "张三", observations)
+    result = build_affiliation_subject_check(
+        "甲运输有限公司", "张三", observations, business=TEST_BUSINESS
+    )
     assert result.check.status == "INSUFFICIENT"
 
 
@@ -213,6 +225,7 @@ def test_page_owner_type_mismatch_is_reported_in_subject_check_without_false_req
             item("business_license.legal_representative", "张三", "license-a"),
         ],
         page_owner_type="个人",
+        business=TEST_BUSINESS,
     )
 
     assert result.check.status == "INSUFFICIENT"
@@ -229,6 +242,7 @@ def test_subject_check_returns_exact_dynamic_identity_requirements():
             item("identity_card.side", "FRONT", "id-front"),
         ],
         page_owner_type="个人",
+        business=TEST_BUSINESS,
     )
 
     requirements = result.check.details["subject_requirements"]
@@ -241,13 +255,11 @@ def test_subject_check_returns_exact_dynamic_identity_requirements():
 
 def test_same_person_uses_one_shared_identity_requirement() -> None:
     result = build_affiliation_subject_check(
-        "张三", "张三", identity("张三", "id-a"), page_owner_type="个人"
+        "张三", "张三", identity("张三", "id-a"), page_owner_type="个人", business=TEST_BUSINESS
     )
 
     assert result.check.status == "MATCH"
-    assert {
-        item["party"] for item in result.check.details["subject_requirements"]
-    } == {"SHARED"}
+    assert {item["party"] for item in result.check.details["subject_requirements"]} == {"SHARED"}
 
 
 def test_identity_back_cannot_be_reused_for_two_different_people() -> None:
@@ -262,6 +274,7 @@ def test_identity_back_cannot_be_reused_for_two_different_people() -> None:
             item("identity_card.side", "BACK", "id-back"),
         ],
         page_owner_type="个人",
+        business=TEST_BUSINESS,
     )
 
     back_requirements = [
@@ -275,3 +288,32 @@ def test_identity_back_cannot_be_reused_for_two_different_people() -> None:
         "UNCERTAIN",
     ]
     assert all("无法确认对应关系" in item["reason"] for item in back_requirements)
+@pytest.mark.parametrize(
+    "value,expected", [("个人", "MATCH"), ("企业", "MATCH"), ("", "INSUFFICIENT"),
+                       ("未知类型", "INSUFFICIENT")],
+)
+def test_owner_type_input_check_is_owned_by_business_rules(value, expected):
+    from forj_review_service.businesses.rules.affiliation_controls import check_owner_type_input
+
+    check = check_owner_type_input("application.owner_type", value)
+    assert check.status == expected
+    assert check.values[0].value == value
+
+
+@pytest.mark.parametrize(
+    "actual,subject_status,expected_status",
+    [("", "MATCH", "MATCH"), ("个人", "MATCH", "MATCH"),
+     ("公司", "MATCH", "CONFLICT"), ("", "INSUFFICIENT", "INSUFFICIENT")],
+)
+def test_affiliation_control_check_preserves_subject_gating(actual, subject_status, expected_status):
+    from forj_review_service.businesses.rules.affiliation_controls import check_affiliation_control
+    from forj_review_service.contracts.checks import CheckResult, CheckResultValue
+
+    subject = CheckResult(
+        check_id="AFFILIATION-SUBJECT-001", label="主体关系", status=subject_status,
+        reason="合成主体检查", values=[CheckResultValue(source="旧车主体类型", value="PERSONAL")],
+    )
+    check = check_affiliation_control("old_vehicle.affiliation", actual, [subject],
+                                      type_source="旧车主体类型")
+    assert check.status == expected_status
+    assert check.values[0].value == actual

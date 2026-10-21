@@ -31,6 +31,7 @@ def context(name, max_age):
                         "evidence": [{"material": "permit", "field": "printed.date"}],
                     }
                 ],
+                "settings": {},
             }
         )
     )

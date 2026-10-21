@@ -18,8 +18,10 @@ def effective_configuration(profile: BusinessProfile) -> dict:
     """Expand inheritance without leaking executable handlers or request data."""
     result = {
         "page_id": profile.page_id or f"{profile.business_type}:{profile.region}",
-        "business_type": str(profile.business_type), "region": str(profile.region),
-        "version": profile.version, "required_fields": list(profile.required_fields),
+        "business_type": str(profile.business_type),
+        "region": str(profile.region),
+        "version": profile.version,
+        "required_fields": list(profile.required_fields),
         "rules_configured": profile.rules_configured,
         "capabilities": {s.capability_id: asdict(s) for s in profile.capabilities},
         "bindings": {b.capability_id: asdict(b) for b in profile.bindings},
@@ -57,42 +59,45 @@ def configuration_snapshot(profiles, active_profiles) -> dict:
     pages = []
     for profile in sorted(profiles, key=lambda p: (p.page_id, p.version)):
         effective = effective_configuration(profile)
-        pages.append({
-            "active": (profile.page_id, profile.version) in active,
-            "fingerprint": digest(effective), "effective": effective,
-        })
+        pages.append(
+            {
+                "active": (profile.page_id, profile.version) in active,
+                "fingerprint": digest(effective),
+                "effective": effective,
+            }
+        )
     return {"schema_version": "1.0", "pages": pages, "fingerprint": digest(pages)}
 
 
-def _mapping_diff(before: dict, after: dict) -> dict:
+def mapping_diff(before: dict, after: dict) -> dict:
     return {
         "added": {key: after[key] for key in sorted(after.keys() - before.keys())},
         "removed": {key: before[key] for key in sorted(before.keys() - after.keys())},
         "changed": {
             key: {"before": before[key], "after": after[key]}
-            for key in sorted(before.keys() & after.keys()) if before[key] != after[key]
+            for key in sorted(before.keys() & after.keys())
+            if before[key] != after[key]
         },
     }
 
 
 def compare_configurations(before: dict, after: dict) -> dict:
     """Compare active pages by stable identity, even when versions differ."""
+
     def active(snapshot):
-        return {
-            p["effective"]["page_id"]: p["effective"]
-            for p in snapshot["pages"] if p["active"]
-        }
+        return {p["effective"]["page_id"]: p["effective"] for p in snapshot["pages"] if p["active"]}
 
     old, new = active(before), active(after)
-    changes = _mapping_diff(old, new)
+    changes = mapping_diff(old, new)
     for page_id, change in tuple(changes["changed"].items()):
         prior, current = change["before"], change["after"]
         changes["changed"][page_id] = {
-            "before_version": prior["version"], "after_version": current["version"],
-            "fields": _mapping_diff(prior["fields"], current["fields"]),
-            "materials": _mapping_diff(prior["materials"], current["materials"]),
-            "field_checks": _mapping_diff(prior["field_checks"], current["field_checks"]),
-            "capabilities": _mapping_diff(prior["capabilities"], current["capabilities"]),
-            "effective_changes": _mapping_diff(prior, current),
+            "before_version": prior["version"],
+            "after_version": current["version"],
+            "fields": mapping_diff(prior["fields"], current["fields"]),
+            "materials": mapping_diff(prior["materials"], current["materials"]),
+            "field_checks": mapping_diff(prior["field_checks"], current["field_checks"]),
+            "capabilities": mapping_diff(prior["capabilities"], current["capabilities"]),
+            "effective_changes": mapping_diff(prior, current),
         }
     return {"before": before["fingerprint"], "after": after["fingerprint"], "pages": changes}

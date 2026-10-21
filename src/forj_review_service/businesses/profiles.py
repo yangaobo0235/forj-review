@@ -11,13 +11,7 @@ from forj_review_service.businesses.material_policies import (
     MaterialPolicy,
     RetryPolicy,
 )
-from forj_review_service.businesses.packs import (
-    BUSINESS_PACKS,
-    SCRAP_REPLACEMENT_PACK,
-)
 from forj_review_service.businesses.packs.model import BusinessExtensionPack
-from forj_review_service.businesses.packs.transfer import TRANSFER_PACK
-from forj_review_service.businesses.packs.vehicle_source import VEHICLE_SOURCE_PACK
 from forj_review_service.businesses.replacement_policies import ReplacementPolicy
 from forj_review_service.capabilities.specs import (
     CapabilityBinding,
@@ -141,16 +135,6 @@ def build_profile(
     )
 
 
-def build_scrap_profile(region: Region) -> BusinessProfile:
-    """从业务声明生成某个地区的报废置换 Profile。"""
-    return build_profile(SCRAP_REPLACEMENT_PACK, region)
-
-
-SCRAP_REPLACEMENT_QINGDAO = build_scrap_profile(Region.QINGDAO)
-
-# 新版车源配置；页面身份与字段、材料和审核规则分别声明。
-VEHICLE_SOURCE_DEFAULT = build_profile(VEHICLE_SOURCE_PACK, Region.DEFAULT)
-
 # 一致性审核不分地区：青岛与长春两个页面地址（/consistency-qingdao、
 # /consistency-changchun）使用默认地区，
 # 由页面识别声明把两个地址都挂到这一条上。规则尚未配置，先立座位。
@@ -162,17 +146,4 @@ CONSISTENCY_DEFAULT = BusinessProfile(
     sections=(),
     rules_configured=False,
     unconfigured_message="一致性审核规则尚未配置，请人工复核",
-)
-
-SCRAP_REPLACEMENT_CHANGCHUN = build_scrap_profile(Region.CHANGCHUN)
-
-TRANSFER_DEFAULT = build_profile(TRANSFER_PACK, Region.DEFAULT)
-
-BUSINESS_PROFILES = (
-    *(
-        build_profile(pack, region.region)
-        for pack in BUSINESS_PACKS.values()
-        for region in pack.regions
-    ),
-    CONSISTENCY_DEFAULT,
 )

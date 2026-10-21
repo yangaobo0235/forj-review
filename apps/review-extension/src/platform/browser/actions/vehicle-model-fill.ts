@@ -4,6 +4,7 @@ import { modelFillPlan, modelPageScope, sameModelData, validatedModelInput, veri
 import { searchVehicleModels } from "../../extension/vehicle-model-client.ts";
 import { ReviewPageFieldWriter } from "./page-field-writer.ts";
 import { inspectExactOption } from "./exact-select.ts";
+import type { ActionMapping } from "@forj/configuration-contracts";
 
 export interface ModelFillRequest {
   expectedPageUrl?: string;
@@ -25,6 +26,8 @@ interface ModelFillContext {
   collect: (fields: readonly string[]) => {pageFields: Record<string, string>; fieldTargets: {field: string; element: DomElement}[]};
   writableFields: () => ReadonlySet<string>;
   controlKinds: () => ReadonlySet<string> | null | undefined;
+  mappings?: () => readonly ActionMapping[];
+  fieldLabels?: () => Record<string, string>;
   resolveSearch?: (request: ModelFillRequest) => Promise<{ok: boolean; code?: string; message: string; candidate?: VehicleModelCandidate; input?: ModelSearchInput}>;
 }
 class ModelFillError extends Error {
@@ -96,7 +99,8 @@ export function createVehicleModelFiller(context: ModelFillContext) {
       checkScope();
       if (!sameModelData(latest, candidate)) throw new ModelFillError("MODEL_CONFIG_CHANGED", "离线目录中的车型配置已更新，请重新搜索并核对回填预览");
       verifyModelOption(candidate);
-      const plan = modelFillPlan(candidate, Object.fromEntries([...context.fields].map(([field, entry]) => [field, entry.collectedValue])));
+      const mappings = context.mappings?.() ?? [];
+      const plan = modelFillPlan(candidate, Object.fromEntries([...context.fields].map(([field, entry]) => [field, entry.collectedValue])), mappings, context.fieldLabels?.() ?? {});
       if (plan.missing.length) throw new ModelFillError("MODEL_CONFIG_INCOMPLETE", `车型配置缺少：${plan.missing.join("、")}，请先人工补齐`);
       preflight(plan.values);
       checkScope();
@@ -104,7 +108,8 @@ export function createVehicleModelFiller(context: ModelFillContext) {
       try {
         result = await ReviewPageFieldWriter.executeSequence(context.root, plan.values, resolveField, guard,
           {fields: context.writableFields(), controlKinds: context.controlKinds(), inspectOption: inspectExactOption,
-            label: "规格参数", focusField: "vehicle.model", settleAfter: {"vehicle.model": 15}});
+            label: "规格参数", focusField: mappings.find(m => m.source_property === "modelName")?.target_field,
+            settleAfter: Object.fromEntries(mappings.filter(m => m.wait_condition_id === "options_ready").map(m => [m.target_field, 15]))});
       } catch (error) {
         result = {ok: false, code: "MODEL_WRITE_INTERRUPTED", message: `${error && typeof error === "object" && "message" in error
           ? String(error.message) : "规格参数写入中断"}；请核对已写入字段`};

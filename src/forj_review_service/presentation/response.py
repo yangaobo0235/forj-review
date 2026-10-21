@@ -4,15 +4,12 @@
 修改日期：2026-08-26
 """
 
-import logging
-
 from forj_review_service.businesses.context import DEFAULT_BUSINESS, BusinessContext
 from forj_review_service.businesses.profiles import BusinessProfile
 from forj_review_service.contracts.recognition import RecognitionBatchResult
 from forj_review_service.contracts.review import (
     FieldComparison,
     FieldObservation,
-    FieldStatus,
     QrCheck,
     Recommendation,
     ResultSection,
@@ -22,45 +19,8 @@ from forj_review_service.contracts.review import (
 from forj_review_service.evidence.comparison.check_results import unique_checks
 from forj_review_service.evidence.comparison.review import build_field_comparisons
 from forj_review_service.evidence.qr import append_qr_observations
+from forj_review_service.observability.decision import log_review_decision
 from forj_review_service.presentation.assembly import assemble_review_response
-
-logger = logging.getLogger(__name__)
-
-
-def _log_decision(response: ReviewResponse, note: str = "") -> None:
-    """结论摘要：配置回测与影响面对账的唯一数据源。
-
-    只记字段键、状态与来源材料类型，**绝不记值**。没有这一行，"新配置跑出的结论与
-    当时人工判断是否一致"根本无法核对，agent 的映射质量就只能靠人看一眼——那不是判卷。
-    """
-    statuses = ",".join(f"{item.field}:{item.status.value}" for item in response.comparisons)
-    conflicts = ",".join(
-        f"{item.field}:"
-        + "+".join(sorted({fact.document_type or fact.source for fact in item.evidence}))
-        for item in response.comparisons
-        if item.status == FieldStatus.CONFLICT
-    )
-    uncertain = ",".join(
-        f"{item.field}:"
-        + "+".join(
-            sorted({fact.document_type or fact.source for fact in item.evidence if fact.uncertain})
-        )
-        for item in response.comparisons
-        if any(fact.uncertain for fact in item.evidence)
-    )
-    logger.info(
-        "review decision trace_id=%s business=%s region=%s profile=%s recommendation=%s"
-        " note=%s fields=%s conflicts=%s uncertain=%s",
-        response.trace_id,
-        response.business_type,
-        response.region,
-        response.profile_version,
-        response.recommendation.value,
-        note or "-",
-        statuses or "-",
-        conflicts or "-",
-        uncertain or "-",
-    )
 
 
 def response_from_results(
@@ -146,7 +106,7 @@ def build_review_response(
         )
     )
     if not defer_advice:
-        _log_decision(decision, "assembled")
+        log_review_decision(decision, "assembled")
     return decision
 
 
@@ -180,5 +140,5 @@ def build_unconfigured_response(
     decision = assemble_review_response(
         response, RecognitionBatchResult(), business_checks=[], business=business
     ).model_copy(update={"summary": message})
-    _log_decision(decision, "unconfigured")
+    log_review_decision(decision, "unconfigured")
     return decision

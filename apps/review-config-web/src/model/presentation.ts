@@ -1,7 +1,7 @@
 import type { ConfigurationEvent, ConfigurationSession } from "@forj/configuration-contracts";
 
 export const stateLabels: Record<string, string> = {DRAFTING: "配置草稿", NEEDS_INPUT: "等待补充",
-  READY_FOR_CONFIRMATION: "待确认保存", SAVED_PENDING_RESTART: "已保存 · 待加载", EFFECTIVE: "已启用", BLOCKED: "需要处理"};
+  READY_FOR_CONFIRMATION: "待确认保存", PUBLISHED: "已发布", CLOSED: "已关闭", BLOCKED: "需要处理"};
 
 export function visibleMessages(session: ConfigurationSession) {
   return (session.chat_messages ?? session.messages).filter(m => ["assistant", "user"].includes(m.role) && typeof m.content === "string"

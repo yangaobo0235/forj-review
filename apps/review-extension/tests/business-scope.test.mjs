@@ -1,3 +1,4 @@
+import { applyCollectManifest } from "../src/platform/browser/catalog/collect-manifest.ts";
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import { ReviewBusinessScope } from "../src/platform/browser/collection/business-scope.ts";
@@ -53,12 +54,13 @@ test("does not infer a retired transfer scope", () => {
   ]);
 });
 
-test("scrap image order never substitutes for a physical material label", () => {
+test("没有清单时不按图片顺序或历史材料名猜类型", () => {
+  applyCollectManifest(null);
   const { documentTypeFor } = loadBusinessScope();
 
   for (const scope of ["old_vehicle", "new_vehicle"]) {
     for (const order of [1, 2, 3, 4]) assert.equal(documentTypeFor(scope, order, scope), "unknown");
   }
-  assert.equal(documentTypeFor("old_vehicle", 3, "vehicle_license"), "vehicle_license");
-  assert.equal(documentTypeFor("identity", 1, "id_card"), "identity_card");
+  assert.equal(documentTypeFor("old_vehicle", 3, "vehicle_license"), "unknown");
+  assert.equal(documentTypeFor("identity", 1, "id_card"), "unknown");
 });

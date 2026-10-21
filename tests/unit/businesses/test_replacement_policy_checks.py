@@ -1,16 +1,17 @@
 import pytest
 
-from forj_review_service.businesses.packs.scrap_replacement import (
-    CHANGCHUN_REPLACEMENT_POLICY,
-    QINGDAO_REPLACEMENT_POLICY,
-)
-from forj_review_service.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
 from forj_review_service.businesses.rules.replacement_policy import (
     build_replacement_policy_checks,
 )
 from forj_review_service.contracts.review import FieldObservation, ReviewRequest
 from forj_review_service.presentation.advice import build_final_advice
 from forj_review_service.presentation.routing import build_review_tasks
+from tests.support.business_values import (
+    CHANGCHUN_REPLACEMENT_POLICY,
+    QINGDAO_REPLACEMENT_POLICY,
+)
+from tests.support.pages import SCRAP_BUSINESS as TEST_BUSINESS
+from tests.support.pages import SCRAP_REPLACEMENT_QINGDAO
 
 
 def observation(field: str, value: str, document_type: str) -> FieldObservation:
@@ -50,11 +51,10 @@ def test_invoice_date_policy_boundaries(policy, invoice_date, expected) -> None:
             ),
             observation("new_vehicle.origin", "长春市", "invoice"),
         ],
+        business=TEST_BUSINESS,
     )
 
-    assert {item.check_id: item.status for item in checks}[
-        "POLICY-INVOICE-DATE"
-    ] == expected
+    assert {item.check_id: item.status for item in checks}["POLICY-INVOICE-DATE"] == expected
 
 
 def test_region_policy_requires_matching_origin() -> None:
@@ -65,6 +65,7 @@ def test_region_policy_requires_matching_origin() -> None:
             observation("old_vehicle.recycle_date", "2026-12-31", "scrap_certificate"),
             observation("new_vehicle.origin", "青岛市", "invoice"),
         ],
+        business=TEST_BUSINESS,
     )
     changchun_unreadable = build_replacement_policy_checks(
         CHANGCHUN_REPLACEMENT_POLICY,
@@ -73,6 +74,7 @@ def test_region_policy_requires_matching_origin() -> None:
             observation("old_vehicle.recycle_date", "2026-12-31", "scrap_certificate"),
             observation("new_vehicle.origin", "无法识别", "invoice"),
         ],
+        business=TEST_BUSINESS,
     )
     qingdao = build_replacement_policy_checks(
         QINGDAO_REPLACEMENT_POLICY,
@@ -80,11 +82,10 @@ def test_region_policy_requires_matching_origin() -> None:
             observation("invoice.invoice_date", "2026-09-10", "invoice"),
             observation("old_vehicle.recycle_date", "2026-10-31", "scrap_certificate"),
         ],
+        business=TEST_BUSINESS,
     )
 
-    assert {item.check_id: item.status for item in changchun}[
-        "POLICY-NEW-ORIGIN"
-    ] == "CONFLICT"
+    assert {item.check_id: item.status for item in changchun}["POLICY-NEW-ORIGIN"] == "CONFLICT"
     assert {item.check_id: item.status for item in changchun_unreadable}[
         "POLICY-NEW-ORIGIN"
     ] == "INSUFFICIENT"
@@ -102,6 +103,7 @@ def test_policy_uses_image_evidence_and_reports_missing_as_insufficient() -> Non
                 value="2026-09-10",
             )
         ],
+        business=TEST_BUSINESS,
     )
 
     statuses = {item.check_id: item.status for item in checks}
@@ -126,11 +128,11 @@ def test_policy_uses_image_evidence_and_reports_missing_as_insufficient() -> Non
 )
 def test_disposal_date_window_is_inclusive(policy, value, expected):
     checks = build_replacement_policy_checks(
-        policy, [observation("old_vehicle.recycle_date", value, "scrap_certificate")]
+        policy,
+        [observation("old_vehicle.recycle_date", value, "scrap_certificate")],
+        business=TEST_BUSINESS,
     )
-    assert {item.check_id: item.status for item in checks}[
-        "POLICY-DISPOSAL-DEADLINE"
-    ] == expected
+    assert {item.check_id: item.status for item in checks}["POLICY-DISPOSAL-DEADLINE"] == expected
 
 
 def test_out_of_window_dates_ask_for_human_review_instead_of_failing() -> None:
@@ -145,6 +147,7 @@ def test_out_of_window_dates_ask_for_human_review_instead_of_failing() -> None:
             observation("invoice.invoice_date", "2025-12-31", "invoice"),
             observation("old_vehicle.recycle_date", "2027-01-05", "scrap_certificate"),
         ],
+        business=TEST_BUSINESS,
     )
 
     statuses = {item.check_id: item for item in checks}
@@ -162,18 +165,17 @@ def test_out_of_window_dates_ask_for_human_review_instead_of_failing() -> None:
         (CHANGCHUN_REPLACEMENT_POLICY, "长春", "青岛"),
     ],
 )
-def test_origin_matches_by_keyword_in_every_region(
-    policy, keyword, other_region_value
-) -> None:
+def test_origin_matches_by_keyword_in_every_region(policy, keyword, other_region_value) -> None:
     """两地的产地规则必须同口径：**包含本地关键词就通过**。
 
     发票产地栏的写法不固定（"中国青岛""产地：中国 / 长 春"都出现过）。只要
     一个地区按完全匹配、另一个按包含匹配，同一张发票换个地区审核结论就不同，
     而且不会报错——只会静静地把一张合规发票判成冲突。
     """
+
     def status(value: str) -> str:
         checks = build_replacement_policy_checks(
-            policy, [observation("new_vehicle.origin", value, "invoice")]
+            policy, [observation("new_vehicle.origin", value, "invoice")], business=TEST_BUSINESS
         )
         return {item.check_id: item.status for item in checks}["POLICY-NEW-ORIGIN"]
 
@@ -218,17 +220,18 @@ def test_changchun_origin_requires_readable_evidence(value, expected):
     checks = build_replacement_policy_checks(
         CHANGCHUN_REPLACEMENT_POLICY,
         [observation("new_vehicle.origin", value, "invoice")],
+        business=TEST_BUSINESS,
     )
-    assert {item.check_id: item.status for item in checks}[
-        "POLICY-NEW-ORIGIN"
-    ] == expected
+    assert {item.check_id: item.status for item in checks}["POLICY-NEW-ORIGIN"] == expected
 
 
 def test_qingdao_origin_is_displayed_with_full_original_image_evidence():
     origin = observation("new_vehicle.origin", "青岛市", "invoice").model_copy(
         update={"image_id": "invoice-img", "image_index": 3}
     )
-    checks = build_replacement_policy_checks(QINGDAO_REPLACEMENT_POLICY, [origin])
+    checks = build_replacement_policy_checks(
+        QINGDAO_REPLACEMENT_POLICY, [origin], business=TEST_BUSINESS
+    )
     check = next(item for item in checks if item.check_id == "POLICY-NEW-ORIGIN")
     assert check.label == "新车发票产地"
     assert check.status == "MATCH"
@@ -237,8 +240,12 @@ def test_qingdao_origin_is_displayed_with_full_original_image_evidence():
     assert check.values[0].value == "青岛市"
     steps = build_review_tasks(
         request=ReviewRequest(page_url="https://example.test/review", region="qingdao"),
-        profile=SCRAP_REPLACEMENT_QINGDAO, comparisons=[], external_checks=[],
-        business_checks=checks, completeness=None, limitations=[],
+        profile=SCRAP_REPLACEMENT_QINGDAO,
+        comparisons=[],
+        external_checks=[],
+        business_checks=checks,
+        completeness=None,
+        limitations=[],
     )
     origin_step = next(step for step in steps if step.step_id == "BUSINESS-POLICY-NEW-ORIGIN")
     assert origin_step.values[0].image_id == "invoice-img"
@@ -258,15 +265,13 @@ def test_policy_ignores_page_values_and_keeps_conflicting_image_sources():
     original = observation("invoice.invoice_date", "2026-09-10", "invoice")
     page = original.model_copy(update={"source_type": "page", "value": "2020-01-01"})
     checks = build_replacement_policy_checks(
-        QINGDAO_REPLACEMENT_POLICY, [original, page]
+        QINGDAO_REPLACEMENT_POLICY, [original, page], business=TEST_BUSINESS
     )
     assert checks[0].status == "MATCH"
     assert len(checks[0].evidence) == 1
-    conflict = original.model_copy(
-        update={"source_id": "invoice-2", "value": "2026-10-01"}
-    )
+    conflict = original.model_copy(update={"source_id": "invoice-2", "value": "2026-10-01"})
     checks = build_replacement_policy_checks(
-        QINGDAO_REPLACEMENT_POLICY, [original, conflict, page]
+        QINGDAO_REPLACEMENT_POLICY, [original, conflict, page], business=TEST_BUSINESS
     )
     assert checks[0].status == "INSUFFICIENT"
     assert {item.source_id for item in checks[0].evidence} == {
@@ -300,12 +305,15 @@ def test_qingdao_origin_requires_readable_matching_evidence(
             observation("old_vehicle.recycle_date", "2026-10-31", "scrap_certificate"),
             *origin_observations,
         ],
+        business=TEST_BUSINESS,
     )
 
-    origin_check = next(
-        item for item in checks if item.check_id == "POLICY-NEW-ORIGIN"
+    origin_check = next(item for item in checks if item.check_id == "POLICY-NEW-ORIGIN")
+    expected = (
+        "MATCH"
+        if origin_observations and all(item.value == "青岛市" for item in origin_observations)
+        else "INSUFFICIENT"
     )
-    expected = "MATCH" if origin_observations and all(item.value == "青岛市" for item in origin_observations) else "INSUFFICIENT"
     assert origin_check.status == expected
     assert {item.check_id: item.status for item in checks}["POLICY-INVOICE-DATE"] == "MATCH"
     assert {item.check_id: item.status for item in checks}["POLICY-DISPOSAL-DEADLINE"] == "MATCH"
@@ -322,12 +330,10 @@ def test_qingdao_origin_requires_readable_matching_evidence(
         completeness=None,
         limitations=[],
     )
-    origin_step = next(
-        step for step in steps if step.step_id == "BUSINESS-POLICY-NEW-ORIGIN"
-    )
+    origin_step = next(step for step in steps if step.step_id == "BUSINESS-POLICY-NEW-ORIGIN")
     assert origin_step.result_status == expected
     assert origin_step.requires_reviewer_action is (expected != "MATCH")
 
-    decision, advice = build_final_advice([], checks, [], [], [], [])
+    decision, advice = build_final_advice([], checks, [], [], [], [], business=TEST_BUSINESS)
     assert decision == ("PASS" if expected == "MATCH" else "REVIEW_REQUIRED")
     assert bool(advice.findings) is (expected != "MATCH")

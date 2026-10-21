@@ -19,9 +19,10 @@ const labelOf = (documentType) =>
   evidencePresentation({ source: "图片识别", document_type: documentType, value: "X" })
     .label;
 
-test("清单不可用时退回内置表；内置表不认识的材料不编造名字", () => {
-  assert.equal(labelOf("vehicle_license"), "行驶证");
-  assert.equal(labelOf("registration_certificate"), "机动车登记证书");
+test("清单不可用时不编造材料名称", () => {
+  applyCollectManifest(null);
+  assert.equal(labelOf("vehicle_license"), "图片证据");
+  assert.equal(labelOf("registration_certificate"), "图片证据");
   assert.equal(labelOf("permit"), "图片证据");
   assert.equal(labelOf(undefined), "图片证据");
 });

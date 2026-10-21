@@ -2,9 +2,9 @@
 
 from dataclasses import replace
 
-from forj_review_service.businesses.profiles import SCRAP_REPLACEMENT_CHANGCHUN
 from forj_review_service.contracts.review import FieldObservation, ReviewRequest
 from forj_review_service.evidence.comparison.review import build_field_comparisons
+from tests.support.pages import SCRAP_REPLACEMENT_CHANGCHUN
 
 
 def test_display_and_page_interaction_do_not_change_evidence_judgment():

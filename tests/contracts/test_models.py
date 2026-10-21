@@ -32,39 +32,61 @@ def test_review_step_legacy_name_aliases_review_task() -> None:
 
 
 def test_review_request_accepts_collection_diagnostics_aliases() -> None:
-    request = ReviewRequest.model_validate({
-        "pageUrl": "https://example.test/review/1",
-        "collectionDiagnostics": {
-            "matchedFields": 2,
-            "ambiguousFields": ["transfer.vin"],
-            "scannedImages": 12,
-            "selectedImages": 10,
-            "imageOverflow": True,
-            "collectionIssues": ["候选资料超过 10 张，请确认是否漏审"],
-        },
-    })
+    request = ReviewRequest.model_validate(
+        {
+            "pageUrl": "https://example.test/review/1",
+            "collectionDiagnostics": {
+                "matchedFields": 2,
+                "ambiguousFields": ["transfer.vin"],
+                "scannedImages": 12,
+                "selectedImages": 10,
+                "imageOverflow": True,
+                "collectionIssues": ["候选资料超过 10 张，请确认是否漏审"],
+            },
+        }
+    )
     assert request.collection_diagnostics.ambiguous_fields == ["transfer.vin"]
     assert request.collection_diagnostics.image_overflow is True
 
 
 def test_response_and_batch_preserve_completeness_and_retry_records() -> None:
     report = MaterialCompletenessReport(
-        phase="EXTRACTED", status="INCOMPLETE", enforced=True,
-        issues=[MaterialCompletenessIssue(
-            code="MISSING_REGISTRATION_PAGES", missing_pages=[3, 4],
-            message="机动车登记证材料不完整", suggested_action="请补充登记证第 3、4 页",
-        )],
+        phase="EXTRACTED",
+        status="INCOMPLETE",
+        enforced=True,
+        issues=[
+            MaterialCompletenessIssue(
+                code="MISSING_REGISTRATION_PAGES",
+                missing_pages=[3, 4],
+                message="机动车登记证材料不完整",
+                suggested_action="请补充登记证第 3、4 页",
+            )
+        ],
     )
-    retry = RetrySummary(attempts=[RetryAttempt(
-        target_id="transfer-02", stage="qwen", attempt_number=2,
-        reason_code="low_confidence", strategy="focused_extraction",
-        result="succeeded", duration_ms=1200,
-    )])
+    retry = RetrySummary(
+        attempts=[
+            RetryAttempt(
+                target_id="transfer-02",
+                stage="qwen",
+                attempt_number=2,
+                reason_code="low_confidence",
+                strategy="focused_extraction",
+                result="succeeded",
+                duration_ms=1200,
+            )
+        ]
+    )
     batch = RecognitionBatchResult(
-        recognized_documents=[RecognizedDocument(
-            target_id="transfer-02", document_type="registration_certificate",
-            business_scope="transfer", covered_pages=[1, 2],
-        )], material_completeness=report, retry_summary=retry,
+        recognized_documents=[
+            RecognizedDocument(
+                target_id="transfer-02",
+                document_type="registration_certificate",
+                business_scope="transfer",
+                covered_pages=[1, 2],
+            )
+        ],
+        material_completeness=report,
+        retry_summary=retry,
     )
     assert batch.material_completeness.status == "INCOMPLETE"
     assert batch.retry_summary.qwen_retries == 1
@@ -79,15 +101,22 @@ def test_upload_presence_is_additive_and_survives_job_serialization():
     assert RecognitionBatchResult().document_classifications == []
     assert QwenClassification(document_type="identity_card", confidence=0.9).identity_sides == []
     assert ImageInput(index=0, src="https://example.test/0.jpg").identity_sides_hint == []
-    assert ImageInput(index=0, src="https://example.test/0.jpg", identitySidesHint=["BACK"]).identity_sides_hint == ["BACK"]
-    snapshot = ReviewJobSnapshot.model_validate({
-        "job_id": "synthetic", "status": "PARTIAL", "created_at": "synthetic",
-        "progress": {"total_count": 0},
-        "material_completeness": {
-            "phase": "EXTRACTED", "status": "INCOMPLETE",
-            "presence": {"status": "COMPLETE", "groups": []},
-        },
-    })
+    assert ImageInput(
+        index=0, src="https://example.test/0.jpg", identitySidesHint=["BACK"]
+    ).identity_sides_hint == ["BACK"]
+    snapshot = ReviewJobSnapshot.model_validate(
+        {
+            "job_id": "synthetic",
+            "status": "PARTIAL",
+            "created_at": "synthetic",
+            "progress": {"total_count": 0},
+            "material_completeness": {
+                "phase": "EXTRACTED",
+                "status": "INCOMPLETE",
+                "presence": {"status": "COMPLETE", "groups": []},
+            },
+        }
+    )
     restored = ReviewJobSnapshot.model_validate_json(snapshot.model_dump_json())
     assert restored.material_completeness.presence.status == "COMPLETE"
     assert restored.material_completeness.status == "INCOMPLETE"
@@ -125,15 +154,17 @@ def test_review_request_accepts_extension_camel_case_payload() -> None:
         pageUrl="https://example.test/review/1",
         pageTitle="审核页面",
         pageFields={"old_vehicle.vin": "ABC123"},
-        reviewFields=[{
-            "field": "old_vehicle.vin",
-            "label": "报废车辆车架号",
-            "value": "ABC123",
-            "controlType": "text",
-            "editable": True,
-            "order": 1,
-            "section": "old_vehicle",
-        }],
+        reviewFields=[
+            {
+                "field": "old_vehicle.vin",
+                "label": "报废车辆车架号",
+                "value": "ABC123",
+                "controlType": "text",
+                "editable": True,
+                "order": 1,
+                "section": "old_vehicle",
+            }
+        ],
         collectionDiagnostics={"reviewFieldCount": 1},
         images=[{"index": 0, "src": "image", "pagePosition": "10,20"}],
     )

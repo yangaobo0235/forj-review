@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
+from dataclasses import dataclass
 
 from forj_review_service.businesses.rules.emission_patterns import infer_engine_emission
 from forj_review_service.capabilities.specs import ReviewExecutionContext, RuleExecutionResult
 from forj_review_service.contracts.checks import CheckResult, CheckResultValue
 from forj_review_service.contracts.engine_emissions import (
+    AsyncEngineEmissionLookup,
     EngineEmissionLookup,
     EngineEmissionLookupUnavailable,
     engine_model_key,
 )
+from forj_review_service.contracts.review import FieldObservation
 from forj_review_service.evidence.comparison.evidence_values import (
     observation_evidence,
     trusted_page_value,
@@ -82,9 +85,37 @@ def _check(
     )
 
 
-def run_emission_standard(
-    context: ReviewExecutionContext, *, lookup: EngineEmissionLookup | None = None,
-) -> RuleExecutionResult:
+@dataclass(frozen=True)
+class _EmissionReference:
+    models: list[str]
+    page_standard: str | None
+    page_values: list[CheckResultValue]
+    engine_items: list[FieldObservation]
+    fuel_items: list[FieldObservation]
+    evidence: list[FieldObservation]
+
+    def unavailable(self, error: EngineEmissionLookupUnavailable) -> RuleExecutionResult:
+        return RuleExecutionResult(
+            checks=(
+                _check(
+                    "INSUFFICIENT",
+                    str(error),
+                    values=self.page_values + _values_for_observations(self.engine_items),
+                    evidence=self.evidence,
+                    reason_codes=["EVIDENCE_MISSING"],
+                    details={
+                        "source": "engine_model",
+                        "lookup_table": "ref_engine_emission",
+                        "engine_models": self.models,
+                    },
+                ),
+            )
+        )
+
+
+def _prepare_emission(
+    context: ReviewExecutionContext,
+) -> RuleExecutionResult | _EmissionReference:
     """核验旧车排放标准，登记证无明确值时先查表，再按已有系列规则兜底。"""
 
     if context.profile.business_type != "scrap_replacement":
@@ -104,7 +135,9 @@ def run_emission_standard(
     reliable_emission = [
         item
         for item in emission_items
-        if not item.uncertain and readable_value(item.value) and canonical_emission_standard(item.value)
+        if not item.uncertain
+        and readable_value(item.value)
+        and canonical_emission_standard(item.value)
     ]
     uncertain_emission = [item for item in emission_items if item not in reliable_emission]
     explicit_standards = {canonical_emission_standard(item.value) for item in reliable_emission}
@@ -140,7 +173,9 @@ def run_emission_standard(
                     _check(
                         "INSUFFICIENT",
                         f"登记证书排放标准识别为 {expected}，页面尚未填写，请核对后回填",
-                        values=page_values + _values_for_observations(emission_items) + [
+                        values=page_values
+                        + _values_for_observations(emission_items)
+                        + [
                             CheckResultValue(
                                 source="登记证书排放标准推导",
                                 value=expected,
@@ -184,7 +219,9 @@ def run_emission_standard(
             )
         )
 
-    if not engine_items or any(item.uncertain or not readable_value(item.value) for item in engine_items):
+    if not engine_items or any(
+        item.uncertain or not readable_value(item.value) for item in engine_items
+    ):
         return RuleExecutionResult(
             checks=(
                 _check(
@@ -199,35 +236,45 @@ def run_emission_standard(
 
     models = sorted({engine_model_key(item.value) for item in engine_items})
     if any(len(model) < 2 for model in models):
-        return RuleExecutionResult(checks=(
-            _check(
-                "INSUFFICIENT", "发动机型号不完整，无法查询排放对应表",
-                values=page_values + _values_for_observations(engine_items), evidence=evidence,
-                reason_codes=["RECOGNITION_UNCERTAIN"],
-            ),
-        ))
-    details = {"source": "engine_model", "lookup_table": "engine_emission_standards",
-               "engine_models": models}
-    try:
-        if lookup is None:
-            raise EngineEmissionLookupUnavailable("发动机排放对应表查询未配置，请检查服务装配")
-        standards = lookup(models)
-    except EngineEmissionLookupUnavailable as error:
-        return RuleExecutionResult(checks=(
-            _check(
-                "INSUFFICIENT", str(error),
-                values=page_values + _values_for_observations(engine_items), evidence=evidence,
-                reason_codes=["EVIDENCE_MISSING"], details=details,
-            ),
-        ))
+        return RuleExecutionResult(
+            checks=(
+                _check(
+                    "INSUFFICIENT",
+                    "发动机型号不完整，无法查询排放对应表",
+                    values=page_values + _values_for_observations(engine_items),
+                    evidence=evidence,
+                    reason_codes=["RECOGNITION_UNCERTAIN"],
+                ),
+            )
+        )
+    return _EmissionReference(
+        models, page_standard, page_values, engine_items, fuel_items, evidence
+    )
+
+
+def _evaluate_reference(
+    reference: _EmissionReference, standards: dict[str, str]
+) -> RuleExecutionResult:
+    models, page_standard = reference.models, reference.page_standard
+    page_values, engine_items = reference.page_values, reference.engine_items
+    fuel_items, evidence = reference.fuel_items, reference.evidence
+    details = {
+        "source": "engine_model",
+        "lookup_table": "ref_engine_emission",
+        "engine_models": models,
+    }
+    # Inference augments a local copy; callers may reuse their reference fixture.
+    standards = dict(standards)
     lookup_results = dict(standards)
     rule_results = {}
     # 不新增燃料证据要求；已有证据明确非柴油或燃料读值不确定时，不能套柴油规则。
     fuel_allows_inference = all(
         not item.uncertain and str(item.value).strip() == "柴油" for item in fuel_items
     )
-    details["fuel_scope"] = "diesel" if fuel_items and fuel_allows_inference else (
-        "unknown" if not fuel_items else "not_eligible"
+    details["fuel_scope"] = (
+        "diesel"
+        if fuel_items and fuel_allows_inference
+        else ("unknown" if not fuel_items else "not_eligible")
     )
     for model in models:
         if model in standards:
@@ -236,56 +283,122 @@ def run_emission_standard(
         if candidate is not None:
             standards[model] = candidate.standard
             rule_results[model] = {
-                "standard": candidate.standard, "rule_id": candidate.rule_id,
-                "family": candidate.family, "marker": candidate.marker,
+                "standard": candidate.standard,
+                "rule_id": candidate.rule_id,
+                "family": candidate.family,
+                "marker": candidate.marker,
             }
     method = "mixed" if lookup_results and rule_results else "pattern" if rule_results else "lookup"
-    details.update({"method": method, "lookup_results": lookup_results, "rule_results": rule_results})
+    details.update(
+        {"method": method, "lookup_results": lookup_results, "rule_results": rule_results}
+    )
     missing = [model for model in models if model not in standards]
     if missing:
-        return RuleExecutionResult(checks=(
-            _check(
-                "INSUFFICIENT", "发动机排放对应表未收录完整型号且无法按已配置系列规则推导："
-                + "、".join(missing) + "，请人工复核",
-                values=page_values + _values_for_observations(engine_items), evidence=evidence,
-                reason_codes=["EVIDENCE_MISSING"], details={**details, "missing_models": missing},
-            ),
-        ))
+        return RuleExecutionResult(
+            checks=(
+                _check(
+                    "INSUFFICIENT",
+                    "发动机排放对应表未收录完整型号且无法按已配置系列规则推导："
+                    + "、".join(missing)
+                    + "，请人工复核",
+                    values=page_values + _values_for_observations(engine_items),
+                    evidence=evidence,
+                    reason_codes=["EVIDENCE_MISSING"],
+                    details={**details, "missing_models": missing},
+                ),
+            )
+        )
     resolved = {standards[model] for model in models}
     if len(resolved) != 1:
-        return RuleExecutionResult(checks=(
-            _check(
-                "CONFLICT", "不同发动机型号查表或规则推导得到的排放标准不一致，请人工核对登记证书",
-                values=page_values + _values_for_observations(engine_items), evidence=evidence,
-                reason_codes=["VALUE_MISMATCH"],
-                details=details,
-            ),
-        ))
+        return RuleExecutionResult(
+            checks=(
+                _check(
+                    "CONFLICT",
+                    "不同发动机型号查表或规则推导得到的排放标准不一致，请人工核对登记证书",
+                    values=page_values + _values_for_observations(engine_items),
+                    evidence=evidence,
+                    reason_codes=["VALUE_MISMATCH"],
+                    details=details,
+                ),
+            )
+        )
     expected = next(iter(resolved))
-    result_label = {"lookup": "发动机型号查表", "pattern": "发动机型号规则推导",
-                    "mixed": "发动机型号查表与规则推导"}[method]
+    result_label = {
+        "lookup": "发动机型号查表",
+        "pattern": "发动机型号规则推导",
+        "mixed": "发动机型号查表与规则推导",
+    }[method]
     values = page_values + _values_for_observations(engine_items)
     if page_standard != expected:
-        values.append(CheckResultValue(
-            source=result_label + "参考值", value=expected, fill_role="RECOMMENDATION",
-            derived_from="；".join(models),
-        ))
+        values.append(
+            CheckResultValue(
+                source=result_label + "参考值",
+                value=expected,
+                fill_role="RECOMMENDATION",
+                derived_from="；".join(models),
+            )
+        )
     if page_standard is None:
-        return RuleExecutionResult(checks=(
-            _check(
-                "INSUFFICIENT", f"页面排放标准未填写，{result_label}为 {expected}，请核对后回填",
-                values=values, evidence=evidence, reason_codes=["PAGE_VALUE_MISSING"],
-                details={**details, "standard": expected, "permitted_fill_values": [expected]},
-            ),
-        ))
+        return RuleExecutionResult(
+            checks=(
+                _check(
+                    "INSUFFICIENT",
+                    f"页面排放标准未填写，{result_label}为 {expected}，请核对后回填",
+                    values=values,
+                    evidence=evidence,
+                    reason_codes=["PAGE_VALUE_MISSING"],
+                    details={**details, "standard": expected, "permitted_fill_values": [expected]},
+                ),
+            )
+        )
     status = "MATCH" if expected == page_standard else "CONFLICT"
-    return RuleExecutionResult(checks=(
-        _check(
-            status,
-            f"{result_label}结果与页面排放标准一致" if status == "MATCH" else
-            f"{result_label}为 {expected}，与页面填写的 {page_standard} 不一致",
-            values=values, evidence=evidence,
-            reason_codes=[] if status == "MATCH" else ["VALUE_MISMATCH"],
-            details={**details, "standard": expected},
-        ),
-    ))
+    return RuleExecutionResult(
+        checks=(
+            _check(
+                status,
+                f"{result_label}结果与页面排放标准一致"
+                if status == "MATCH"
+                else f"{result_label}为 {expected}，与页面填写的 {page_standard} 不一致",
+                values=values,
+                evidence=evidence,
+                reason_codes=[] if status == "MATCH" else ["VALUE_MISMATCH"],
+                details={**details, "standard": expected},
+            ),
+        )
+    )
+
+
+def run_emission_standard(
+    context: ReviewExecutionContext,
+    *,
+    lookup: EngineEmissionLookup | None = None,
+) -> RuleExecutionResult:
+    """Evaluate with a synchronous reference provider for standalone callers."""
+    prepared = _prepare_emission(context)
+    if isinstance(prepared, RuleExecutionResult):
+        return prepared
+    try:
+        if lookup is None:
+            raise EngineEmissionLookupUnavailable("发动机排放对应表查询未配置，请检查服务装配")
+        standards = lookup(prepared.models)
+    except EngineEmissionLookupUnavailable as error:
+        return prepared.unavailable(error)
+    return _evaluate_reference(prepared, standards)
+
+
+async def run_emission_standard_async(
+    context: ReviewExecutionContext,
+    *,
+    lookup: AsyncEngineEmissionLookup | None = None,
+) -> RuleExecutionResult:
+    """Await reference data only when material evidence cannot resolve the check."""
+    prepared = _prepare_emission(context)
+    if isinstance(prepared, RuleExecutionResult):
+        return prepared
+    try:
+        if lookup is None:
+            raise EngineEmissionLookupUnavailable("发动机排放对应表查询未配置，请检查服务装配")
+        standards = await lookup(prepared.models)
+    except EngineEmissionLookupUnavailable as error:
+        return prepared.unavailable(error)
+    return _evaluate_reference(prepared, standards)

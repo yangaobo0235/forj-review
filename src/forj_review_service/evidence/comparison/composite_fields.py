@@ -8,7 +8,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from forj_review_service.businesses.context import DEFAULT_BUSINESS, BusinessContext
-from forj_review_service.businesses.packs import BUSINESS_PACKS
 from forj_review_service.contracts.checks import CheckResult, CheckResultValue
 from forj_review_service.contracts.review import FieldComparison, ReviewRequest
 from forj_review_service.evidence.comparison.evidence_values import trusted_page_value
@@ -26,7 +25,7 @@ class CompositeFieldSpec:
     secondary_label: str
 
 
-def _declared_composites(packs=None) -> tuple[CompositeFieldSpec, ...]:
+def declared_composites(packs) -> tuple[CompositeFieldSpec, ...]:
     """从业务扩展包合成组合字段表。
 
     和材料策略、字段证据策略同样的做法：**字段键是业务知识，声明在
@@ -44,12 +43,10 @@ def _declared_composites(packs=None) -> tuple[CompositeFieldSpec, ...]:
             primary_label=item.primary_label,
             secondary_label=item.secondary_label,
         )
-        for pack in (BUSINESS_PACKS.values() if packs is None else packs)
+        for pack in packs
         for item in pack.page_field_composites
     )
 
-
-PAGE_FIELD_COMPOSITES = _declared_composites()
 
 def build_page_composite_check(
     request: ReviewRequest,

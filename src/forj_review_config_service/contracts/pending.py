@@ -32,6 +32,7 @@ class BrowserPending(ToolInteraction):
     expires_at: str
     binding: NotRequired[dict[str, JsonValue]]  # Older tasks must be recollected.
     result: NotRequired[dict[str, JsonValue]]
+    manual: NotRequired[bool]
 
 
 class ConfirmationPending(TypedDict):

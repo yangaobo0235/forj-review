@@ -52,6 +52,13 @@ docker load --input "${image_tar}"
 new_image="$(docker image inspect --format '{{.Id}}' "${image_name}")"
 [[ -n "${new_image}" ]] || die "Release did not provide ${image_name}."
 [[ "${new_image}" == "${expected_image}" ]] || die "Loaded image does not match this release; container was not recreated."
+# Check the uploaded image against the configured database BEFORE replacing a
+# running container. No migration or schema creation is performed by startup.
+echo "Checking target database schema with the new image..."
+docker compose --project-name forj-review --project-directory "${deploy_dir}" --env-file "${deploy_dir}/.env" \
+  -f "${uploaded_compose}" run --rm --no-deps --entrypoint python "${service_name}" \
+  -c 'from forj_review_service.integrations.database import review_database; review_database().require_ready()' \
+  || die "Database schema is incompatible. Existing container was not recreated. Back up and explicitly migrate the target schema first."
 # Re-running an identical release must not destroy the genuine previous version.
 if [[ -n "${previous_image}" ]] && { [[ "${previous_image}" != "${new_image}" ]] || ! cmp -s "${uploaded_compose}" "${previous_compose}"; }; then
   docker tag "${previous_image}" "${rollback_image}"

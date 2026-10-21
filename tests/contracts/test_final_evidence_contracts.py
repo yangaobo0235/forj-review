@@ -2,7 +2,6 @@ from dataclasses import replace
 
 import pytest
 
-from forj_review_service.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
 from forj_review_service.businesses.registry import BusinessRegistry
 from forj_review_service.contracts.recognition import RecognitionBatchResult
 from forj_review_service.contracts.review import (
@@ -13,6 +12,7 @@ from forj_review_service.contracts.review import (
 )
 from forj_review_service.evidence.comparison.check_results import qr_review_checks
 from forj_review_service.runtime.review_service import ReviewService
+from tests.support.pages import SCRAP_REPLACEMENT_QINGDAO
 
 
 @pytest.mark.asyncio

@@ -9,7 +9,7 @@ TOOL_DESCRIPTIONS = {
     'get_configuration_capabilities': '读取真实 PageDefinition JSON Schema、规则 ID 与依赖，编辑前查询',
     'analyze_materials': '查看已选样本，发现材料字段；图片不可读须补充，不猜测',
     'inspect_material_region': '重新查看样本并聚焦指定位置，不生成裁剪上传',
-    'edit_draft': '类型化修改草稿。例如 operations=[{"op":"set_page_metadata","value":{"title":"新标题","version":"2.0"}}]；upsert_field 的 value 是含 key 的字段对象。每次修改使旧验证失效，不修改程序代码',
+    'edit_draft': '维护已有页面：upsert_field/remove_field/set_collection_binding；set_page_options 修改已登记规则绑定、政策、材料要求、展示与动作；upsert_material/remove_material；set_field_permissions 单独提出权限变化。禁止页面身份、实现代码或未支持参数。所有改动使旧验证失效',
     'record_decision': '记录规则依据。字段映射写 candidate_id/field_key，材料写 sample_id/material；用户要求处理写 requirement_id/status。来源 evidence_refs 必填；不能伪造用户确认',
     'inspect_candidate': '编译候选并查看差异、清单和摘要',
     'validate_candidate': '编译验证，不等于已完成或已保存',

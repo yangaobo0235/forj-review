@@ -8,7 +8,6 @@
 
 import pytest
 
-from forj_review_service.businesses.packs import BUSINESS_PACKS
 from forj_review_service.businesses.packs.model import (
     BusinessExtensionPack,
     CompositeFieldDeclaration,
@@ -17,6 +16,7 @@ from forj_review_service.businesses.packs.model import (
     RouteDeclaration,
     validate_pack_references,
 )
+from tests.support.pages import BUSINESS_PACKS
 
 
 def _pack(**overrides) -> BusinessExtensionPack:
@@ -28,9 +28,7 @@ def _pack(**overrides) -> BusinessExtensionPack:
             FieldDeclaration(key="vehicle.vin", label="车架号", section="vehicle"),
             FieldDeclaration(key="vehicle.origin", label="产地", section="vehicle"),
         ),
-        "materials": (
-            MaterialDeclaration(document_type="vehicle_license", display_name="行驶证"),
-        ),
+        "materials": (MaterialDeclaration(document_type="vehicle_license", display_name="行驶证"),),
     }
     base.update(overrides)
     return BusinessExtensionPack(**base)
@@ -50,9 +48,7 @@ def test_minimal_pack_is_clean() -> None:
 
 def test_route_target_must_be_declared() -> None:
     """路由目标写错一个字母：必须报错，否则观察值会被静默丢弃。"""
-    pack = _pack(
-        routes=(RouteDeclaration("vehicle_license", "vehicle.vin", ("vehicle.vinn",)),)
-    )
+    pack = _pack(routes=(RouteDeclaration("vehicle_license", "vehicle.vin", ("vehicle.vinn",)),))
     with pytest.raises(ValueError, match="vehicle.vinn"):
         validate_pack_references(pack)
 
@@ -165,9 +161,7 @@ def test_invoice_verification_field_must_be_declared() -> None:
 
 def test_material_field_shared_policy_must_be_declared() -> None:
     pack = _pack(
-        fields=(
-            FieldDeclaration(key="vehicle.vin", label="车架号", material_field="vehicle.vinn"),
-        )
+        fields=(FieldDeclaration(key="vehicle.vin", label="车架号", material_field="vehicle.vinn"),)
     )
     with pytest.raises(ValueError, match="material_field"):
         validate_pack_references(pack)
@@ -192,9 +186,12 @@ def test_presence_never_accepts_an_empty_alternative(options):
         MaterialPresenceGroup,
     )
 
-    pack = _pack(material_policy=MaterialPolicy(
-        mode="enforce", presence_groups=(MaterialPresenceGroup("subject", "主体", options),),
-    ))
+    pack = _pack(
+        material_policy=MaterialPolicy(
+            mode="enforce",
+            presence_groups=(MaterialPresenceGroup("subject", "主体", options),),
+        )
+    )
     with pytest.raises(ValueError, match="空方案"):
         validate_pack_references(pack)
 
@@ -206,11 +203,16 @@ def test_presence_rejects_an_undeclared_document_type():
         MaterialRequirement,
     )
 
-    pack = _pack(material_policy=MaterialPolicy(
-        mode="enforce", presence_groups=(MaterialPresenceGroup("subject", "主体", (
-            (MaterialRequirement("synthetic_unknown", "vehicle"),),
-        )),),
-    ))
+    pack = _pack(
+        material_policy=MaterialPolicy(
+            mode="enforce",
+            presence_groups=(
+                MaterialPresenceGroup(
+                    "subject", "主体", ((MaterialRequirement("synthetic_unknown", "vehicle"),),)
+                ),
+            ),
+        )
+    )
     with pytest.raises(ValueError, match="未声明的材料"):
         validate_pack_references(pack)
 

@@ -12,7 +12,6 @@ from forj_review_service.businesses.context import BusinessContext
 from forj_review_service.businesses.field_policies import AuthorityRule, date_window_problem
 from forj_review_service.businesses.page_config.compiler import compile_page
 from forj_review_service.businesses.page_config.schema import PageDefinition
-from forj_review_service.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
 from forj_review_service.businesses.rules.scrap_certificate_qr import qr_candidates
 from forj_review_service.contracts.recognition import CheckResult, RecognitionBatchResult
 from forj_review_service.contracts.review import (
@@ -36,6 +35,8 @@ from forj_review_service.presentation.assembly import assemble_review_response
 from forj_review_service.presentation.response import build_review_response
 from forj_review_service.runtime.review_service import ReviewService
 from forj_review_service.runtime.scheduling.fair_scheduler import FairAsyncScheduler
+from tests.support.pages import SCRAP_BUSINESS as TEST_BUSINESS
+from tests.support.pages import SCRAP_REPLACEMENT_QINGDAO, business_registry
 
 
 @pytest.fixture
@@ -59,6 +60,7 @@ def date_policy():
                         "evidence": [{"material": "permit", "field": "printed.date"}],
                     }
                 ],
+                "settings": {},
             }
         )
     )
@@ -140,6 +142,7 @@ def test_equal_value_deduplication_retains_uncertainty():
             evidence("2026-10-01", source="page"),
         ],
         uncertain_requires_review=True,
+        business=TEST_BUSINESS,
     )
     assert comparison.status is FieldStatus.REVIEW_REQUIRED
     assert len(comparison.evidence) == 2
@@ -152,6 +155,7 @@ def test_material_agreement_requires_page_evidence_when_reviewing_page_fields():
         [evidence("2026-10-01")],
         single_evidence_requires_review=False,
         page_evidence_required=True,
+        business=TEST_BUSINESS,
     )
     assert comparison.status is FieldStatus.REVIEW_REQUIRED
     assert "页面字段" in comparison.message
@@ -161,7 +165,11 @@ def test_authority_materials_cannot_pass_a_missing_page_field():
     observation = evidence("2026-10-01")
     authority = (AuthorityRule(source="image", label="行驶证", document_types=("permit",)),)
     comparison = aggregate_by_authority(
-        "permit.issue_date", [observation], authority, page_evidence_required=True
+        "permit.issue_date",
+        [observation],
+        authority,
+        page_evidence_required=True,
+        business=TEST_BUSINESS,
     )
     assert comparison.status is FieldStatus.REVIEW_REQUIRED
     assert "页面字段" in comparison.message
@@ -185,6 +193,7 @@ def test_unmapped_control_cannot_leave_final_recommendation_pass():
         RecognitionBatchResult(),
         business_checks=[],
         review_tasks=[task],
+        business=TEST_BUSINESS,
     )
     assert response.recommendation == "REVIEW_REQUIRED"
     assert [finding.check_id for finding in response.agent_advice.findings] == [task.step_id]
@@ -211,6 +220,7 @@ def test_task_downgrade_is_not_masked_by_a_matching_underlying_check():
             CheckResult(check_id="CHECK-1", label="材料一致", status="MATCH", reason="材料一致")
         ],
         review_tasks=[task],
+        business=TEST_BUSINESS,
     )
     assert response.recommendation == "REVIEW_REQUIRED"
     assert response.agent_advice.findings[0].check_id == task.step_id
@@ -219,7 +229,7 @@ def test_task_downgrade_is_not_masked_by_a_matching_underlying_check():
 @pytest.mark.asyncio
 async def test_final_decision_log_matches_the_completed_business_result(caplog):
     with caplog.at_level("INFO", logger="forj_review_service"):
-        response = await ReviewService().assist_async(
+        response = await ReviewService(registry=business_registry()).assist_async(
             ReviewRequest(
                 page_url="https://example.test/review",
                 business_type="scrap_replacement",
@@ -248,7 +258,7 @@ async def test_failed_preferred_qr_classification_still_scans_old_vehicle_fallba
             {"index": 1, "src": "https://example.test/actual.jpg", "business_scope": "old_vehicle"},
         ],
     )
-    service = ReviewService()
+    service = ReviewService(registry=business_registry())
     from forj_review_service.contracts.recognition import RecognizedDocument
 
     batch = RecognitionBatchResult(

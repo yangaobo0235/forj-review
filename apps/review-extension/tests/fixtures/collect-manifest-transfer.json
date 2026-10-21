@@ -330,5 +330,15 @@
         ]
       ]
     }
+  ],
+  "actions": [
+    {
+      "action_id": "fill_review_fields",
+      "handler_id": "fill_review_fields",
+      "contract_version": "1.0",
+      "enabled": true,
+      "label": "fill_review_fields",
+      "mappings": []
+    }
   ]
 }

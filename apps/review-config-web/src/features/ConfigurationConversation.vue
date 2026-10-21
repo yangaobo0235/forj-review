@@ -48,7 +48,7 @@ function keydown(event: KeyboardEvent) {
       <div v-if="session?.pending?.kind === 'question'" class="interaction-card"><span class="eyebrow">需要你确认</span><h3>{{ session.pending.question }}</h3><div class="option-list"><button v-for="option in questionOptions(session.pending.options)" :key="option" class="secondary" :disabled="disabled" @click="send(option)">{{ option }}</button></div><p>也可以在下方用自己的话说明。</p></div>
       <div v-if="session?.pending?.kind === 'browser'" class="interaction-card trial-card"><Icon name="scan" :size="26"/><div><h3>核对配置能否正确读取原页面</h3><p>将通过扩展在原业务标签页执行只读试采集，不需要切换页面。</p><button class="primary" :disabled="Boolean(work.busy) || work.running" @click="work.run('执行只读试采集', work.trial)"><Icon name="scan" :size="17"/>执行只读试采集</button></div></div>
       <div v-if="session?.state === 'READY_FOR_CONFIRMATION' && !committing" class="interaction-card success-card"><Icon name="check" :size="23"/><div><h3>候选配置已通过验证</h3><p>请在右侧检查变更和依据，然后确认保存。</p></div></div>
-      <div v-if="session?.receipt" class="interaction-card success-card"><Icon name="shield" :size="23"/><div><h3>{{ session.state === 'EFFECTIVE' ? '审核服务已加载此版本' : '配置已保存到本地' }}</h3><p>{{ session.state === 'EFFECTIVE' ? '可以使用新的页面规则进行审核。' : '完成现有审核作业后重启审核服务，再核对实际加载版本。' }}</p></div></div>
+      <div v-if="session?.receipt" class="interaction-card success-card"><Icon name="shield" :size="23"/><div><h3>配置版本已发布</h3><p>审核服务会自动加载新配置。点击“核对审核服务加载版本”查看实际生效状态。</p></div></div>
       <div v-if="session?.error" class="inline-error" role="alert">{{ session.error }}</div><div ref="bottom"/>
     </div>
     <div class="composer-area">

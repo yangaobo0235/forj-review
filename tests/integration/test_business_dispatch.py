@@ -1,10 +1,10 @@
-
 from forj_review_service.contracts.recognition import RecognitionBatchResult
 from forj_review_service.contracts.review import (
     FieldObservation,
     ReviewRequest,
 )
 from forj_review_service.runtime.review_service import ReviewService
+from tests.support.pages import business_registry
 
 
 def test_scrap_target_profile_uncertain_observation_forces_review(client) -> None:
@@ -20,7 +20,7 @@ def test_scrap_target_profile_uncertain_observation_forces_review(client) -> Non
             )
         ]
     )
-    result = ReviewService()._build_response(
+    result = ReviewService(registry=business_registry())._build_response(
         ReviewRequest(
             page_url="https://example.test/review/1",
             business_type="scrap_replacement",
@@ -36,7 +36,7 @@ def test_scrap_target_profile_uncertain_observation_forces_review(client) -> Non
 
 
 def test_scrap_request_uses_scrap_fields_and_sections(client) -> None:
-    result = ReviewService().assist(
+    result = ReviewService(registry=business_registry()).assist(
         ReviewRequest(
             page_url="https://example.test/scrap-replace-qingdao",
             business_type="scrap_replacement",
@@ -48,8 +48,6 @@ def test_scrap_request_uses_scrap_fields_and_sections(client) -> None:
 
     assert any(item.field == "old_vehicle.vin" for item in result.comparisons)
     assert [item.id for item in result.sections] == ["old_vehicle", "new_vehicle"]
-
-
 
 
 def test_unknown_profile_version_returns_422(client) -> None:

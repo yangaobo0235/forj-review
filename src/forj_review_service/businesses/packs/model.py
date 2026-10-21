@@ -17,6 +17,7 @@ from forj_review_service.businesses.material_policies import (
 )
 from forj_review_service.businesses.replacement_policies import ReplacementPolicy
 from forj_review_service.capabilities.specs import CapabilityBinding, CapabilitySpec
+from forj_review_service.contracts.errors import ConfigurationInputError
 from forj_review_service.contracts.review import RegionId
 
 EvidenceMode = Literal[
@@ -46,9 +47,9 @@ class AuthorityRule:
 
     def __post_init__(self) -> None:
         if self.source not in ("qr_page", "page", "image", "capability"):
-            raise ValueError(f"未知权威来源：{self.source}")
+            raise ConfigurationInputError(f"未知权威来源：{self.source}")
         if self.match not in ("full", "suffix8"):
-            raise ValueError(f"未知比较窗口：{self.match}")
+            raise ConfigurationInputError(f"未知比较窗口：{self.match}")
 
 
 @dataclass(frozen=True)
@@ -296,6 +297,7 @@ class BusinessExtensionPack:
     binding_declarations: tuple[CapabilityBinding, ...] = ()
     # 允许的页面动作 ID 与是否启用页内交互。
     page_action_ids: tuple[str, ...] = ()
+    action_bindings: tuple[object, ...] = ()
     page_interaction: bool = False
     # 允许浏览器写回的控件类型（`ReviewFieldSnapshot.control_type` 的取值，
     # 如 text / textarea / number / select / date）。**空元组表示不限制**，
@@ -559,7 +561,9 @@ def validate_pack_references(pack: BusinessExtensionPack) -> None:
 
     if problems:
         detail = "\n  - ".join(problems)
-        raise ValueError(f"业务声明「{pack.business_type}」存在无效引用：\n  - {detail}")
+        raise ConfigurationInputError(
+            f"业务声明「{pack.business_type}」存在无效引用：\n  - {detail}"
+        )
 
 
 def build_collect_manifest(pack: BusinessExtensionPack) -> dict[str, object]:
@@ -569,6 +573,7 @@ def build_collect_manifest(pack: BusinessExtensionPack) -> dict[str, object]:
     一份表。只包含需要在页面上采集的字段（有中文别名的）。
     """
     return {
+        "actions": [a.model_dump(mode="json") for a in pack.action_bindings],
         "business_type": pack.business_type,
         # 该业务认定的材料分区。前端据此判断图片是否属于审核材料、以及
         # 哪些分区的图片优先入选。

@@ -2,6 +2,21 @@
 
 
 class AsyncSnapshotKernel:
+    def proof_is_current(self, proof):
+        return self.snapshot.proof_is_current(proof)
+
+    def evaluate_collection(self, *args):
+        return self.snapshot.evaluate_collection(*args)
+
+    def edit_fields(self, draft, operations):
+        return self.snapshot.edit_fields(draft, operations)
+
+    def field_dependencies(self, draft):
+        return self.snapshot.field_dependencies(draft)
+
+    def page_options(self, draft):
+        return self.snapshot.page_options(draft)
+
     def __init__(self, snapshot):
         self.snapshot = snapshot
 

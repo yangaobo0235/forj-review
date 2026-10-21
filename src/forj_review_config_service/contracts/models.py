@@ -123,15 +123,24 @@ class RefreshPageCommand(RevisionCommand):
 
 class DraftOperation(Contract):
     op: Literal[
-        "create_page", "set_page_metadata", "upsert_field", "remove_field",
-        "upsert_material", "remove_material", "set_rule_bindings", "set_material_requirements",
-        "set_collection_binding", "set_write_policy",
+        "upsert_field", "remove_field", "set_collection_binding",
+        "set_page_options", "upsert_material", "remove_material", "set_field_permissions",
     ]
     value: dict[str, JsonValue]
 
 
 class EditCommand(RevisionCommand):
     operations: list[DraftOperation] = Field(min_length=1, max_length=100)
+
+
+class MappingCommand(RevisionCommand):
+    fields: dict[str, str] = Field(default_factory=dict)
+    materials: dict[str, str] = Field(default_factory=dict)
+    requirements: list[str] = Field(default_factory=list)
+
+
+class ReplayCommand(RevisionCommand):
+    case_set_id: str
 
 
 class InteractionCommand(RevisionCommand):
@@ -173,7 +182,7 @@ class SessionRecord(Contract):
     session_id: str
     revision: int = 0
     activation_only: bool = False
-    state: Literal["DRAFTING", "NEEDS_INPUT", "READY_FOR_CONFIRMATION", "SAVED_PENDING_RESTART", "EFFECTIVE", "BLOCKED"] = "DRAFTING"
+    state: Literal["DRAFTING", "NEEDS_INPUT", "READY_FOR_CONFIRMATION", "PUBLISHED", "BLOCKED", "CLOSED"] = "DRAFTING"
     turn_status: Literal["COMPLETED", "RUNNING", "QUEUED", "WAITING", "INTERRUPTED", "CANCELLED", "FAILED"] = "COMPLETED"
     turn_id: str | None = None
     snapshot: PageDiscoverySnapshot

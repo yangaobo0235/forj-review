@@ -7,8 +7,6 @@
 from collections.abc import Mapping
 from typing import Any
 
-from forj_review_service.businesses.packs import SCRAP_REPLACEMENT_PACK as _PACK
-from forj_review_service.businesses.packs import pack_for_scope
 from forj_review_service.businesses.packs.model import (
     BusinessExtensionPack,
     MaterialDeclaration,
@@ -73,10 +71,11 @@ def route_fields(
     分区白名单、材料归属和字段映射都来自业务声明（`forj_review_service.businesses.packs`）；
     新增业务时只要在声明里写清这些内容，本函数不需要改动。
 
-    未显式传 `pack` 时按业务分区反查声明；分区只有报废置换的老车/新车时才退回
-    报废置换声明，未声明的分区一律不路由。
+    未显式提供当前页面的 pack 时拒绝路由，避免借用其他页面的规则。
     """
-    resolved_pack = pack or pack_for_scope(business_scope) or _PACK
+    if pack is None:
+        return {}, "页面尚未配置材料路由，请人工复核"
+    resolved_pack = pack
     normalized_type = normalize_document_type(document_type)
     material = resolved_pack.material(normalized_type)
 
@@ -121,7 +120,7 @@ def route_fields(
         if matched:
             continue
         suffix = _vehicle_suffix(material, field_name)
-        if suffix is not None:
+        if suffix is not None and resolved_pack.field(f"{business_scope}.{suffix}") is not None:
             routed[f"{business_scope}.{suffix}"] = value
 
     # 数电发票票面只有一个号码。模型只提取一次，另一个字段由确定性兼容层

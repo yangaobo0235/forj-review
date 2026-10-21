@@ -12,6 +12,7 @@ export function useWorkbench() {
   const state = shallowReactive({
     sessionId: initial.get("session") ?? "", session: null as ConfigurationSession | null,
     sessions: [] as SessionSummary[], templates: [] as PageTemplate[], captures: [] as CaptureSummary[],
+    caseSets: [] as string[],
     capture: null as CapturedPage | null, source: null as CapturedPage | null,
     scopeOpen: Boolean(initial.get("capture")), scopeOpener: null as HTMLElement | null, events: [] as ConfigurationEvent[],
     busy: "", error: "", connectionError: "", notice: "", connected: false,
@@ -26,11 +27,12 @@ export function useWorkbench() {
   async function inventory() {
     const [history, catalog, collected] = await Promise.all([
       request<SessionSummary[]>("/sessions", undefined, undefined, lifecycle.signal),
-      request<{templates: PageTemplate[]}>("/templates", undefined, undefined, lifecycle.signal),
+      request<{templates: PageTemplate[]; case_sets?: string[]}>("/templates", undefined, undefined, lifecycle.signal),
       request<CaptureSummary[]>("/captures", undefined, undefined, lifecycle.signal),
     ]);
     if (!live) return;
     state.sessions = history; state.templates = catalog.templates; state.captures = collected;
+    state.caseSets = catalog.case_sets ?? [];
     state.connected = true; state.connectionError = "";
   }
   async function initialize() {
@@ -133,7 +135,7 @@ export function useWorkbench() {
     const result = await runCollectionTrial(source, task);
     await request(`/sessions/${sid}/browser-tasks/${task.id}/result`, command(session.revision, result));
     await reloadSession(sid);
-    if (live && sid === state.sessionId) state.notice = "只读试采集结果已送达，助手将继续核对。";
+    if (live && sid === state.sessionId) state.notice = task.manual ? "只读试采集完成，可继续独立回放与验证。" : "只读试采集结果已送达，助手将继续核对。";
   }
   async function confirm() {
     const session = state.session, sid = state.sessionId;
@@ -141,6 +143,12 @@ export function useWorkbench() {
     await request(`/sessions/${sid}/confirm`, command(session.revision, {
       report_id: session.report.report_id, candidate_digest: session.report.candidate_digest,
     }));
+    await reloadSession(sid);
+  }
+  async function manual(kind: "draft" | "mappings" | "trial" | "replay", body: Record<string, unknown> = {}) {
+    const session = state.session, sid = state.sessionId;
+    if (!session) return;
+    await request(`/sessions/${sid}/${kind}`, command(session.revision, body));
     await reloadSession(sid);
   }
   async function action(kind: "resume" | "cancel" | "validate" | "activation" | "delete") {
@@ -173,6 +181,6 @@ export function useWorkbench() {
   }
   return Object.assign(state, {setScopeOpen: (value: boolean) => { state.scopeOpen = value; },
     setNotice: (value: string) => { state.notice = value; }, run, inventory, navigate, saveScope,
-    send, trial, confirm, action, openScope, selectCapture});
+    send, trial, confirm, manual, action, openScope, selectCapture});
 }
 export type Workbench = ReturnType<typeof useWorkbench>;

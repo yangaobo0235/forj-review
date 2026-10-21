@@ -7,7 +7,6 @@
  * DOM 定位留在浏览器平台，目录只声明页签名称，不包含选择器或节点。
  */
 import { pagePath } from "../adapters/selection.ts";
-import { bundledPageCatalog } from "./bundled-page-catalog.ts";
 import type { BusinessSelection, BusinessType, Region } from "../../../shared/contracts/review";
 
 export interface PageIdentityDeclaration {
@@ -50,14 +49,11 @@ function isValid(value: unknown): value is PageCatalog {
   const catalog = value as PageCatalog | null;
   return Boolean(catalog)
     && Array.isArray(catalog?.identities)
-    // 空清单当没有清单，不当「什么页面都不认识」。生产环境的清单至少包含
-    // 已配置的几个业务，一份空表只可能是后端出了问题；此时退回内置表比
-    // 让所有页面都变成「识别不出来」更合理。
     && catalog.identities.length > 0
     && catalog.identities.every(isIdentity);
 }
 
-/** 应用后端下发的页面识别清单；传空则清空，退回内置表。 */
+/** 应用后端下发的页面识别清单；传空则清空，不保留旧页面身份。 */
 export function applyPageCatalog(catalog: PageCatalog | null | undefined): void {
   applied = isValid(catalog) ? catalog : null;
 }
@@ -67,9 +63,9 @@ export function appliedPageCatalog(): PageCatalog | null {
   return applied;
 }
 
-/** 服务不可达时保留同一份声明生成的识别规则；不替代审核字段或判定配置。 */
+/** 页面身份只取当前服务下发的配置。 */
 export function effectivePageCatalog(): PageCatalog {
-  return applied ?? bundledPageCatalog;
+  return applied ?? { version: "1.0", identities: [] };
 }
 
 export async function fetchPageCatalog(

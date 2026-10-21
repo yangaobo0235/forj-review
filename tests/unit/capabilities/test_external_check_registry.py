@@ -1,6 +1,5 @@
 import pytest
 
-from forj_review_service.businesses.profiles import TRANSFER_DEFAULT
 from forj_review_service.capabilities.external_checks import (
     ExternalCheckRegistry,
     UnknownExternalCheck,
@@ -11,6 +10,7 @@ from forj_review_service.capabilities.specs import (
 )
 from forj_review_service.contracts.recognition import RecognitionBatchResult
 from forj_review_service.contracts.review import ReviewRequest
+from tests.support.pages import TRANSFER_DEFAULT
 
 
 def context():

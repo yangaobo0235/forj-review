@@ -1,11 +1,10 @@
 """Review HTTP boundary: validation, status mapping and application delegation."""
+
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 
-from forj_review_service.businesses.context_validation import BusinessContextMismatch
-from forj_review_service.businesses.registry import BusinessProfileNotFound
 from forj_review_service.contracts.review import (
     ReviewJobCreated,
     ReviewJobSnapshot,
@@ -24,18 +23,8 @@ logger = logging.getLogger(__name__)
 
 
 def validate_business_profile(request: ReviewRequest, review_service: ReviewService) -> None:
-    try:
-        request.validate_images()
-        review_service.resolve_profile(request)
-    except BusinessContextMismatch as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except BusinessProfileNotFound as exc:
-        raise HTTPException(
-            status_code=422,
-            detail="审核业务配置不存在或版本不兼容",
-        ) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    request.validate_images()
+    review_service.resolve_profile(request)
 
 
 @router.post("/api/review/assist", response_model=ReviewResponse)
@@ -77,11 +66,7 @@ def create_review_job(
         request.trace_id or "generated",
         len(request.images),
     )
-    try:
-        created = review_jobs.create(request)
-    except ValueError as exc:
-        # 请求本身不合法返回 422。
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    created = review_jobs.create(request)
     logger.info("Review job created: job_id=%s", created.job_id)
     return created
 
@@ -98,10 +83,7 @@ def create_url_review_job(
 ) -> ReviewJobCreated:
     """直接提交 DOM 采集的图片地址，不下载、压缩或接收图片正文。"""
     validate_business_profile(request, review_service)
-    try:
-        created = review_jobs.create_urls(request)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    created = review_jobs.create_urls(request)
     logger.info(
         "URL review job created: job_id=%s image_count=%d", created.job_id, len(request.images)
     )
@@ -115,17 +97,11 @@ def create_url_review_job(
 def cancel_review_job(
     job_id: str, review_jobs: Annotated[ReviewJobManager, Depends(get_review_jobs)]
 ) -> ReviewJobSnapshot:
-    try:
-        return review_jobs.cancel(job_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="审核任务不存在或已过期") from exc
+    return review_jobs.cancel(job_id)
 
 
 @router.get("/api/review/jobs/{job_id}", response_model=ReviewJobSnapshot)
 def get_review_job(
     job_id: str, review_jobs: Annotated[ReviewJobManager, Depends(get_review_jobs)]
 ) -> ReviewJobSnapshot:
-    try:
-        return review_jobs.get(job_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="审核任务不存在或已过期") from exc
+    return review_jobs.get(job_id)

@@ -18,6 +18,7 @@ export interface ConfigurationPending {
   id: string;
   kind: "question" | "browser" | "confirmation";
   confirmed?: boolean;
+  manual?: boolean;
   question?: string;
   options?: string[];
   manifest?: CollectManifest;
@@ -34,15 +35,20 @@ export interface ConfigurationPending {
 export interface ConfigurationSession {
   session_id: string;
   revision: number;
+  activation_only?: boolean;
+  field_dependencies?: Record<string, string[]>;
+  tool_results?: Record<string, {kind?: string; ok?: boolean; revision?: number; case_set_id?: string; binding?: {revision: number}; expires_at?: string}>;
   state: string;
   turn_status: string;
   snapshot: ConfigurationSnapshot;
   capture_id: string | null;
   selected_fields: string[];
+  requirements?: Array<{requirement_id: string; text: string}>;
   selected_samples: string[];
   required_samples: string[];
-  decisions: Array<{status: string; revision: number; reason: string; field_key?: string; material?: string}>;
+  decisions: Array<{status: string; revision: number; reason: string; field_key?: string; material?: string; candidate_id?: string; sample_id?: string}>;
   draft: Record<string, unknown>;
+  page_options?: Record<string, unknown>;
   pending: ConfigurationPending | null;
   messages: Array<{role: string; content: string}>;
   chat_messages?: Array<{role: "assistant" | "user"; content: string}>;

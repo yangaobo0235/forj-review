@@ -37,7 +37,7 @@ test("报废页其他图片区内的旧新车分组均被采集，无单图标�
     const candidates = collectImageCandidates(classifyImage);
     assert.equal(ReviewImageCandidates.select(candidates, 16).selected.length, 7);
     assert.deepEqual(candidates.map(item => item.businessScope), ["business_license", ...Array(3).fill("old_vehicle"), ...Array(3).fill("new_vehicle")]);
-    assert.deepEqual(candidates.slice(1).map(imageDocumentType), Array(6).fill("unknown"));
+    assert.deepEqual(candidates.slice(1).map(imageDocumentType), ["vehicle_license", "registration_certificate", "scrap_certificate", "vehicle_license", "registration_certificate", "invoice"]);
     assert.equal(imageDocumentType(candidates[0]), "business_license");
     assert.ok(candidates.slice(4).every(item => item.categoryHint === "new_vehicle"));
   } finally {

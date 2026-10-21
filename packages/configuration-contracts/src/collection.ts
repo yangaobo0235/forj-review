@@ -25,7 +25,24 @@ export interface ManifestMaterial {
   slots: [string, number][];
 }
 
+export interface ActionMapping {
+  mapping_id: string;
+  source_kind: "MODEL_CANDIDATE" | "REVIEW_RESULT";
+  source_property: string;
+  source_option_property: string | null;
+  target_field: string;
+  order: number;
+  depends_on: string[];
+  converter_id: "text" | "positive_number";
+  missing_policy: "BLOCK" | "SKIP" | "RESTORE_ORIGINAL";
+  wait_condition_id: "none" | "options_ready";
+}
+export interface ActionBinding {
+  action_id: string; handler_id: string; contract_version: "1.0";
+  enabled: boolean; label: string; mappings: ActionMapping[];
+}
 export interface CollectManifest {
+  actions?: ActionBinding[];
   ignored_image_labels?: string[];
   page_id?: string;
   business_type: string;

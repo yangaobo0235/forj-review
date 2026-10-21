@@ -8,8 +8,18 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, model_validator
 
-from forj_review_service.businesses.packs.model import EvidenceMode, TaskProjectorId
+from forj_review_service.businesses.material_policies import MaterialPolicy, RetryPolicy
+from forj_review_service.businesses.packs.model import (
+    CompositeFieldDeclaration,
+    EvidenceMode,
+    QrFieldBinding,
+    TaskPresentation,
+    TaskProjectorId,
+)
 from forj_review_service.businesses.page_action_catalog import PageActionId
+from forj_review_service.businesses.page_config.action_contract import ActionBinding
+from forj_review_service.businesses.replacement_policies import ReplacementPolicy
+from forj_review_service.capabilities.specs import CapabilityBinding, CapabilitySpec
 from forj_review_service.contracts.review import BusinessId, Identifier, RegionId
 
 Key = Annotated[
@@ -40,16 +50,12 @@ class Declaration(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, validate_default=True)
 
 
-class ProfileReference(Declaration):
-    page_id: PageId
-    version: Text
-
-
 class EvidenceSource(Declaration):
     material: Identifier
     field: Key
     scope: str = ""
     group_order: int | None = Field(default=None, ge=1)
+    comparison: StrictBool = True
 
 
 class Authority(Declaration):
@@ -62,7 +68,7 @@ class Authority(Declaration):
 
 class FieldConfig(Declaration):
     key: Key
-    # Omitted properties inherit from a template. A new field must supply label.
+    # Every complete page owns the labels and evidence for its fields.
     label: Text | None = None
     section: str = ""
     aliases: tuple[Text, ...] = ()
@@ -77,7 +83,8 @@ class FieldConfig(Declaration):
     writable: StrictBool = False
     allow_single_evidence: StrictBool = True
     uncertain_requires_review: StrictBool = Field(
-        default=True, description="必须为 true；不确定读值不能证明通过或冲突",
+        default=True,
+        description="必须为 true；不确定读值不能证明通过或冲突",
     )
     page_evidence_required: StrictBool = True
     material_field: Key | None = None
@@ -94,6 +101,25 @@ class FieldConfig(Declaration):
             raise ValueError("uncertain_requires_review 必须为 true，不能关闭识别不确定性保护")
         return self
 
+    @model_validator(mode="before")
+    @classmethod
+    def default_evidence_mode(cls, value):
+        if isinstance(value, dict) and "mode" not in value and value.get("evidence"):
+            return {**value, "mode": "PARALLEL"}
+        return value
+
+
+class MaterialDetails(Declaration):
+    """Developer-owned material behavior, never editable by field maintenance."""
+
+    scoped_extra_fields: tuple[tuple[str, tuple[Key, ...]], ...] = ()
+    scoped_guidance: tuple[tuple[str, str], ...] = ()
+    scoped_names: tuple[tuple[str, str], ...] = ()
+    scope_independent: StrictBool = False
+    scoped_vehicle_fields: tuple[str, ...] = ()
+    slots: tuple[tuple[str, int], ...] = ()
+    derived_field: tuple[str, str] | None = None
+
 
 class MaterialConfig(Declaration):
     document_type: Identifier
@@ -108,6 +134,7 @@ class MaterialConfig(Declaration):
     # Additional values consumed only by a registered business rule.
     extra_fields: tuple[Key, ...] = ()
     remove_extra_fields: tuple[Key, ...] = ()
+    details: MaterialDetails | None = None
 
     @model_validator(mode="after")
     def validate_extra_fields(self):
@@ -131,18 +158,73 @@ class PageGroup(Declaration):
     occurrence: int = Field(default=0, ge=0)
 
 
+class PageSettings(Declaration):
+    """Complete declarative development settings; contains no executable handlers."""
+
+    material_policy: MaterialPolicy | None = None
+    replacement_policy: ReplacementPolicy | None = None
+    capability_specs: tuple[CapabilitySpec, ...] = ()
+    binding_declarations: tuple[CapabilityBinding, ...] = ()
+    page_field_composites: tuple[CompositeFieldDeclaration, ...] = ()
+    qr_field_bindings: tuple[QrFieldBinding, ...] = ()
+    invoice_verification_field: Key | None = None
+    ignored_image_labels: tuple[str, ...] = ()
+    retry_policy: RetryPolicy = RetryPolicy()
+    presentation: TaskPresentation = TaskPresentation()
+
+    @model_validator(mode="before")
+    @classmethod
+    def strict_nested_declarations(cls, value):
+        from forj_review_service.businesses.page_config.strict_data import validate_declaration_data
+
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key in cls.model_fields:
+                    validate_declaration_data(item, cls.model_fields[key].annotation, key)
+        return value
+
+    @model_validator(mode="after")
+    def validate_settings(self):
+        policy = self.material_policy
+        requirements = (
+            (
+                *policy.materials,
+                *(
+                    r
+                    for group in policy.presence_groups
+                    for option in group.alternatives
+                    for r in option
+                ),
+            )
+            if policy
+            else ()
+        )
+        for item in requirements:
+            if item.minimum_count < 1 or any(page < 1 for page in item.required_pages):
+                raise ValueError("材料 minimum_count 和 required_pages 必须为正整数")
+        if (
+            not 0 <= self.retry_policy.semantic_retry_count <= 3
+            or not 0 <= self.retry_policy.qr_web_retry_count <= 3
+            or self.retry_policy.minimum_retry_window_seconds < 0
+        ):
+            raise ValueError("重试次数范围 0–3，重试窗口不能为负数")
+        return self
+
+
 class PageDefinition(Declaration):
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["2.0"] = "2.0"
     page_id: PageId
     business_type: BusinessId
     region: RegionId = "default"
     version: Text = "1.0"
     active: StrictBool = True
+    # Omit the default from page-v2 canonical bytes to preserve existing versions.
+    enabled: StrictBool = Field(default=True, exclude_if=lambda value: value is True)
     title: Text
     paths: tuple[Text, ...]
     anchors: tuple[Text, ...] = ()
     review_tab: Text | None = None
-    extends: ProfileReference | None = None
+    extends: None = None
     scopes: tuple[Identifier, ...] = ()
     sections: tuple[Section, ...] = ()
     page_groups: tuple[PageGroup, ...] = ()
@@ -155,11 +237,95 @@ class PageDefinition(Declaration):
     identity_anchors: tuple[Key, ...] = ()
     record_identity_fields: tuple[Key, ...] = ()
     page_actions: tuple[PageActionId, ...] = ()
+    actions: tuple[ActionBinding, ...] = ()
     writable_control_kinds: tuple[Literal["text", "textarea", "number", "select", "date"], ...] = ()
     review_declared_fields_only: StrictBool = True
+    settings: PageSettings | None = None
 
     @model_validator(mode="after")
     def validate_structure(self):
+        if self.settings is None or not self.scopes or not self.fields:
+            raise ValueError("完整配置必须包含 settings、scopes 和完整 fields")
+        from dataclasses import replace
+
+        actions = self.actions
+        if "actions" not in self.model_fields_set:
+            actions = tuple(
+                ActionBinding(action_id=a, handler_id=a, label=a) for a in self.page_actions
+            )
+            if self.business_type == "vehicle_source":
+                from forj_review_service.businesses.page_config.row_contract import (
+                    vehicle_model_action,
+                )
+
+                actions = (*actions, vehicle_model_action())
+        elif "page_actions" in self.model_fields_set and tuple(self.page_actions) != tuple(
+            a.action_id for a in actions if a.enabled and a.action_id != "vehicle_model_fill"
+        ):
+            raise ValueError("page_actions 是 actions 的只读投影，不能独立更改")
+        object.__setattr__(self, "actions", actions)
+        if len({a.action_id for a in actions}) != len(actions):
+            raise ValueError("动作编号重复")
+        object.__setattr__(
+            self,
+            "page_actions",
+            tuple(
+                a.action_id for a in actions if a.enabled and a.action_id != "vehicle_model_fill"
+            ),
+        )
+        fields_by_key = {f.key: f for f in self.fields}
+        for action in actions:
+            if action.enabled:
+                for mapping in action.mappings:
+                    target = fields_by_key.get(mapping.target_field)
+                    if target is None or not target.writable:
+                        raise ValueError(
+                            f"动作映射目标 {mapping.target_field} 必须存在并显式授权 writable"
+                        )
+
+        specs = {s.capability_id: s for s in self.settings.capability_specs}
+        bindings = tuple(
+            replace(b, required=specs[b.capability_id].required)
+            if b.required is None and b.capability_id in specs
+            else b
+            for b in self.settings.binding_declarations
+        )
+        policy = self.settings.replacement_policy
+        if policy:
+            policy = replace(policy, region=self.region, version=self.version)
+        object.__setattr__(
+            self,
+            "settings",
+            self.settings.model_copy(
+                update={
+                    "binding_declarations": bindings,
+                    "replacement_policy": policy,
+                }
+            ),
+        )
+        if any(
+            (
+                self.extends,
+                self.remove_fields,
+                self.remove_materials,
+                self.enable_rules,
+                self.disable_rules,
+            )
+        ):
+            raise ValueError("完整配置不能使用继承、删除清单或增量规则开关")
+        for item in self.fields:
+            if item.label is None:
+                raise ValueError(f"完整字段 {item.key} 必须声明 label")
+        if any(item.remove_extra_fields for item in self.materials):
+            raise ValueError("完整配置不使用 remove_extra_fields")
+        if any(
+            item.required
+            or item.minimum_count != 1
+            or item.required_pages
+            or item.alternative_group
+            for item in self.materials
+        ):
+            raise ValueError("完整配置的上传要求只在 settings.material_policy 声明")
         if not self.paths or any(
             not path.startswith("/")
             or "?" in path

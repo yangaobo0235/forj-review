@@ -5,16 +5,22 @@ from pathlib import Path
 
 from forj_review_config_service.integrations.async_database import AsyncDatabase
 from forj_review_config_service.integrations.configuration_store.async_postgres import (
-    AsyncPageSnapshots,
+    AsyncConfigurationStore,
 )
 from forj_review_config_service.integrations.review_kernel.snapshot import SnapshotKernel
 
 
 class PostgresReviewKernel:
+    edit_fields = staticmethod(SnapshotKernel.edit_fields)
+    evaluate_collection = staticmethod(SnapshotKernel.evaluate_collection)
+    proof_is_current = staticmethod(SnapshotKernel.proof_is_current)
+    field_dependencies = staticmethod(SnapshotKernel.field_dependencies)
+    page_options = staticmethod(SnapshotKernel.page_options)
+
     def __init__(
         self, database: AsyncDatabase, cases_dir: Path, review_url: str, local_cases_dir: Path
     ):
-        self.pages = AsyncPageSnapshots(database)
+        self.pages = AsyncConfigurationStore(database)
         self.cases_dir, self.review_url, self.local_cases_dir = (
             cases_dir,
             review_url,
@@ -22,9 +28,9 @@ class PostgresReviewKernel:
         )
         self.source = "postgresql:" + database.schema
 
-    def _snapshot(self, files: dict[str, str]) -> SnapshotKernel:
+    def _snapshot(self, configuration) -> SnapshotKernel:
         return SnapshotKernel(
-            files,
+            configuration,
             self.cases_dir,
             self.review_url,
             self.local_cases_dir,
@@ -76,16 +82,21 @@ class PostgresReviewKernel:
         return await asyncio.to_thread(kernel.verify_replay_receipt, result)
 
     async def commit(self, record, operation_id):
-        revision, files = await self.pages.get_versioned()
-        kernel = self._snapshot(files)
+        previous = await self.pages.receipt(operation_id)
+        if previous:
+            if (previous["page_id"], previous["version"], previous["candidate_digest"]) != (
+                record.draft["page_id"], record.draft["version"], record.report["candidate_digest"]):
+                from forj_review_config_service.contracts.models import ConfigurationError
+
+                raise ConfigurationError("IDEMPOTENCY_CONFLICT", "保存操作 ID 已用于其他候选")
+            return previous
+        state = await self.pages.get()
+        kernel = self._snapshot(state)
         receipt = await asyncio.to_thread(kernel.commit, record, operation_id)
-        if kernel.files != files:
-            await self.pages.publish(revision, kernel.files)
-        return receipt
+        return await self.pages.publish(kernel.configuration, receipt, record)
 
     async def commit_receipt(self, operation_id):
-        kernel = await self._load()
-        return kernel.commit_receipt(operation_id)
+        return await self.pages.receipt(operation_id)
 
     async def activation(self, record):
         kernel = await self._load()

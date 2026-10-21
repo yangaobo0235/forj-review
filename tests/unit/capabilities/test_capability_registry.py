@@ -8,7 +8,6 @@ import logging
 
 import pytest
 
-from forj_review_service.businesses.profiles import TRANSFER_DEFAULT
 from forj_review_service.capabilities.registry import CapabilityRegistry
 from forj_review_service.capabilities.specs import (
     CapabilityResult,
@@ -18,6 +17,7 @@ from forj_review_service.capabilities.specs import (
 from forj_review_service.contracts.recognition import RecognitionBatchResult
 from forj_review_service.contracts.review import ReviewRequest
 from forj_review_service.runtime.workflow.planner import CapabilityPlanItem
+from tests.support.pages import TRANSFER_DEFAULT
 
 
 def context(trace_id: str = "trace-1") -> ReviewExecutionContext:

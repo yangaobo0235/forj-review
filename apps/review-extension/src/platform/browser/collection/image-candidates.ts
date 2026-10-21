@@ -13,17 +13,13 @@ export interface ImageCandidate {
  */
 
 
-  // 内置规则：采集清单不可用时的兜底。清单可用时一律走清单（后端是
-  // 图片类型、材料关键词和业务分区的唯一来源）。
-  const knownTypes = new Set(["scrap_certificate", "old_vehicle", "registration_certificate", "new_vehicle", "invoice", "business_license", "id_card"]);
   const decorativePattern = /(?:^|[-_\s])(logo|icon|avatar|favicon|badge|spinner)(?:$|[-_\s])/i;
-  const businessPattern = /回收证明|报废证明|报废车辆资料|旧车资料|登记证书|机动车登记证|新车资料|发票|营业执照|身份证/;
-  const businessScopes = new Set(["old_vehicle", "new_vehicle"]);
-
+  const emptyTypes = new Set<string>();
+  const neverMatches = /$^/;
   const imageProfile = () => manifestImageProfile();
-  const knownTypesFor = () => imageProfile()?.knownTypes || knownTypes;
-  const hintsPatternFor = () => imageProfile()?.hintsPattern || businessPattern;
-  const scopesFor = () => imageProfile()?.scopes || businessScopes;
+  const knownTypesFor = () => imageProfile()?.knownTypes ?? emptyTypes;
+  const hintsPatternFor = () => imageProfile()?.hintsPattern ?? neverMatches;
+  const scopesFor = () => imageProfile()?.scopes ?? emptyTypes;
 
   const eligible = (candidate: ImageCandidate) => {
     if (!candidate.src || !candidate.visible || candidate.ariaHidden || candidate.ignoredMaterial) return false;

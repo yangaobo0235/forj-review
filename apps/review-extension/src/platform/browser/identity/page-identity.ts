@@ -1,29 +1,9 @@
+import { manifestIdentityAnchors, manifestRecordIdentityFields } from "../catalog/collect-manifest.ts";
 /** Page identity primitives shared by collection and write guards. */
-
-export interface ReviewPageIdentity {
-  pageUrl: string;
-  pageInstanceId: string;
-  collectionId: string;
-  pageFingerprint: string;
-}
-
-/**
- * 内置指纹锚点：采集清单不可用时的兜底，与报废置换的历史口径一致。
- *
- * 锚点是**业务知识**（哪个字段能唯一标识这条审核记录），正常运行时不从这里
- * 取，而是由后端随采集清单下发，见 `manifestIdentityAnchors()`。
- */
-export const BUILTIN_IDENTITY_ANCHORS = [
-  "application.id",
-  "old_vehicle.vin",
-  "new_vehicle.vin",
-  "old_vehicle.owner",
-  "new_vehicle.owner",
-] as const;
 
 /** 强锚点：能唯一标识记录的编号类字段；只有它们存在时指纹才算数。 */
 export const isStrongIdentityAnchor = (field: string, declared?: readonly string[]) =>
-  declared !== undefined ? declared.includes(field) : field === "application.id" || field.endsWith(".vin");
+  declared?.includes(field) ?? false;
 
 /**
  * 用业务锚点拼出页面指纹。
@@ -36,8 +16,8 @@ export const isStrongIdentityAnchor = (field: string, declared?: readonly string
  */
 export function buildPageFingerprint(
   fields: Record<string, unknown>,
-  anchors: readonly string[] = BUILTIN_IDENTITY_ANCHORS,
-  recordIdentityFields?: readonly string[],
+  anchors: readonly string[] = manifestIdentityAnchors() ?? [],
+  recordIdentityFields: readonly string[] = manifestRecordIdentityFields() ?? [],
 ): string {
   const present = anchors
     .map((field) => [field, String(fields?.[field] ?? "").trim()] as const)
@@ -50,7 +30,7 @@ export function sameRecordExceptFields(
   expectedFingerprint: string,
   actualFingerprint: string,
   excludedFields: readonly string[],
-  recordIdentityFields?: readonly string[],
+  recordIdentityFields: readonly string[] = manifestRecordIdentityFields() ?? [],
 ): boolean {
   const parse = (value: string): Array<[string, string]> | null => {
     try {

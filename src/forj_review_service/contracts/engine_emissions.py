@@ -16,6 +16,10 @@ class EngineEmissionLookup(Protocol):
     def __call__(self, models: Iterable[str]) -> dict[str, str]: ...
 
 
+class AsyncEngineEmissionLookup(Protocol):
+    async def __call__(self, models: Iterable[str]) -> dict[str, str]: ...
+
+
 def engine_model_key(value: object | None, *, engine_brand: str | None = None) -> str:
     """Remove formatting and a leading brand label, retaining the complete model suffix."""
     text = str(value or "").strip()

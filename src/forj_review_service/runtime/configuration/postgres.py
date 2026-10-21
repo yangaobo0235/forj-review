@@ -1,15 +1,20 @@
 """Load a validated in-memory page snapshot from PostgreSQL at startup."""
 
 from forj_review_service.businesses.registry import BusinessRegistry
-from forj_review_service.integrations.database import Database
+from forj_review_service.integrations.database import AsyncDatabase
+from forj_review_service.integrations.storage.configuration import read_state_async
 from forj_review_service.runtime.configuration.service import validated_snapshot
 
 
-def load_registry(database: Database) -> BusinessRegistry:
-    with database.connect() as connection:
-        connection.execute("SET TRANSACTION READ ONLY")
-        row = connection.execute("SELECT files FROM page_snapshots WHERE id=1").fetchone()
-    if row is None:
-        raise ValueError("PostgreSQL 页面配置快照缺失，请核对数据库与配置空间")
-    _, registry = validated_snapshot(row[0])
+async def load_registry(database: AsyncDatabase) -> BusinessRegistry:
+    async with database.session(readonly=True, repeatable=True) as session:
+        state = await read_state_async(session, active_only=True)
+    _, registry = validated_snapshot(state)
+    disabled = {d["page_id"] for d in state.definitions if d.get("enabled") is False}
+    if disabled:
+        registry = BusinessRegistry(
+            tuple(p for p in registry.profiles if p.page_id not in disabled),
+            active_profiles=tuple(p for p in registry.active_profiles if p.page_id not in disabled),
+        )
+    registry.release_id = state.release_id
     return registry

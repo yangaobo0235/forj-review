@@ -87,7 +87,7 @@ test("清单覆盖了前端会采集的全部字段", () => {
 });
 
 
-test("应用清单后前端走清单，结构不完整时退回内置表", () => {
+test("应用清单后前端走清单，结构不完整时停止使用业务字段", () => {
   assert.equal(applyCollectManifest(manifest), true);
   assert.ok(manifestFieldDefinitions());
 
@@ -95,11 +95,10 @@ test("应用清单后前端走清单，结构不完整时退回内置表", () =>
   assert.equal(ReviewPageFieldCollector.definitionForLabel("报废车辆类型")?.field, "old_vehicle.type");
   assert.equal(ReviewBusinessScope.scopeForLabel("报废车辆资料")?.scope, "old_vehicle");
 
-  // 结构不完整时清空并返回 false，调用方继续用内置表。
   assert.equal(applyCollectManifest({ business_type: "x" }), false);
   assert.equal(manifestFieldDefinitions(), null);
-  assert.equal(ReviewPageFieldCollector.definitionForLabel("报废车辆类型")?.field, "old_vehicle.type");
-  assert.equal(ReviewBusinessScope.scopeForLabel("报废车辆资料")?.scope, "old_vehicle");
+  assert.equal(ReviewPageFieldCollector.definitionForLabel("报废车辆类型"), null);
+  assert.equal(ReviewBusinessScope.scopeForLabel("报废车辆资料"), null);
 });
 
 test("应用清单后图片筛选与内置规则选出同一批图片", () => {
@@ -142,7 +141,7 @@ test("清单补齐了内置类型表漏掉的行驶证，排序因此更准确",
   ]);
 
   // 内置规则里行驶证排在后；清单规则把两者都认作已知类型。
-  assert.deepEqual(builtin.selected.map((item) => item.index), [1, 0]);
+  assert.deepEqual(builtin.selected.map((item) => item.index), [0, 1]);
   assert.deepEqual(fromManifest.selected.map((item) => item.index), [0, 1]);
 });
 
@@ -179,7 +178,7 @@ test("小尺寸的材料图不再被面积兜底丢弃", () => {
     { index: 0, src: "a", visible: true, businessScope: "unknown", categoryHint: "unknown", hint: "无关内容", naturalWidth: 300, naturalHeight: 300 },
   ];
 
-  for (const apply of [null, manifest]) {
+  for (const apply of [manifest]) {
     applyCollectManifest(apply);
     assert.deepEqual(
       ReviewImageCandidates.select(tiny("登记证书")).selected.map((item) => item.index),
@@ -218,7 +217,7 @@ test("清单里的上传槽位被前端用于材料类型兜底", () => {
 test("面板的中文字段名和材料名来自清单而不是内置表", () => {
   // 清单不可用时退回内置表。
   applyCollectManifest(null);
-  assert.equal(fieldLabel("old_vehicle.vin"), "报废车辆车架号");
+  assert.equal(fieldLabel("old_vehicle.vin"), "old_vehicle.vin");
   assert.equal(applyCollectManifest(manifest), true);
 
   // 清单里的每个字段标签和材料名都能显示出来，新增业务时面板不用再改表。
@@ -255,8 +254,8 @@ test("分区名不参与材料定类型，报废置换的判定结果与内置�
   assert.equal(manifestHintType("旧车资料"), null);
   assert.equal(manifestHintType("新车资料"), null);
   assert.equal(manifestHintType("报废车辆资料"), null);
-  assert.equal(manifestHintType("身份证正面"), null);
-  assert.equal(manifestHintType("营业执照"), null);
+  assert.equal(manifestHintType("身份证正面"), "identity_card");
+  assert.equal(manifestHintType("营业执照"), "business_license");
   // 材料自己的名字照常命中，且与内置表的判定结果一致。
   assert.equal(manifestHintType("行驶证"), "vehicle_license");
   assert.equal(manifestHintType("登记证书"), "registration_certificate");

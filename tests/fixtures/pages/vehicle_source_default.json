@@ -1,0 +1,1112 @@
+{
+  "schema_version": "2.0",
+  "page_id": "vehicle_source:default",
+  "business_type": "vehicle_source",
+  "region": "default",
+  "version": "1.0",
+  "title": "车源审核",
+  "paths": [
+    "/consistency-qingdao",
+    "/consistency-changchun"
+  ],
+  "anchors": [
+    "行驶证信息",
+    "规格参数"
+  ],
+  "review_tab": "车源审核",
+  "scopes": [
+    "vehicle"
+  ],
+  "sections": [
+    {
+      "key": "license",
+      "title": "行驶证信息"
+    },
+    {
+      "key": "spec",
+      "title": "规格参数"
+    }
+  ],
+  "page_groups": [
+    {
+      "label": "证件资料",
+      "scope": "vehicle",
+      "title": "证件资料",
+      "occurrence": 0
+    },
+    {
+      "label": "车况资料",
+      "scope": "other",
+      "title": "车况资料",
+      "occurrence": 0
+    },
+    {
+      "label": "附件",
+      "scope": "other",
+      "title": "附件",
+      "occurrence": 0
+    }
+  ],
+  "materials": [
+    {
+      "document_type": "vehicle_license",
+      "label": "行驶证正面",
+      "hints": [
+        "行驶证正面",
+        "行驶证"
+      ],
+      "guidance": "只读取行驶证正面及同图副页的实际文字。发动机号是号码，不是发动机型号。vehicle.license_type读取完整车辆类型，不折叠为大类。品牌型号保留品牌文字和实际可见型号，末尾被截断就保留截断值，禁止补写。不得从登记证或铭牌代读。",
+      "scopes": [
+        "vehicle"
+      ],
+      "required": false,
+      "minimum_count": 1,
+      "required_pages": [],
+      "alternative_group": "",
+      "extra_fields": [],
+      "remove_extra_fields": [],
+      "details": {
+        "scoped_extra_fields": [],
+        "scoped_guidance": [],
+        "scoped_names": [],
+        "scope_independent": false,
+        "scoped_vehicle_fields": [],
+        "slots": [],
+        "derived_field": null
+      }
+    },
+    {
+      "document_type": "registration_certificate",
+      "label": "登记证书1、2页",
+      "hints": [
+        "登记证书1、2页",
+        "登记证书1,2页",
+        "登记证书"
+      ],
+      "guidance": "只从登记证书第1、2页读取车辆型号、发动机型号、车辆识别代号。整车型号写vehicle.announcement_model；发动机型号写vehicle.engine_model，禁止用发动机号码替代。保留型号的全部后缀。第3、4页不用于推断这些字段。registration.covered_pages仅记录原图明确可见的页码，输出整数数组，不猜测未展示页码。",
+      "scopes": [
+        "vehicle"
+      ],
+      "required": false,
+      "minimum_count": 1,
+      "required_pages": [],
+      "alternative_group": "",
+      "extra_fields": [],
+      "remove_extra_fields": [],
+      "details": {
+        "scoped_extra_fields": [],
+        "scoped_guidance": [],
+        "scoped_names": [],
+        "scope_independent": false,
+        "scoped_vehicle_fields": [],
+        "slots": [],
+        "derived_field": null
+      }
+    },
+    {
+      "document_type": "vehicle_nameplate",
+      "label": "铭牌",
+      "hints": [
+        "车辆铭牌",
+        "铭牌"
+      ],
+      "guidance": "读取铭牌上的完整整车型号、完整发动机型号和VIN。禁止推导马力、排放或销售版本；发动机号码不能替代发动机型号。",
+      "scopes": [
+        "vehicle"
+      ],
+      "required": false,
+      "minimum_count": 1,
+      "required_pages": [],
+      "alternative_group": "",
+      "extra_fields": [],
+      "remove_extra_fields": [],
+      "details": {
+        "scoped_extra_fields": [],
+        "scoped_guidance": [],
+        "scoped_names": [],
+        "scope_independent": false,
+        "scoped_vehicle_fields": [],
+        "slots": [],
+        "derived_field": null
+      }
+    }
+  ],
+  "fields": [
+    {
+      "key": "vehicle.type",
+      "label": "车辆类型",
+      "section": "",
+      "aliases": [
+        "车辆类型"
+      ],
+      "page_section": "unknown",
+      "section_required": false,
+      "reviewable": false,
+      "mode": null,
+      "evidence": [],
+      "normalizer": "default",
+      "authority": [],
+      "required": false,
+      "writable": false,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "vehicle.plate_no",
+      "label": "车牌号码",
+      "section": "license",
+      "aliases": [
+        "车牌号码",
+        "号牌号码",
+        "车牌号"
+      ],
+      "page_section": "license",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "vehicle_license",
+          "field": "vehicle.plate_no",
+          "scope": "vehicle",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "identifier",
+      "authority": [
+        {
+          "source": "image",
+          "label": "行驶证正面",
+          "document_types": [
+            "vehicle_license"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "vehicle.vin",
+      "label": "VIN",
+      "section": "license",
+      "aliases": [
+        "VIN",
+        "车架号",
+        "车辆识别代号"
+      ],
+      "page_section": "license",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "vehicle_license",
+          "field": "vehicle.vin",
+          "scope": "vehicle",
+          "group_order": null,
+          "comparison": true
+        },
+        {
+          "material": "registration_certificate",
+          "field": "vehicle.vin",
+          "scope": "vehicle",
+          "group_order": null,
+          "comparison": false
+        },
+        {
+          "material": "vehicle_nameplate",
+          "field": "vehicle.vin",
+          "scope": "vehicle",
+          "group_order": null,
+          "comparison": false
+        }
+      ],
+      "normalizer": "vin",
+      "authority": [
+        {
+          "source": "image",
+          "label": "行驶证正面",
+          "document_types": [
+            "vehicle_license"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "vehicle.engine_no",
+      "label": "发动机号",
+      "section": "license",
+      "aliases": [
+        "发动机号",
+        "发动机号码"
+      ],
+      "page_section": "license",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "vehicle_license",
+          "field": "vehicle.engine_no",
+          "scope": "vehicle",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "identifier",
+      "authority": [
+        {
+          "source": "image",
+          "label": "行驶证正面",
+          "document_types": [
+            "vehicle_license"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "vehicle.license_type",
+      "label": "行驶证车辆类型",
+      "section": "license",
+      "aliases": [
+        "行驶证车辆类型"
+      ],
+      "page_section": "license",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "vehicle_license",
+          "field": "vehicle.license_type",
+          "scope": "vehicle",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "text",
+      "authority": [
+        {
+          "source": "image",
+          "label": "行驶证正面",
+          "document_types": [
+            "vehicle_license"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "vehicle.registration_date",
+      "label": "注册日期",
+      "section": "license",
+      "aliases": [
+        "注册日期"
+      ],
+      "page_section": "license",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "vehicle_license",
+          "field": "vehicle.registration_date",
+          "scope": "vehicle",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "date",
+      "authority": [
+        {
+          "source": "image",
+          "label": "行驶证正面",
+          "document_types": [
+            "vehicle_license"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "vehicle.issue_date",
+      "label": "发证日期",
+      "section": "license",
+      "aliases": [
+        "发证日期"
+      ],
+      "page_section": "license",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "vehicle_license",
+          "field": "vehicle.issue_date",
+          "scope": "vehicle",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "date",
+      "authority": [
+        {
+          "source": "image",
+          "label": "行驶证正面",
+          "document_types": [
+            "vehicle_license"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "vehicle.owner",
+      "label": "所有人",
+      "section": "license",
+      "aliases": [
+        "所有人",
+        "车辆所有人"
+      ],
+      "page_section": "license",
+      "section_required": true,
+      "reviewable": true,
+      "mode": "SINGLE_SOURCE",
+      "evidence": [
+        {
+          "material": "vehicle_license",
+          "field": "vehicle.owner",
+          "scope": "vehicle",
+          "group_order": null,
+          "comparison": true
+        }
+      ],
+      "normalizer": "party_name",
+      "authority": [
+        {
+          "source": "image",
+          "label": "行驶证正面",
+          "document_types": [
+            "vehicle_license"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "vehicle.brand_model",
+      "label": "品牌型号",
+      "section": "license",
+      "aliases": [
+        "品牌型号"
+      ],
+      "page_section": "license",
+      "section_required": true,
+      "reviewable": true,
+      "mode": null,
+      "evidence": [
+        {
+          "material": "vehicle_license",
+          "field": "vehicle.brand_model",
+          "scope": "vehicle",
+          "group_order": null,
+          "comparison": false
+        }
+      ],
+      "normalizer": "default",
+      "authority": [],
+      "required": false,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [
+        "VEHICLE-SOURCE-BRAND-MODEL"
+      ],
+      "task_projector": ""
+    },
+    {
+      "key": "vehicle.model",
+      "label": "车型",
+      "section": "spec",
+      "aliases": [
+        "车型"
+      ],
+      "page_section": "spec",
+      "section_required": true,
+      "reviewable": true,
+      "mode": null,
+      "evidence": [],
+      "normalizer": "default",
+      "authority": [],
+      "required": false,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [
+        "VEHICLE-SOURCE-MODEL"
+      ],
+      "task_projector": ""
+    },
+    {
+      "key": "spec.brand",
+      "label": "品牌",
+      "section": "spec",
+      "aliases": [
+        "品牌"
+      ],
+      "page_section": "spec",
+      "section_required": true,
+      "reviewable": false,
+      "mode": null,
+      "evidence": [],
+      "normalizer": "default",
+      "authority": [],
+      "required": false,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "spec.series",
+      "label": "车系",
+      "section": "spec",
+      "aliases": [
+        "车系"
+      ],
+      "page_section": "spec",
+      "section_required": true,
+      "reviewable": false,
+      "mode": null,
+      "evidence": [],
+      "normalizer": "default",
+      "authority": [],
+      "required": false,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "spec.drive_form",
+      "label": "驱动形式",
+      "section": "spec",
+      "aliases": [
+        "驱动形式"
+      ],
+      "page_section": "spec",
+      "section_required": true,
+      "reviewable": false,
+      "mode": null,
+      "evidence": [],
+      "normalizer": "default",
+      "authority": [],
+      "required": false,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "spec.fuel_type",
+      "label": "燃料种类",
+      "section": "spec",
+      "aliases": [
+        "燃料种类"
+      ],
+      "page_section": "spec",
+      "section_required": true,
+      "reviewable": false,
+      "mode": null,
+      "evidence": [],
+      "normalizer": "default",
+      "authority": [],
+      "required": false,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "spec.emission_standard",
+      "label": "排放标准",
+      "section": "spec",
+      "aliases": [
+        "排放标准"
+      ],
+      "page_section": "spec",
+      "section_required": true,
+      "reviewable": false,
+      "mode": null,
+      "evidence": [],
+      "normalizer": "default",
+      "authority": [],
+      "required": false,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "spec.max_hp",
+      "label": "最大马力",
+      "section": "spec",
+      "aliases": [
+        "最大马力"
+      ],
+      "page_section": "spec",
+      "section_required": true,
+      "reviewable": false,
+      "mode": null,
+      "evidence": [],
+      "normalizer": "default",
+      "authority": [],
+      "required": false,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "spec.engine_brand",
+      "label": "发动机品牌",
+      "section": "spec",
+      "aliases": [
+        "发动机品牌"
+      ],
+      "page_section": "spec",
+      "section_required": true,
+      "reviewable": false,
+      "mode": null,
+      "evidence": [],
+      "normalizer": "default",
+      "authority": [],
+      "required": false,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "spec.engine_model",
+      "label": "发动机型号",
+      "section": "spec",
+      "aliases": [
+        "发动机型号"
+      ],
+      "page_section": "spec",
+      "section_required": true,
+      "reviewable": false,
+      "mode": null,
+      "evidence": [],
+      "normalizer": "default",
+      "authority": [],
+      "required": false,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "spec.cargo_length",
+      "label": "货箱长度",
+      "section": "spec",
+      "aliases": [
+        "货箱长度"
+      ],
+      "page_section": "spec",
+      "section_required": true,
+      "reviewable": false,
+      "mode": null,
+      "evidence": [],
+      "normalizer": "default",
+      "authority": [],
+      "required": false,
+      "writable": true,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "vehicle.announcement_model",
+      "label": "整车型号",
+      "section": "",
+      "aliases": [],
+      "page_section": "unknown",
+      "section_required": false,
+      "reviewable": false,
+      "mode": null,
+      "evidence": [
+        {
+          "material": "registration_certificate",
+          "field": "vehicle.announcement_model",
+          "scope": "vehicle",
+          "group_order": null,
+          "comparison": false
+        },
+        {
+          "material": "vehicle_nameplate",
+          "field": "vehicle.announcement_model",
+          "scope": "vehicle",
+          "group_order": null,
+          "comparison": false
+        }
+      ],
+      "normalizer": "default",
+      "authority": [],
+      "required": false,
+      "writable": false,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    },
+    {
+      "key": "vehicle.engine_model",
+      "label": "发动机型号（材料）",
+      "section": "",
+      "aliases": [],
+      "page_section": "unknown",
+      "section_required": false,
+      "reviewable": false,
+      "mode": null,
+      "evidence": [
+        {
+          "material": "registration_certificate",
+          "field": "vehicle.engine_model",
+          "scope": "vehicle",
+          "group_order": null,
+          "comparison": false
+        },
+        {
+          "material": "vehicle_nameplate",
+          "field": "vehicle.engine_model",
+          "scope": "vehicle",
+          "group_order": null,
+          "comparison": false
+        }
+      ],
+      "normalizer": "default",
+      "authority": [],
+      "required": false,
+      "writable": false,
+      "allow_single_evidence": true,
+      "uncertain_requires_review": true,
+      "page_evidence_required": true,
+      "material_field": null,
+      "max_age_days": null,
+      "locator_name": "",
+      "locator_id": "",
+      "occurrence": 1,
+      "checks": [],
+      "task_projector": ""
+    }
+  ],
+  "identity_anchors": [
+    "vehicle.vin",
+    "vehicle.plate_no",
+    "vehicle.owner"
+  ],
+  "record_identity_fields": [
+    "vehicle.vin"
+  ],
+  "page_actions": [
+    "fill_review_fields"
+  ],
+  "writable_control_kinds": [
+    "text",
+    "textarea",
+    "number",
+    "date",
+    "select"
+  ],
+  "review_declared_fields_only": true,
+  "settings": {
+    "material_policy": {
+      "mode": "observe",
+      "materials": [
+        {
+          "document_type": "vehicle_license",
+          "business_scope": "vehicle",
+          "minimum_count": 1,
+          "required_pages": [],
+          "display_name": "行驶证正面",
+          "alternative_group": "",
+          "identity_side": null,
+          "presence_name": ""
+        },
+        {
+          "document_type": "registration_certificate",
+          "business_scope": "vehicle",
+          "minimum_count": 1,
+          "required_pages": [
+            1,
+            2
+          ],
+          "display_name": "登记证书1、2页",
+          "alternative_group": "model_evidence",
+          "identity_side": null,
+          "presence_name": ""
+        },
+        {
+          "document_type": "vehicle_nameplate",
+          "business_scope": "vehicle",
+          "minimum_count": 1,
+          "required_pages": [],
+          "display_name": "铭牌",
+          "alternative_group": "model_evidence",
+          "identity_side": null,
+          "presence_name": ""
+        }
+      ],
+      "field_sources": [],
+      "presence_groups": [
+        {
+          "key": "license",
+          "display_name": "行驶证正面",
+          "alternatives": [
+            [
+              {
+                "document_type": "vehicle_license",
+                "business_scope": "vehicle",
+                "minimum_count": 1,
+                "required_pages": [],
+                "display_name": "行驶证正面",
+                "alternative_group": "",
+                "identity_side": null,
+                "presence_name": ""
+              }
+            ]
+          ]
+        },
+        {
+          "key": "model_evidence",
+          "display_name": "车型辅助材料",
+          "alternatives": [
+            [
+              {
+                "document_type": "registration_certificate",
+                "business_scope": "vehicle",
+                "minimum_count": 1,
+                "required_pages": [
+                  1,
+                  2
+                ],
+                "display_name": "登记证书1、2页",
+                "alternative_group": "model_evidence",
+                "identity_side": null,
+                "presence_name": ""
+              }
+            ],
+            [
+              {
+                "document_type": "vehicle_nameplate",
+                "business_scope": "vehicle",
+                "minimum_count": 1,
+                "required_pages": [],
+                "display_name": "铭牌",
+                "alternative_group": "model_evidence",
+                "identity_side": null,
+                "presence_name": ""
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "replacement_policy": null,
+    "capability_specs": [
+      {
+        "capability_id": "vehicle_source_model",
+        "kind": "RULE",
+        "version": "1.0",
+        "stage": "POST_COMPARE",
+        "input_facts": [],
+        "output_facts": [],
+        "required": true,
+        "dependencies": [],
+        "timeout_seconds": 30.0,
+        "retries": 0,
+        "failure_policy": "MANUAL_REVIEW"
+      },
+      {
+        "capability_id": "material_completeness",
+        "kind": "MATERIAL",
+        "version": "1.0",
+        "stage": "EVIDENCE_VALIDATION",
+        "input_facts": [],
+        "output_facts": [],
+        "required": true,
+        "dependencies": [],
+        "timeout_seconds": 30.0,
+        "retries": 0,
+        "failure_policy": "MANUAL_REVIEW"
+      }
+    ],
+    "binding_declarations": [
+      {
+        "capability_id": "vehicle_source_model",
+        "enabled": true,
+        "required": null,
+        "parameters": []
+      },
+      {
+        "capability_id": "material_completeness",
+        "enabled": true,
+        "required": null,
+        "parameters": []
+      }
+    ],
+    "page_field_composites": [],
+    "qr_field_bindings": [],
+    "invoice_verification_field": null,
+    "ignored_image_labels": [
+      "行驶证反面",
+      "登记证书3、4页",
+      "登记证书3,4页",
+      "登记证书3，4页"
+    ],
+    "retry_policy": {
+      "semantic_retry_count": 1,
+      "minimum_retry_window_seconds": 2.0,
+      "qr_web_retry_count": 1
+    },
+    "presentation": {
+      "hidden_fields": [],
+      "hidden_check_prefixes": [],
+      "groups": []
+    }
+  },
+  "active": true
+}

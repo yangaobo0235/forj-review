@@ -26,10 +26,10 @@ services:
       REVIEW_LOG_LEVEL: "${REVIEW_LOG_LEVEL:-INFO}"
       REVIEW_LOG_MAX_MB: "${REVIEW_LOG_MAX_MB:-10}"
       REVIEW_LOG_BACKUP_COUNT: "${REVIEW_LOG_BACKUP_COUNT:-30}"
-      # 本项目独立使用 forj_review.public；实例账号统一为 postgres。
+      # 线上默认 public；本机使用 local。新版本启动前必须检查目标 Schema 已迁移。
       # 连接只取下面的 PG* 和私密 env_file，避免模型文件中的旧 URL 覆盖它们。
       REVIEW_DATABASE_URL: ""
-      REVIEW_DATABASE_SCHEMA: "public"
+      REVIEW_DATABASE_SCHEMA: "${REVIEW_DATABASE_SCHEMA:-public}"
       PGDATABASE: "forj_review"
       PGUSER: "postgres"
       PGHOST: "postgres"

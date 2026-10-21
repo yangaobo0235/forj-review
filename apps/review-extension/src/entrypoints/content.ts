@@ -11,12 +11,13 @@ import { ReviewImageFocus } from "../platform/browser/actions/image-focus.ts";
 import { classifyImage } from "../platform/browser/collection/material-hints.ts";
 import { ReviewPageFieldCollector } from "../platform/browser/collection/page-field-collector.ts";
 import { ReviewPageFieldWriter } from "../platform/browser/actions/page-field-writer.ts";
-import { BUILTIN_IDENTITY_ANCHORS, buildPageFingerprint, createPageInstanceId, sameRecordExceptFields } from "../platform/browser/identity/page-identity.ts";
+import { buildPageFingerprint, createPageInstanceId, sameRecordExceptFields } from "../platform/browser/identity/page-identity.ts";
 import type { BusinessSelection, PageWriteGroupAction } from "../shared/contracts/review.ts";
 import { logDiagnostic } from "../shared/diagnostics.ts";
 import { captureConfigurationPage, trialConfigurationPage } from "../platform/browser/collection/configuration-discovery";
 import type { ConfigurationPending } from "../shared/contracts/configuration";
 import { createVehicleModelFiller } from "../platform/browser/actions/vehicle-model-fill.ts";
+import { manifestActions, manifestFieldLabels } from "../platform/browser/catalog/collect-manifest.ts";
 /**
  * 功能：协调页面字段、图片地址采集和原图定位消息。
  * 职责边界：复杂识别逻辑委托给独立公共脚本；DOM 元素不跨消息传输。
@@ -42,7 +43,7 @@ let activeReviewRoot: HTMLElement | null = null;
 let activeCollectionBusiness = "";
 const sameReviewStep = () => reviewTabGuard?.isCurrent() ?? true;
 const nextCollectionId = () => `${pageInstanceId}:${++collectionSequence}`;
-// 指纹锚点来自本次业务的采集清单；没有清单时退回内置表。
+// 指纹锚点来自本次业务的采集清单；没有清单时不启用身份判定。
 const pageFingerprint = (fields: Record<string, unknown>) =>
   buildPageFingerprint(fields, manifestIdentityAnchors() ?? undefined, manifestRecordIdentityFields() ?? undefined);
 const MESSAGE_TYPES = Object.freeze({
@@ -60,12 +61,11 @@ type ReviewMessage = {
   [key: string]: unknown;
 };
 type CollectionSnapshot = { pageFields?: Record<string, string>; fieldTargets?: Array<{ field: string; element: Element }> };
-// 采集清单不可用时的兜底白名单。清单一旦应用就以清单为准：允许写回哪些
-// 字段、哪些控件类型都是业务声明，不在浏览器里再维护一份。
-/** 本次清单允许写回的字段；没有清单时退回内置白名单。 */
-const writableFields = () => manifestWritableFields() ?? ReviewPageFieldWriter.defaultWritableFields;
+// 回填权限只来自本次采集清单。
+/** 本次清单允许写回的字段；没有清单时禁止回填。 */
+const writableFields = () => manifestWritableFields() ?? new Set<string>();
 
-/** 本次清单允许写回的控件类型；没有清单时不限制。 */
+/** 本次清单允许写回的控件类型；没有清单时不启用写回。 */
 const writableControlKinds = () => manifestWritableControlKinds();
 
 const controlFields = (collection: CollectionSnapshot) => {
@@ -78,7 +78,7 @@ const controlFields = (collection: CollectionSnapshot) => {
 };
 
 const readIdentityFields = () => controlFields(ReviewPageFieldCollector.collectIdentity(
-  activeReviewRoot ?? document, manifestIdentityAnchors() ?? BUILTIN_IDENTITY_ANCHORS,
+  activeReviewRoot ?? document, manifestIdentityAnchors() ?? [],
 ));
 
 const originalIdentityFields = (fields: Record<string, unknown>) => {
@@ -151,6 +151,8 @@ const modelFiller = createVehicleModelFiller({
   collect: fields => ReviewPageFieldCollector.collect(activeReviewRoot ?? document, new Set(fields)),
   writableFields,
   controlKinds: writableControlKinds,
+  mappings: () => manifestActions().find(a => a.handler_id === "vehicle_model_fill" && a.enabled)?.mappings ?? [],
+  fieldLabels: () => manifestFieldLabels() ?? {},
 });
 
 chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendResponse) => {

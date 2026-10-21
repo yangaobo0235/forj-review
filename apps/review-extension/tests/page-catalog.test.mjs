@@ -1,8 +1,7 @@
 /**
  * 页面识别清单：后端下发、浏览器暂存与匹配。
  *
- * 清单不可用时的行为单独在这里验：识别退回内置表，共用地址只报「认不出来」，
- * 要求人工选择，不猜。
+ * 清单不可用时不恢复历史页面身份；共用地址必须能唯一匹配。
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -46,19 +45,10 @@ test("结构不对的清单当没下发，不半信半疑地用", () => {
   assert.equal(appliedPageCatalog(), null);
 });
 
-test("清单不可用时退回内置表，共用地址要求人工选择", () => {
+test("清单不可用时不使用历史页面身份", () => {
   applyPageCatalog(null);
-
-  // 地址唯一的业务照常识别。
-  assert.equal(
-    ReviewBusinessDetector.detect("https://admin.forjtruck.com/scrap-replace-qingdao", "").businessType,
-    "scrap_replacement",
-  );
-  // 共用地址给不出答案：内置表只有地址，猜一半错。这里必须落到人工选择。
-  assert.deepEqual(
-    { ...ReviewBusinessDetector.resolve("https://admin.forjtruck.com/sample-review-qingdao", "新车信息 车辆所有人类型 新车挂靠") },
-    { business: null, error: "无法识别当前审核业务，请人工选择" },
-  );
+  assert.equal(ReviewBusinessDetector.detect("https://admin.forjtruck.com/scrap-replace-qingdao", ""), null);
+  assert.equal(ReviewBusinessDetector.resolve("https://admin.forjtruck.com/sample-review-qingdao", "新车信息 车辆所有人类型 新车挂靠").business, null);
 });
 
 test("清单拉不到时返回 null，不抛错", async () => {
@@ -76,14 +66,11 @@ test("清单拉不到时返回 null，不抛错", async () => {
   );
 });
 
-test("offline catalog keeps both scrap routes and all three selected review steps", () => {
+test("缺失目录时审核页签也不能恢复历史配置", () => {
   applyPageCatalog(null);
   for (const city of ["qingdao", "changchun"]) {
-    assert.equal(ReviewBusinessDetector.detect(`https://admin.forjtruck.com/scrap-replace-${city}`).region, city);
-    for (const [label, expected] of [["车源审核", "vehicle_source"], ["过户审核", "transfer"], ["一致性审核", "consistency"]]) {
-      const url = `https://admin.forjtruck.com/consistency-${city}?showPageModel=1`;
-      assert.equal(ReviewBusinessDetector.resolve(url, "", null, {label, panelReady: true}).business.businessType, expected);
-      assert.equal(ReviewBusinessDetector.resolve(url, "", null, {label, panelReady: false}).business, null);
+    for (const label of ["车源审核", "过户审核", "一致性审核"]) {
+      assert.equal(ReviewBusinessDetector.resolve(`https://admin.forjtruck.com/consistency-${city}`, "", null, {label, panelReady: true}).business, null);
     }
   }
 });

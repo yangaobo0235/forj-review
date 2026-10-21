@@ -15,6 +15,7 @@ from forj_review_service.contracts.review import (
     ReviewResponse,
 )
 from forj_review_service.presentation.assembly import assemble_review_response
+from tests.support.pages import SCRAP_BUSINESS as TEST_BUSINESS
 
 
 def response_for(
@@ -25,7 +26,11 @@ def response_for(
     issues: list[str] | None = None,
 ) -> ReviewResponse:
     return ReviewResponse(
-        presentation=("FIELD_WORKBENCH" if business_type is BusinessType.SCRAP_REPLACEMENT else "MANUAL_REVIEW"),
+        presentation=(
+            "FIELD_WORKBENCH"
+            if business_type is BusinessType.SCRAP_REPLACEMENT
+            else "MANUAL_REVIEW"
+        ),
         business_type=business_type,
         region=region,
         profile_version="1.0",
@@ -65,6 +70,7 @@ def test_legacy_comparison_conflict_is_high_with_legacy_summary() -> None:
         ),
         RecognitionBatchResult(),
         business_checks=[],
+        business=TEST_BUSINESS,
     )
 
     assert assembled.risk_level == "HIGH"
@@ -77,6 +83,7 @@ def test_legacy_business_check_conflict_does_not_raise_risk_level() -> None:
         response_for(BusinessType.TRANSFER, Region.DEFAULT),
         RecognitionBatchResult(),
         business_checks=[conflict_business_check()],
+        business=TEST_BUSINESS,
     )
 
     assert assembled.recommendation is Recommendation.REVIEW_REQUIRED
@@ -93,6 +100,7 @@ def test_legacy_review_required_comparison_is_medium_with_legacy_summary() -> No
         ),
         RecognitionBatchResult(),
         business_checks=[],
+        business=TEST_BUSINESS,
     )
 
     assert assembled.risk_level == "MEDIUM"
@@ -108,6 +116,7 @@ def test_legacy_clean_review_is_low_with_legacy_summary() -> None:
         ),
         RecognitionBatchResult(),
         business_checks=[],
+        business=TEST_BUSINESS,
     )
 
     assert assembled.recommendation is Recommendation.PASS
@@ -120,6 +129,7 @@ def test_target_profile_business_conflict_is_high_with_advice_summary() -> None:
         response_for(BusinessType.SCRAP_REPLACEMENT, Region.QINGDAO),
         RecognitionBatchResult(),
         business_checks=[conflict_business_check()],
+        business=TEST_BUSINESS,
     )
 
     assert assembled.recommendation is Recommendation.REVIEW_REQUIRED
@@ -136,6 +146,7 @@ def test_target_profile_clean_review_is_low_with_advice_summary() -> None:
         ),
         RecognitionBatchResult(),
         business_checks=[],
+        business=TEST_BUSINESS,
     )
 
     assert assembled.recommendation is Recommendation.PASS

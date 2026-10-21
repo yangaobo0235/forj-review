@@ -24,7 +24,8 @@ def release_project(tmp_path):
     for name in ("package-server.ps1", "release-common.ps1"):
         shutil.copyfile(ROOT / "scripts/release" / name, scripts / name)
     wrapper = project / "invoke.ps1"
-    wrapper.write_text("""
+    wrapper.write_text(
+        """
 function git {
     $global:LASTEXITCODE = 0
     if ($args -contains 'rev-parse') { 'abcdef123456' }
@@ -38,12 +39,20 @@ function docker {
     }
 }
 & "$PSScriptRoot/scripts/release/$($env:RELEASE_ENTRYPOINT).ps1"
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     def run(entrypoint, **env):
-        return subprocess.run([powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(wrapper)],
-                              env={**os.environ, "RELEASE_ENTRYPOINT": entrypoint, **env}, capture_output=True, text=True,
-                              encoding="utf-8", errors="replace", timeout=30)
+        return subprocess.run(
+            [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(wrapper)],
+            env={**os.environ, "RELEASE_ENTRYPOINT": entrypoint, **env},
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+        )
 
     return project, run
 
@@ -64,6 +73,7 @@ def test_daily_package_only_writes_archive_and_preserves_fixed_tools(release_pro
         files = {member.name: archive.extractfile(member).read() for member in archive}
     assert files["forj-review-service-main.tar"] == b"synthetic image"
     assert json.loads(files["release.json"])["image_id"] == "sha256:" + "a" * 64
+    assert json.loads(files["release.json"])["database_storage_version"] == 4
     for line in files["SHA256SUMS"].decode().splitlines():
         checksum, name = line.split("  ")
         assert hashlib.sha256(files[name]).hexdigest() == checksum
@@ -78,4 +88,6 @@ def test_daily_package_only_writes_archive_and_preserves_fixed_tools(release_pro
     assert run("package-server", FAIL_BUILD="1").returncode != 0
     assert package_path.read_bytes() == previous
     assert {path.name for path in package_path.parent.iterdir()} == {"forj-review-server.tar.gz"}
-    assert {p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in tools.iterdir()} == original_tools
+    assert {
+        p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in tools.iterdir()
+    } == original_tools

@@ -7,6 +7,7 @@ from forj_review_service.contracts.review import (
 from forj_review_service.evidence.comparison.composite_fields import (
     build_page_composite_checks,
 )
+from tests.support.pages import SCRAP_BUSINESS as TEST_BUSINESS
 
 
 def request(**page_fields: str) -> ReviewRequest:
@@ -35,6 +36,7 @@ def test_invoice_composite_checks_page_pair_before_material() -> None:
     check = build_page_composite_checks(
         request(invoice_code="unused"),
         {"invoice.code": comparison("invoice.code", "INV-001")},
+        business=TEST_BUSINESS,
     )
     assert len(check) == 1
     assert check[0].status == "INSUFFICIENT"
@@ -42,6 +44,7 @@ def test_invoice_composite_checks_page_pair_before_material() -> None:
     checks = build_page_composite_checks(
         request(**{"invoice.code": "INV-001", "invoice.invoice_no": "INV-001"}),
         {"invoice.code": comparison("invoice.code", "INV-001")},
+        business=TEST_BUSINESS,
     )
     assert len(checks) == 1
     assert checks[0].check_id == "FIELD-INVOICE-CODE-NO"
@@ -50,9 +53,9 @@ def test_invoice_composite_checks_page_pair_before_material() -> None:
 
 
 def test_composite_task_uses_reviewer_facing_page_labels_and_keeps_differences() -> None:
-    from forj_review_service.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
     from forj_review_service.contracts.evidence import DifferenceRange, EvidenceFact
     from forj_review_service.presentation.routing import build_review_tasks
+    from tests.support.pages import SCRAP_REPLACEMENT_QINGDAO
 
     difference = DifferenceRange(
         kind="REPLACE", start=4, end=5, page_start=4, page_end=5, page_text="A"
@@ -95,6 +98,7 @@ def test_composite_page_mismatch_blocks_material_comparison() -> None:
     checks = build_page_composite_checks(
         request(**{"new_vehicle.vin": "VIN-A", "page_ocr.new_vehicle_vin": "VIN-B"}),
         {"new_vehicle.vin": comparison("new_vehicle.vin", "VIN-A")},
+        business=TEST_BUSINESS,
     )
     assert checks[0].check_id == "FIELD-NEW-VEHICLE-VIN"
     assert checks[0].status == "CONFLICT"
@@ -105,6 +109,7 @@ def test_composite_material_conflict_is_reported_after_matching_page_pair() -> N
     checks = build_page_composite_checks(
         request(**{"invoice.code": "INV-PAGE", "invoice.invoice_no": "INV-PAGE"}),
         {"invoice.code": comparison("invoice.code", "INV-MATERIAL", FieldStatus.CONFLICT)},
+        business=TEST_BUSINESS,
     )
     assert checks[0].status == "CONFLICT"
     assert "材料提取值存在冲突" in checks[0].reason

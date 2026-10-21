@@ -24,8 +24,12 @@ def test_production_sinks_include_all_namespaces_once_and_restore(tmp_path, monk
     previous = list(app.handlers), app.level, app.propagate
     for run in range(2):
         with configured_logging(), log_context(trace_id=f"trace-{run}", job_id="job-1"):
-            logging.getLogger("forj_review_service.runtime.workflow.graph").info("test graph event %d", run)
-            logging.getLogger("forj_review_service.capabilities.registry").info("test capability event %d", run)
+            logging.getLogger("forj_review_service.runtime.workflow.graph").info(
+                "test graph event %d", run
+            )
+            logging.getLogger("forj_review_service.capabilities.registry").info(
+                "test capability event %d", run
+            )
             logging.getLogger("uvicorn.error").info("test server event %d", run)
         assert (app.handlers, app.level, app.propagate) == previous
     file_text = (tmp_path / "review-service.log").read_text(encoding="utf-8")
@@ -33,7 +37,9 @@ def test_production_sinks_include_all_namespaces_once_and_restore(tmp_path, monk
     for text in (file_text, console_text):
         for run in range(2):
             for event in ("graph", "capability", "server"):
-                line = next(line for line in text.splitlines() if f"test {event} event {run}" in line)
+                line = next(
+                    line for line in text.splitlines() if f"test {event} event {run}" in line
+                )
                 assert f"trace_id=trace-{run} job_id=job-1" in line
                 assert text.count(f"test {event} event {run}") == 1
 
@@ -43,8 +49,16 @@ def test_formatter_omits_exception_payload_and_bounds_injection():
         raise ValueError("private document name and https://secret.test?q=private")
     except ValueError:
         import sys
-        record = logging.LogRecord("test", logging.ERROR, __file__, 1,
-                                   "failed https://secret.test?token=123 Bearer token-value sk-fake-key 13812345678\nFORGED", (), sys.exc_info())
+
+        record = logging.LogRecord(
+            "test",
+            logging.ERROR,
+            __file__,
+            1,
+            "failed https://secret.test?token=123 Bearer token-value sk-fake-key 13812345678\nFORGED",
+            (),
+            sys.exc_info(),
+        )
     with log_context(trace_id="bad\nFORGED", business="transfer"):
         text = SafeFormatter("%(message)s %(context_fields)s").format(record)
     assert "\n" not in text and "\r" not in text
@@ -138,8 +152,12 @@ def test_http_logs_routes_and_errors_without_queries_or_noisy_polls(caplog):
         client.get("/api/review/jobs/private-id")
         client.post("/api/review/jobs/private-id?token=SECRET", json={"name": "PRIVATE"})
         client.get("/unknown-private-path?token=SECRET")
-    lines = [record.getMessage() for record in caplog.records if "review http" in record.getMessage()]
+    lines = [
+        record.getMessage() for record in caplog.records if "review http" in record.getMessage()
+    ]
     assert len(lines) == 2
     assert "status=405" in lines[0] and "route=/api/review/jobs/{job_id}" in lines[0]
     assert "status=404" in lines[1] and "route=unmatched" in lines[1]
-    assert not any(value in " ".join(lines) for value in ("SECRET", "PRIVATE", "private-id", "unknown-private"))
+    assert not any(
+        value in " ".join(lines) for value in ("SECRET", "PRIVATE", "private-id", "unknown-private")
+    )

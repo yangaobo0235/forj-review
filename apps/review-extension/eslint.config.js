@@ -5,7 +5,7 @@ import vue from 'eslint-plugin-vue'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'test-results', 'playwright-report']),
   {files: ['**/*.{ts,vue}'], extends: [js.configs.recommended, tseslint.configs.recommended], languageOptions: {globals: globals.browser}},
   ...vue.configs['flat/essential'],
   {files: ['**/*.vue'], languageOptions: {parserOptions: {parser: tseslint.parser, extraFileExtensions: ['.vue']}}},

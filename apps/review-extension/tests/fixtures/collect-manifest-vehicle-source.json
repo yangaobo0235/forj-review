@@ -355,5 +355,162 @@
       ],
       "slots": []
     }
+  ],
+  "actions": [
+    {
+      "action_id": "fill_review_fields",
+      "handler_id": "fill_review_fields",
+      "contract_version": "1.0",
+      "enabled": true,
+      "label": "fill_review_fields",
+      "mappings": []
+    },
+    {
+      "action_id": "vehicle_model_fill",
+      "handler_id": "vehicle_model_fill",
+      "contract_version": "1.0",
+      "enabled": true,
+      "label": "车型回填",
+      "mappings": [
+        {
+          "mapping_id": "brand",
+          "source_kind": "MODEL_CANDIDATE",
+          "source_property": "brandName",
+          "source_option_property": "brandId",
+          "target_field": "spec.brand",
+          "order": 0,
+          "depends_on": [],
+          "converter_id": "text",
+          "missing_policy": "BLOCK",
+          "wait_condition_id": "options_ready"
+        },
+        {
+          "mapping_id": "series",
+          "source_kind": "MODEL_CANDIDATE",
+          "source_property": "seriesName",
+          "source_option_property": "seriesId",
+          "target_field": "spec.series",
+          "order": 1,
+          "depends_on": [
+            "brand"
+          ],
+          "converter_id": "text",
+          "missing_policy": "BLOCK",
+          "wait_condition_id": "options_ready"
+        },
+        {
+          "mapping_id": "model",
+          "source_kind": "MODEL_CANDIDATE",
+          "source_property": "modelName",
+          "source_option_property": "modelId",
+          "target_field": "vehicle.model",
+          "order": 2,
+          "depends_on": [
+            "series"
+          ],
+          "converter_id": "text",
+          "missing_policy": "BLOCK",
+          "wait_condition_id": "options_ready"
+        },
+        {
+          "mapping_id": "drive_form",
+          "source_kind": "MODEL_CANDIDATE",
+          "source_property": "config.driveForm",
+          "source_option_property": null,
+          "target_field": "spec.drive_form",
+          "order": 3,
+          "depends_on": [
+            "model"
+          ],
+          "converter_id": "text",
+          "missing_policy": "BLOCK",
+          "wait_condition_id": "none"
+        },
+        {
+          "mapping_id": "fuel_type",
+          "source_kind": "MODEL_CANDIDATE",
+          "source_property": "config.fuelType",
+          "source_option_property": null,
+          "target_field": "spec.fuel_type",
+          "order": 4,
+          "depends_on": [
+            "drive_form"
+          ],
+          "converter_id": "text",
+          "missing_policy": "BLOCK",
+          "wait_condition_id": "none"
+        },
+        {
+          "mapping_id": "emission",
+          "source_kind": "MODEL_CANDIDATE",
+          "source_property": "config.emissionStandard",
+          "source_option_property": null,
+          "target_field": "spec.emission_standard",
+          "order": 5,
+          "depends_on": [
+            "fuel_type"
+          ],
+          "converter_id": "text",
+          "missing_policy": "BLOCK",
+          "wait_condition_id": "none"
+        },
+        {
+          "mapping_id": "hp",
+          "source_kind": "MODEL_CANDIDATE",
+          "source_property": "config.maxHp",
+          "source_option_property": null,
+          "target_field": "spec.max_hp",
+          "order": 6,
+          "depends_on": [
+            "emission"
+          ],
+          "converter_id": "text",
+          "missing_policy": "BLOCK",
+          "wait_condition_id": "none"
+        },
+        {
+          "mapping_id": "engine_brand",
+          "source_kind": "MODEL_CANDIDATE",
+          "source_property": "config.engineBrand",
+          "source_option_property": null,
+          "target_field": "spec.engine_brand",
+          "order": 7,
+          "depends_on": [
+            "hp"
+          ],
+          "converter_id": "text",
+          "missing_policy": "BLOCK",
+          "wait_condition_id": "none"
+        },
+        {
+          "mapping_id": "engine",
+          "source_kind": "MODEL_CANDIDATE",
+          "source_property": "config.engineType",
+          "source_option_property": null,
+          "target_field": "spec.engine_model",
+          "order": 8,
+          "depends_on": [
+            "engine_brand"
+          ],
+          "converter_id": "text",
+          "missing_policy": "BLOCK",
+          "wait_condition_id": "none"
+        },
+        {
+          "mapping_id": "cargo",
+          "source_kind": "MODEL_CANDIDATE",
+          "source_property": "config.packingCaseLength",
+          "source_option_property": null,
+          "target_field": "spec.cargo_length",
+          "order": 9,
+          "depends_on": [
+            "engine"
+          ],
+          "converter_id": "positive_number",
+          "missing_policy": "RESTORE_ORIGINAL",
+          "wait_condition_id": "none"
+        }
+      ]
+    }
   ]
 }

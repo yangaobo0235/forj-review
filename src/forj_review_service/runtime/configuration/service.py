@@ -10,14 +10,14 @@ from forj_review_service.businesses.page_config.inspection import (
     configuration_snapshot,
     profile_fingerprint,
 )
-from forj_review_service.businesses.page_config.loader import (
-    load_page_profiles,
-    load_snapshot_profiles,
-)
 from forj_review_service.businesses.page_config.schema import Declaration, Key
-from forj_review_service.businesses.profiles import BUSINESS_PROFILES
+from forj_review_service.businesses.profiles import CONSISTENCY_DEFAULT
 from forj_review_service.businesses.registry import BusinessRegistry
 from forj_review_service.contracts.decisions import DECISION_POLICY, ReasonCode
+from forj_review_service.contracts.engine_emissions import (
+    EngineEmissionLookupUnavailable,
+    engine_model_key,
+)
 from forj_review_service.contracts.evidence import EvidenceFact
 from forj_review_service.contracts.recognition import CheckResult, RecognitionBatchResult
 from forj_review_service.contracts.review import QrCheck, ReviewRequest
@@ -30,16 +30,30 @@ def decision_policy() -> dict:
 
 
 def validated_configuration(directory: Path):
-    pages = load_page_profiles(directory, BUSINESS_PROFILES)
-    return validate_pages(pages)
+    from forj_review_service.businesses.page_config.loader import load_page_profiles
+    from forj_review_service.businesses.page_config.state import ConfigurationState
+
+    pages = load_page_profiles(directory)
+    state = ConfigurationState(
+        tuple(d.model_dump(mode="json") for _, d in pages.sources),
+        {p.page_id: p.version for p in pages.active},
+    )
+    return validated_snapshot(state)
 
 
-def validated_snapshot(files):
-    return validate_pages(load_snapshot_profiles(files, BUSINESS_PROFILES))
+def validated_snapshot(state):
+    from dataclasses import replace
+
+    from forj_review_service.businesses.page_config.loader import load_definitions
+
+    templates = (CONSISTENCY_DEFAULT,)
+    pages = load_definitions(state.definitions, state.active)
+    pages = replace(pages, active=(*templates, *pages.active))
+    return validate_pages(pages, templates)
 
 
-def validate_pages(pages):
-    registry = BusinessRegistry((*BUSINESS_PROFILES, *pages.profiles), active_profiles=pages.active)
+def validate_pages(pages, templates):
+    registry = BusinessRegistry((*templates, *pages.profiles), active_profiles=pages.active)
     ReviewService(registry=registry, load_model=False)  # Offline: no model credentials loaded.
     return pages, registry
 
@@ -86,6 +100,7 @@ class ReplayCase(Declaration):
     batch: RecognitionBatchResult  # Required: a replay must never fall through to live recognition.
     expect: ReplayExpect
     external_results: dict[str, ExternalFixture] = Field(default_factory=dict)
+    engine_emissions: dict[str, Literal["国三", "国四", "国五", "国六"]] | None = None
 
 
 class ReplaySuite(Declaration):
@@ -94,6 +109,23 @@ class ReplaySuite(Declaration):
 
 
 class _ReplayService(ReviewService):
+    def __init__(self, *, engine_emissions, **kwargs):
+        super().__init__(**kwargs)
+        self._engine_emissions = (
+            {engine_model_key(key): value for key, value in engine_emissions.items()}
+            if engine_emissions is not None
+            else None
+        )
+
+    async def lookup_engine_emissions(self, models):
+        if self._engine_emissions is None:
+            raise EngineEmissionLookupUnavailable("离线回放未提供发动机排放参考数据")
+        return {
+            model: self._engine_emissions[model]
+            for model in models
+            if model in self._engine_emissions
+        }
+
     async def _extract_documents(self, *args, **kwargs):
         raise RuntimeError("离线回放禁止调用模型识别")
 
@@ -137,15 +169,19 @@ async def replay_suite(registry: BusinessRegistry, suite: ReplaySuite) -> dict:
             return (*fixture.checks, *fixture.qr_checks, *fixture.evidence)
 
         service = _ReplayService(
+            engine_emissions=case.engine_emissions,
             registry=registry,
             external_check_handlers={key: external_stub for key in external_ids},
             load_model=False,
         )
         profile = service.resolve_profile(case.request)
-        response, _ = await service.assist_with_batch_async(
-            case.request.model_copy(deep=True),
-            initial_batch=case.batch.model_copy(deep=True),
-        )
+        try:
+            response, _ = await service.assist_with_batch_async(
+                case.request.model_copy(deep=True),
+                initial_batch=case.batch.model_copy(deep=True),
+            )
+        finally:
+            await service.aclose()
         actual = {
             "recommendation": response.recommendation.value,
             "comparisons": {c.field: c.status.value for c in response.comparisons},

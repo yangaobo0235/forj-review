@@ -7,29 +7,11 @@
 import { manifestMaterialLabels } from "../../../platform/browser/catalog/collect-manifest.ts";
 import type { EvidenceFact } from "../../../shared/contracts/review";
 
-/**
- * 材料中文名的兜底表，**只有清单不可用时才生效**。
- *
- * 以前这里是唯一的来源，绕过了后端下发的采集清单——于是同一份材料在同一块
- * 面板上有两个名字（清单说「机动车行驶证或车辆资料」，证据卡写死成「行驶证」），
- * 动态声明的材料类型也可能被遗漏而退回「图片证据」。
- * 新增材料类型只需在后端声明，不必回来加分支。
- */
-const FALLBACK_MATERIAL_LABELS: Record<string, string> = {
-  invoice: "机动车销售发票",
-  registration_certificate: "机动车登记证书",
-  vehicle_license: "行驶证",
-  scrap_certificate: "报废机动车回收证明",
-  business_license: "营业执照",
-  identity_card: "身份证",
-};
-
-/** 材料类型 → 中文名：优先用清单，清单不可用时退回内置表。 */
+/** 材料名称来自当前清单。 */
 function materialLabel(documentType: string | null | undefined): string | null {
   if (!documentType) return null;
   return (
     manifestMaterialLabels()?.[documentType] ??
-    FALLBACK_MATERIAL_LABELS[documentType] ??
     null
   );
 }

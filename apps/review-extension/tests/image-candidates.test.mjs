@@ -30,7 +30,7 @@ test("excludes decorations and hidden images but keeps identity cards", () => {
     candidate(1, { className: "company-logo", hint: "", categoryHint: "unknown" }),
     candidate(2, { role: "presentation", hint: "", categoryHint: "unknown" }),
     candidate(5, { emptySlot: true, hint: "新车资料 暂无图片", categoryHint: "new_vehicle" }),
-    candidate(3, { hint: "身份证", categoryHint: "id_card" }),
+    candidate(3, { hint: "身份证", categoryHint: "identity_card" }),
     candidate(4),
   ], 6);
 

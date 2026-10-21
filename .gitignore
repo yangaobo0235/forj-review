@@ -53,7 +53,9 @@ logs/
 
 # Local configuration conversations, checkpoints and credentials
 .review-config/
-.review-pages.lock
+
+# Local development plans, excluded from version control.
+/docs/开发计划/
 
 # Generated delivery files; deploy/ contains only maintained sources.
 /release/

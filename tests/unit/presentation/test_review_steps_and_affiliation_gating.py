@@ -1,6 +1,5 @@
 import pytest
 
-from forj_review_service.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
 from forj_review_service.businesses.rules.affiliation import run_affiliation_subject
 from forj_review_service.contracts.recognition import RecognitionBatchResult
 from forj_review_service.contracts.review import (
@@ -10,6 +9,7 @@ from forj_review_service.contracts.review import (
     ReviewRequest,
 )
 from forj_review_service.runtime.workflow.capability_execution import execution_context
+from tests.support.pages import SCRAP_REPLACEMENT_QINGDAO
 
 
 def EvidenceFact(field: str, value: str, source_id: str, document_type: str) -> FieldObservation:
@@ -61,9 +61,7 @@ def test_affiliation_actions_follow_confirmed_subject_types_even_if_auxiliary_cu
         "qr_checks": [],
     }
 
-    result = run_affiliation_subject(
-        execution_context(state)
-    )
+    result = run_affiliation_subject(execution_context(state))
 
     assert result.checks[0].check_id == "AFFILIATION-SUBJECT-001"
     assert result.checks[0].status == "MATCH"
@@ -107,9 +105,7 @@ def test_affiliation_actions_ignore_ocr_vin_and_accept_company_labels(ocr_vin) -
         "qr_checks": [],
     }
 
-    result = run_affiliation_subject(
-        execution_context(state)
-    )
+    result = run_affiliation_subject(execution_context(state))
 
     assert [item.status for item in result.checks] == ["MATCH", "MATCH"]
     assert all("VIN" not in item.check_id for item in result.checks)

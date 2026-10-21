@@ -40,7 +40,7 @@ test("scrap replacement keeps generic physical document labels", () => {
 test("vehicle license evidence exposes the vehicle license source label", () => {
   assert.deepEqual(
     evidencePresentation({ source: "图片识别", document_type: "vehicle_license", value: "鲁A12345" }),
-    { kind: "image", label: "行驶证", value: "鲁A12345" },
+    { kind: "image", label: "机动车行驶证或车辆资料", value: "鲁A12345" },
   );
 });
 

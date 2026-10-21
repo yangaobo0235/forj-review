@@ -3,7 +3,6 @@
 from collections.abc import Iterable
 
 from forj_review_service.businesses.context import DEFAULT_BUSINESS, BusinessContext
-from forj_review_service.businesses.fields import PAGE_FIELD_LABELS
 from forj_review_service.businesses.material_policies import (
     MaterialRequirement,
     SourceSelector,
@@ -23,7 +22,6 @@ from forj_review_service.contracts.recognition import (
 from forj_review_service.contracts.review import FieldObservation, ReviewRequest
 
 FIELD_LABELS = {
-    **PAGE_FIELD_LABELS,
     "registration.covered_pages": "登记证页码",
     "new_vehicle.origin": "新车发票产地",
     "identity_card.name": "身份证姓名",

@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 
 from forj_review_service.businesses.context import DEFAULT_BUSINESS, BusinessContext
-from forj_review_service.businesses.packs.transfer import (
+from forj_review_service.businesses.rules.transfer_contract import (
     USED_PREFIX,
     USED_SCOPE,
 )

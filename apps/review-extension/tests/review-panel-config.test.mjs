@@ -34,13 +34,6 @@ test("presents stable business, field, and status labels", () => {
 });
 
 
-test("page recognition choices survive an empty rules configuration", () => {
-  assert.equal(businessLabels.vehicle_source, "车源审核");
-  assert.equal(businessLabels.transfer, "过户审核");
-  const offline = Object.values(catalogBusinessChoices(null));
-  assert.equal(offline.length, 6);
-  assert.ok(offline.includes("车源审核"));
-  assert.ok(offline.includes("过户审核"));
-  assert.ok(offline.some(label => label.includes("青岛")));
-  assert.ok(offline.some(label => label.includes("长春")));
+test("服务目录缺失时只提供自动识别占位，不展示历史页面版本", () => {
+  assert.deepEqual(catalogBusinessChoices(null), {AUTO: "自动识别"});
 });

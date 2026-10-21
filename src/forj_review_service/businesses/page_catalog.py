@@ -56,10 +56,12 @@ _DECLARED_IDENTITIES: tuple[PageIdentity, ...] = (
 
 
 def active_identities(profiles=None):
-    from forj_review_service.businesses.profiles import BUSINESS_PROFILES
+    if profiles is None:
+        from forj_review_service.businesses.profiles import CONSISTENCY_DEFAULT
 
+        profiles = (CONSISTENCY_DEFAULT,)
     active = {}
-    for profile in BUSINESS_PROFILES if profiles is None else profiles:
+    for profile in profiles:
         active[profile.page_id or f"{profile.business_type}:{profile.region}"] = profile
     result = []
     for page_id, profile in active.items():

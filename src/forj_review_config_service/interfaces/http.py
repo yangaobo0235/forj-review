@@ -11,8 +11,10 @@ from forj_review_config_service.contracts.models import (
     CreateSession,
     EditCommand,
     InteractionCommand,
+    MappingCommand,
     MessageCommand,
     RefreshPageCommand,
+    ReplayCommand,
     RevisionCommand,
 )
 
@@ -69,7 +71,11 @@ async def register_cases(command: CaseSetCommand, request: Request):
 @router.get("/sessions/{sid}/draft")
 async def session(sid: str, request: Request):
     record = await request.app.state.service.store.get(sid)
-    return {**record.model_dump(mode="json"), "chat_messages": chat_messages(record)}
+    return {
+        **record.model_dump(mode="json"), "chat_messages": chat_messages(record),
+        "page_options": request.app.state.service.kernel.page_options(record.draft),
+        "field_dependencies": request.app.state.service.kernel.field_dependencies(record.draft),
+    }
 
 
 @router.get("/sessions/{sid}/events")
@@ -78,14 +84,47 @@ async def events(sid: str, request: Request, after_seq: int = 0):
     return await request.app.state.service.store.events(sid, after_seq)
 
 
+@router.get("/sessions/{sid}/export")
+async def export_candidate(sid: str, request: Request):
+    record = await request.app.state.service.store.get(sid)
+    proof = next((result for result in reversed(list(record.tool_results.values()))
+                  if isinstance(result, dict) and result.get("kind") == "collection_trial"), None)
+    return {"candidate": record.draft, "evidence": {
+        **record.model_dump(mode="json", include={
+            "snapshot", "capture_id", "revision", "selected_fields", "selected_samples",
+            "required_samples", "decisions",
+        }), "proof": proof,
+    }}
+
+
 @router.post("/sessions/{sid}/messages")
 async def message(sid: str, command: MessageCommand, request: Request):
     return await request.app.state.service.command(sid, "message", command)
 
 
+@router.get("/sessions/{sid}/messages")
+async def messages(sid: str, request: Request, after_seq: int = 0, limit: int = 100):
+    return await request.app.state.service.store.messages(sid, after_seq, limit)
+
+
 @router.post("/sessions/{sid}/draft")
 async def edit(sid: str, command: EditCommand, request: Request):
     return await request.app.state.service.command(sid, "edit", command)
+
+
+@router.post("/sessions/{sid}/mappings")
+async def mappings(sid: str, command: MappingCommand, request: Request):
+    return await request.app.state.service.command(sid, "mappings", command)
+
+
+@router.post("/sessions/{sid}/trial")
+async def collection_trial(sid: str, command: RevisionCommand, request: Request):
+    return await request.app.state.service.command(sid, "trial", command)
+
+
+@router.post("/sessions/{sid}/replay")
+async def replay(sid: str, command: ReplayCommand, request: Request):
+    return await request.app.state.service.command(sid, "replay", command)
 
 
 @router.post("/sessions/{sid}/page")

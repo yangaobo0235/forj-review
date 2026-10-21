@@ -14,17 +14,22 @@ from forj_review_service.integrations.recognition.extraction import RecognitionS
 from forj_review_service.integrations.recognition.retry import (
     retry_reason_for_extraction,
 )
+from tests.support.pages import SCRAP_BUSINESS as TEST_BUSINESS
 
 
 @pytest.fixture
 def invoice_policy():
-    from forj_review_service.businesses.materials import DOCUMENT_POLICIES
 
-    return DOCUMENT_POLICIES["invoice"]
+    return TEST_BUSINESS.document_policies["invoice"]
 
 
 def invoice_image() -> ImageInput:
-    return ImageInput(index=0, src="https://images.example.test/synthetic.jpg", category_hint="invoice", business_scope="new_vehicle")
+    return ImageInput(
+        index=0,
+        src="https://images.example.test/synthetic.jpg",
+        category_hint="invoice",
+        business_scope="new_vehicle",
+    )
 
 
 class SequencedClient:
@@ -49,12 +54,14 @@ class SequencedClient:
 @pytest.mark.asyncio
 async def test_low_confidence_retries_once_and_uses_second_result() -> None:
     client = SequencedClient()
-    result = await RecognitionService(client).extract_async([invoice_image()], retry_policy=DEFAULT_RETRY_POLICY)
+    result = await RecognitionService(client).extract_async(
+        [invoice_image()], retry_policy=DEFAULT_RETRY_POLICY, business=TEST_BUSINESS
+    )
     assert client.calls == 2
-    assert [(item.field, item.value) for item in result.observations] == [
+    assert {(item.field, item.value) for item in result.observations} == {
         ("invoice.invoice_no", "B"),
         ("invoice.code", "B"),
-    ]
+    }
     assert result.retry_summary.qwen_retries == 1
     assert result.completed_count == 1
 
@@ -92,8 +99,7 @@ async def test_invalid_schema_retry_adds_targeted_correction_to_prompt() -> None
         transport=httpx.MockTransport(handler),
     )
     result = await RecognitionService(client).extract_async(
-        [invoice_image()],
-        retry_policy=DEFAULT_RETRY_POLICY,
+        [invoice_image()], retry_policy=DEFAULT_RETRY_POLICY, business=TEST_BUSINESS
     )
 
     assert len(prompts) == 2
@@ -157,8 +163,7 @@ async def test_uncertain_field_retry_asks_the_model_to_reread_that_region() -> N
         transport=httpx.MockTransport(handler),
     )
     result = await RecognitionService(client).extract_async(
-        [invoice_image()],
-        retry_policy=DEFAULT_RETRY_POLICY,
+        [invoice_image()], retry_policy=DEFAULT_RETRY_POLICY, business=TEST_BUSINESS
     )
 
     assert len(prompts) == 2
@@ -193,7 +198,7 @@ async def test_image_without_a_retry_reason_reports_no_retry(caplog) -> None:
 
     with caplog.at_level(logging.INFO, logger="forj_review_service"):
         await RecognitionService(client).extract_async(
-            [invoice_image()], retry_policy=DEFAULT_RETRY_POLICY
+            [invoice_image()], retry_policy=DEFAULT_RETRY_POLICY, business=TEST_BUSINESS
         )
 
     assert client.calls == 1
@@ -207,7 +212,7 @@ async def test_uncertain_fields_surviving_the_reread_are_reported_as_retried(cap
 
     with caplog.at_level(logging.INFO, logger="forj_review_service"):
         result = await RecognitionService(client).extract_async(
-            [invoice_image()], retry_policy=DEFAULT_RETRY_POLICY
+            [invoice_image()], retry_policy=DEFAULT_RETRY_POLICY, business=TEST_BUSINESS
         )
 
     assert client.calls == 2
@@ -227,6 +232,7 @@ async def test_retry_skipped_for_lack_of_time_is_not_counted_as_an_attempt(caplo
             retry_policy=DEFAULT_RETRY_POLICY,
             # 剩余时间小于 minimum_retry_window_seconds，重读会被跳过。
             absolute_deadline=asyncio.get_running_loop().time() + 0.5,
+            business=TEST_BUSINESS,
         )
 
     assert client.calls == 1

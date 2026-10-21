@@ -30,9 +30,7 @@ def context(*document_types: str, image_hints: tuple[str, ...] = ()):
 
 
 def test_business_license_proposes_company_affiliation_action() -> None:
-    result = run_set_affiliation(
-        context("business_license")
-    )
+    result = run_set_affiliation(context("business_license"))
 
     assert len(result.page_action_intents) == 1
     intent = result.page_action_intents[0]
@@ -69,8 +67,6 @@ def test_uploaded_material_hint_can_drive_the_action_when_ocr_has_no_fields() ->
 
 
 def test_both_uploaded_material_hints_suppress_the_action() -> None:
-    result = run_set_affiliation(
-        context(image_hints=("business_license", "id_card"))
-    )
+    result = run_set_affiliation(context(image_hints=("business_license", "id_card")))
 
     assert result.page_action_intents == ()

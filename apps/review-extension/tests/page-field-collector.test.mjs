@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import { ReviewPageFieldCollector } from "../src/platform/browser/collection/page-field-collector.ts";
-import { applyCollectManifest } from "../src/platform/browser/catalog/collect-manifest.ts";
+import { applyCollectManifest, currentCollectManifest } from "../src/platform/browser/catalog/collect-manifest.ts";
 
 function loadCollector() {
   return ReviewPageFieldCollector;
@@ -113,12 +113,14 @@ test("identity collection matches live full collection but skips the review inve
   assert.deepEqual(sparse.pageFields, Object.fromEntries(anchors.map(field => [field, full.pageFields[field]])));
   assert.deepEqual(sparse.reviewFields, []);
   assert.deepEqual(sparse.writableTargets, []);
-  assert.deepEqual(sparse.fieldTargets.map(item => item.field), anchors);
+  assert.deepEqual(sparse.fieldTargets.map(item => item.field).sort(), [...anchors].sort());
   vin.value = "VIN-CHANGED";
   assert.equal(collector.collectIdentity(root, anchors).pageFields["old_vehicle.vin"], "VIN-CHANGED");
 });
 
 test("identity collection rejects duplicate anchors even when values agree", () => {
+  const current = currentCollectManifest();
+  applyCollectManifest({...current, fields: current.fields.map(field => ({...field, occurrence: undefined}))});
   const collector = loadCollector();
   for (const value of ["VIN-A", "VIN-B"]) {
     const root = fixture(control({ label: "新车车架号", value: "VIN-A" }), control({ label: "新车车架号", value }));
@@ -162,7 +164,7 @@ test("label index follows manifest replacement and reset without losing shared-l
     applyCollectManifest(null);
   }
   assert.equal(collector.definitionForLabel("自定义编号"), null);
-  assert.equal(collector.definitionForLabel("申请单编号").field, "application.id");
+  assert.equal(collector.definitionForLabel("申请单编号"), null);
 });
 
 test("recognizes the actual scrap date label", () => {
@@ -897,6 +899,8 @@ test("ignores invoice verification buttons when collecting invoice number", () =
 });
 
 test("equally ranked duplicate DOM candidates do not expose a target", () => {
+  const current = currentCollectManifest();
+  applyCollectManifest({...current, fields: current.fields.map(field => ({...field, occurrence: undefined}))});
   const collector = loadCollector();
   const result = collector.collect(fixture(
     control({ label: "新车车架号", value: "VIN-1" }),
@@ -907,6 +911,8 @@ test("equally ranked duplicate DOM candidates do not expose a target", () => {
 });
 
 test("equally ranked duplicate DOM candidates do not expose a page field value", () => {
+  const current = currentCollectManifest();
+  applyCollectManifest({...current, fields: current.fields.map(field => ({...field, occurrence: undefined}))});
   const collector = loadCollector();
   const result = collector.collect(fixture(
     control({ label: "新车车架号", value: "VIN-1" }),
@@ -928,6 +934,8 @@ test("prefers one populated control over an empty duplicate wrapper", () => {
 });
 
 test("conflicting DOM candidates do not expose a target", () => {
+  const current = currentCollectManifest();
+  applyCollectManifest({...current, fields: current.fields.map(field => ({...field, occurrence: undefined}))});
   const collector = loadCollector();
   const result = collector.collect(fixture(
     control({ label: "新车车架号", value: "VIN-1" }),

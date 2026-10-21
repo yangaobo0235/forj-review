@@ -31,7 +31,7 @@ def bash_executable():
     return str(candidate) if candidate and candidate.is_file() else None
 
 
-DOCKER = r'''#!/usr/bin/env bash
+DOCKER = r"""#!/usr/bin/env bash
 set -eu
 echo "$*" >> "$FAKE_STATE/commands"
 if [[ $1 == info || $1 == network ]]; then exit 0; fi
@@ -68,7 +68,7 @@ if [[ $1 == run ]]; then
   exit 0
 fi
 exit 1
-'''
+"""
 
 
 @pytest.fixture
@@ -76,11 +76,19 @@ def host(tmp_path):
     bash = bash_executable()
     if not bash:
         pytest.skip("Deployment requires Bash (Git Bash on Windows)")
-    upload, runtime, state, commands = [tmp_path / name for name in ("upload", "runtime", "state", "bin")]
+    upload, runtime, state, commands = [
+        tmp_path / name for name in ("upload", "runtime", "state", "bin")
+    ]
     for directory in (upload, runtime, state, commands):
         directory.mkdir()
     (upload / ".env").write_text("DASHSCOPE_API_KEY=synthetic\n", encoding="utf-8")
-    for name in ("setup-server.sh", "start-server.sh", "stop-server.sh", "rollback-server.sh", "server-common.sh"):
+    for name in (
+        "setup-server.sh",
+        "start-server.sh",
+        "stop-server.sh",
+        "rollback-server.sh",
+        "server-common.sh",
+    ):
         shutil.copyfile(ROOT / "deploy/server" / name, upload / name)
     (upload / ".env.database").write_text("PGPASSWORD=synthetic\n", encoding="utf-8")
     for name in ("review.env.example", "database.env.example"):
@@ -108,8 +116,12 @@ def host(tmp_path):
             (state / "incoming").write_text(image_id(image), encoding="utf-8")
             if compose is not None:
                 (upload / "docker-compose.server.yml").write_text(compose, encoding="utf-8")
-            self.members = {"forj-review-service-main.tar": ("synthetic " + image).encode(),
-                            "release.json": (json.dumps({"image_id": image_id(image)}, indent=2) + "\n").encode()}
+            self.members = {
+                "forj-review-service-main.tar": ("synthetic " + image).encode(),
+                "release.json": (
+                    json.dumps({"image_id": image_id(image)}, indent=2) + "\n"
+                ).encode(),
+            }
             self.members["SHA256SUMS"] = "".join(
                 f"{hashlib.sha256(content).hexdigest()}  {name}\n"
                 for name, content in self.members.items()
@@ -117,12 +129,28 @@ def host(tmp_path):
             self.write_archive()
 
         def run(self, name, *, success=True, default_runtime=False):
-            env = {**os.environ, "REVIEW_DEPLOY_DIR": bash_path(upload), "REVIEW_RUNTIME_DIR": bash_path(runtime),
-                   "FAKE_STATE": bash_path(state), "TEST_BIN": bash_path(commands)}
+            env = {
+                **os.environ,
+                "REVIEW_DEPLOY_DIR": bash_path(upload),
+                "REVIEW_RUNTIME_DIR": bash_path(runtime),
+                "FAKE_STATE": bash_path(state),
+                "TEST_BIN": bash_path(commands),
+            }
             if default_runtime:
                 env.pop("REVIEW_RUNTIME_DIR", None)
-            result = subprocess.run([bash, "-c", 'if command -v cygpath >/dev/null; then TEST_BIN=$(cygpath -u "$TEST_BIN"); fi; export PATH="$TEST_BIN:$PATH"; exec bash "$REVIEW_DEPLOY_DIR/$1"', "test", name],
-                                    env=env, capture_output=True, text=True, timeout=20)
+            result = subprocess.run(
+                [
+                    bash,
+                    "-c",
+                    'if command -v cygpath >/dev/null; then TEST_BIN=$(cygpath -u "$TEST_BIN"); fi; export PATH="$TEST_BIN:$PATH"; exec bash "$REVIEW_DEPLOY_DIR/$1"',
+                    "test",
+                    name,
+                ],
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
             assert (result.returncode == 0) == success, result.stdout + result.stderr
             return result.stdout + result.stderr
 
@@ -183,16 +211,19 @@ def test_missing_previous_compose_without_container_refuses_incomplete_rollback(
     assert "load --input" not in (host.state / "commands").read_text()
 
 
-
-
-
-
 def test_stop_replace_one_package_start_preserves_scripts_and_config(host):
     host.release("old", "fixed compose")
     host.run("start-server.sh")
-    fixed = {name: (host.upload / name).stat().st_mtime_ns for name in (
-        "start-server.sh", "stop-server.sh", "rollback-server.sh", "server-common.sh", "docker-compose.server.yml",
-    )}
+    fixed = {
+        name: (host.upload / name).stat().st_mtime_ns
+        for name in (
+            "start-server.sh",
+            "stop-server.sh",
+            "rollback-server.sh",
+            "server-common.sh",
+            "docker-compose.server.yml",
+        )
+    }
     host.run("stop-server.sh")
     host.release("new", compose=None)
     host.run("start-server.sh")
@@ -236,8 +267,12 @@ def test_entrypoint_shell_syntax():
     if not bash:
         pytest.skip("Bash is unavailable")
     for script in (ROOT / "deploy/server").glob("*.sh"):
-        assert b"\r" not in script.read_bytes() and not script.read_bytes().startswith(b"\xef\xbb\xbf")
-        result = subprocess.run([bash, "-n"], input=script.read_text(encoding="utf-8"), text=True, capture_output=True)
+        assert b"\r" not in script.read_bytes() and not script.read_bytes().startswith(
+            b"\xef\xbb\xbf"
+        )
+        result = subprocess.run(
+            [bash, "-n"], input=script.read_text(encoding="utf-8"), text=True, capture_output=True
+        )
         assert result.returncode == 0, f"{script.name}: {result.stderr}"
 
 
@@ -254,7 +289,9 @@ def test_setup_is_repeatable_and_preserves_existing_credentials(host):
 def test_setup_creates_only_missing_configuration_files(host):
     (host.upload / ".env.database").unlink()
     host.run("setup-server.sh")
-    assert (host.upload / ".env.database").read_bytes() == (ROOT / "deploy/server/database.env.example").read_bytes()
+    assert (host.upload / ".env.database").read_bytes() == (
+        ROOT / "deploy/server/database.env.example"
+    ).read_bytes()
     assert (host.upload / ".env").read_text() == "DASHSCOPE_API_KEY=synthetic\n"
 
 

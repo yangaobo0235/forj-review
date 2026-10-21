@@ -8,7 +8,6 @@ import json
 from dataclasses import dataclass
 
 from forj_review_service.businesses.context import DEFAULT_BUSINESS, BusinessContext
-from forj_review_service.businesses.packs import BUSINESS_PACKS
 from forj_review_service.businesses.packs.model import MaterialDeclaration
 from forj_review_service.contracts.recognition import RETRYABLE_UNCERTAIN_PREFIX
 
@@ -163,7 +162,7 @@ def _merge_scoped(left, right, combine):
     return tuple(merged)
 
 
-def _merge_material(
+def merge_material(
     declaration: MaterialDeclaration,
     current: DocumentPolicy | None,
 ) -> DocumentPolicy:
@@ -211,28 +210,6 @@ def _merge_material(
         if current.allowed_scopes and projected.allowed_scopes
         else (),
     )
-
-
-def _merge_document_policies() -> dict[str, DocumentPolicy]:
-    """材料类型、字段白名单和识别指引的唯一来源是业务扩展包
-    `forj_review_service.businesses.packs`；本表把各业务的声明转成运行时结构。
-
-    同一份材料可能被多个业务共用（行驶证、登记证书），因此这里按
-    `document_type` **叠加**而不是覆盖。覆盖会让后声明的业务悄悄吃掉前一个
-    业务的白名单，表现为“另一个业务的字段永远识别不出来”。
-    """
-    policies: dict[str, DocumentPolicy] = {}
-    for pack in BUSINESS_PACKS.values():
-        for declaration in pack.materials:
-            policies[declaration.document_type] = _merge_material(
-                declaration, policies.get(declaration.document_type)
-            )
-    return policies
-
-
-DOCUMENT_POLICIES = _merge_document_policies()
-
-# 分类提示词的候选资料类型；新增材料类型只需在扩展包里声明。
 
 
 def document_type_choices(*, business: BusinessContext = DEFAULT_BUSINESS):

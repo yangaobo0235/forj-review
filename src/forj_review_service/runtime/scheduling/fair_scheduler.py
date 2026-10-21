@@ -11,6 +11,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
+from forj_review_service.config.event_loop import new_event_loop
+
 
 @dataclass
 class _WorkItem:
@@ -103,7 +105,7 @@ class FairAsyncScheduler:
             task.cancel()
 
     def _thread_main(self) -> None:
-        loop = asyncio.new_event_loop()
+        loop = new_event_loop()
         asyncio.set_event_loop(loop)
         self._loop = loop
         self._ready.set()

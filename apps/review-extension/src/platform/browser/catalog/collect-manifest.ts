@@ -2,7 +2,7 @@
  * 页面采集清单：后端下发的字段别名、页面分组标题和材料分组关键词。
  *
  * 职责边界：只做结构转换和暂存，不判断业务。后端是这几张表的唯一来源，
- * 各模块里的内置表只作为清单不可用时的兜底；清单一旦应用就优先使用。
+ * 清单缺失时不推导字段、材料或回填权限。
  */
 import type { FieldDefinition } from "../dom.ts";
 
@@ -47,7 +47,8 @@ function buildImageProfile(manifest: CollectManifest): ManifestImageProfile {
     // 和行驶证，拿它定类型会让一张只写着分区名的图从 `old_vehicle` 漂移成
     // `scrap_certificate`。定类型只用材料自己的名字。
     hintTypes: (() => {
-      const groupLabels = new Set(manifest.page_groups.map((group) => group.label));
+      const groupLabels = new Set(manifest.page_groups
+        .filter(group => manifest.scopes.includes(group.scope)).map(group => group.label));
       return manifest.materials
         .flatMap((item) => item.hints
           .filter((hint) => Boolean(hint) && !groupLabels.has(hint))
@@ -118,7 +119,7 @@ const isValid = (manifest: unknown): manifest is CollectManifest => {
 };
 
 /**
- * 应用后端下发的采集清单。结构不完整时返回 false 并清空，调用方继续用内置表。
+ * 应用后端下发的采集清单。结构不完整时返回 false 并清空，调用方停止业务字段采集。
  */
 export function applyCollectManifest(manifest: unknown): boolean {
   currentManifest = manifest;
@@ -130,11 +131,10 @@ export function applyCollectManifest(manifest: unknown): boolean {
     appliedFieldLabels = null;
     appliedMaterialLabels = null;
     // Explicit identity metadata that fails validation must never enable legacy writes.
-    const invalidIdentity = Boolean(manifest && typeof manifest === "object" && "record_identity_fields" in manifest);
-    appliedWritableFields = invalidIdentity ? new Set() : null;
-    appliedWritableKinds = invalidIdentity ? new Set() : null;
-    appliedIdentityAnchors = invalidIdentity ? [] : null;
-    appliedRecordIdentityFields = invalidIdentity ? [] : null;
+    appliedWritableFields = new Set();
+    appliedWritableKinds = new Set();
+    appliedIdentityAnchors = [];
+    appliedRecordIdentityFields = [];
     appliedSections = [];
     return false;
   }
@@ -153,24 +153,27 @@ export function applyCollectManifest(manifest: unknown): boolean {
   appliedMaterialLabels = Object.fromEntries(
     manifest.materials.map((item) => [item.document_type, item.label]),
   );
-  // 老版本后端不带这两项时保持 null：调用方退回内置表，而不是把"清单里
-  // 没有"当成"业务声明了不允许"，否则旧清单会让报废置换的回填全部失效。
+  // 缺少显式权限的清单不启用回填。
   appliedWritableFields = Array.isArray(manifest.writable_fields)
     ? new Set(manifest.writable_fields)
-    : null;
+    : new Set();
   appliedWritableKinds = Array.isArray(manifest.writable_control_kinds)
     ? new Set(manifest.writable_control_kinds)
     : new Set();
   appliedIdentityAnchors = Array.isArray(manifest.identity_anchors)
     ? manifest.identity_anchors
-    : null;
-  appliedRecordIdentityFields = Array.isArray(manifest.record_identity_fields) ? manifest.record_identity_fields : null;
+    : [];
+  appliedRecordIdentityFields = Array.isArray(manifest.record_identity_fields) ? manifest.record_identity_fields : [];
   return true;
 }
 
-/** 已应用的上传槽位表；没有应用清单时返回 null，调用方退回内置表。 */
+/** 已应用的上传槽位表；没有应用清单时返回 null，调用方保持未配置状态。 */
 export function manifestSlotEntries(): [string, string][] | null {
   return appliedSlots;
+}
+
+export function manifestActions() {
+  return isValid(currentManifest) ? currentManifest.actions ?? [] : [];
 }
 
 /** 唯一命中的原始区域标题；多个区域同时出现时保留歧义。 */
@@ -182,7 +185,7 @@ export function manifestSectionFromText(text: string): string | null {
   return keys.size === 1 ? matching[0].key : null;
 }
 
-/** 已应用的图片筛选依据；没有应用清单时返回 null，调用方退回内置规则。 */
+/** 已应用的图片筛选依据；没有应用清单时返回 null，调用方保持未配置状态。 */
 export function manifestImageProfile(): ManifestImageProfile | null {
   return appliedImageProfile;
 }
@@ -214,7 +217,7 @@ export function manifestDocumentType(category: string): string | null {
   return appliedMaterialLabels && Object.hasOwn(appliedMaterialLabels, category) ? category : null;
 }
 
-/** 已应用的字段定义；没有应用清单时返回 null，调用方退回内置表。 */
+/** 已应用的字段定义；没有应用清单时返回 null，调用方保持未配置状态。 */
 export function manifestFieldDefinitions(): Record<string, FieldDefinition> | null {
   return appliedFields;
 }
@@ -225,7 +228,7 @@ export function manifestGroupLabelEntries(): [string, { scope: string; title: st
 }
 
 /**
- * 已应用的字段中文标签；没有应用清单时返回 null，调用方退回内置表。
+ * 已应用的字段中文标签；没有应用清单时返回 null，调用方保持未配置状态。
  *
  * 侧边栏和 Content Script 是两个独立的运行时，各自应用同一份清单：采集
  * 逻辑在 Content Script，展示用的中文名在侧边栏。
@@ -240,7 +243,7 @@ export function manifestMaterialLabels(): Record<string, string> | null {
 }
 
 /**
- * 已应用的写回字段白名单；没有应用清单时返回 null，调用方退回内置表。
+ * 已应用的写回字段白名单；没有应用清单时返回 null，调用方保持未配置状态。
  *
  * 写回是不可逆的页面操作，这份白名单是浏览器的硬边界：清单之外的字段
  * 一律拒绝写入，即使消息里带了字段名。
@@ -260,7 +263,7 @@ export function manifestWritableControlKinds(): Set<string> | null {
 }
 
 /**
- * 已应用的页面指纹锚点；没有应用清单时返回 null，调用方退回内置表。
+ * 已应用的页面指纹锚点；没有应用清单时返回 null，调用方保持未配置状态。
  *
  * 锚点写死在浏览器里可能无法匹配业务字段；空指纹会拒绝页面写回和原图定位。
  */
@@ -272,7 +275,7 @@ export function manifestRecordIdentityFields(): string[] | null {
   return appliedRecordIdentityFields;
 }
 
-/** 拉取某个业务的采集清单；失败返回 null，调用方退回内置表。 */
+/** 拉取某个业务的采集清单；失败返回 null，调用方保持未配置状态。 */
 export async function fetchCollectManifest(
   baseUrl: string,
   businessType: string,

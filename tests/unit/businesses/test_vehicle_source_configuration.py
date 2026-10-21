@@ -7,7 +7,6 @@ from forj_review_service.businesses.field_policies import field_policy
 from forj_review_service.businesses.packs.model import build_collect_manifest
 from forj_review_service.businesses.page_config.compiler import compile_page
 from forj_review_service.businesses.page_config.schema import PageDefinition
-from forj_review_service.businesses.profiles import VEHICLE_SOURCE_DEFAULT as PROFILE
 from forj_review_service.businesses.rules.vehicle_source_model import run_vehicle_source_model
 from forj_review_service.capabilities.specs import ReviewExecutionContext
 from forj_review_service.contracts.evidence import FieldObservation
@@ -15,6 +14,8 @@ from forj_review_service.contracts.recognition import RecognitionBatchResult
 from forj_review_service.contracts.review import FieldStatus, ReviewFieldSnapshot, ReviewRequest
 from forj_review_service.evidence.comparison.aggregate import aggregate_by_authority
 from forj_review_service.presentation.routing import build_review_tasks
+from tests.support.pages import VEHICLE_BUSINESS as TEST_BUSINESS
+from tests.support.pages import VEHICLE_SOURCE_DEFAULT as PROFILE
 
 
 def observation(field, value, kind="vehicle_license", **changes):
@@ -155,7 +156,6 @@ def test_configuration_cannot_enable_model_evidence_rule_without_vin_identity_ch
         "title": "车源示例",
         "paths": ["/example"],
         "scopes": ["vehicle"],
-        "enable_rules": ["vehicle_source_model"],
         "materials": [{"document_type": "vehicle_nameplate", "label": "铭牌"}],
         "fields": [
             {
@@ -166,6 +166,24 @@ def test_configuration_cannot_enable_model_evidence_rule_without_vin_identity_ch
             }
             for key in ("vehicle.brand_model", "vehicle.announcement_model", "vehicle.engine_model")
         ],
+        "settings": {
+            "capability_specs": [
+                {
+                    "capability_id": "vehicle_source_model",
+                    "kind": "RULE",
+                    "version": "1.0",
+                    "stage": "POST_COMPARE",
+                    "input_facts": (),
+                    "output_facts": (),
+                    "required": True,
+                    "dependencies": (),
+                    "timeout_seconds": 30,
+                    "retries": 0,
+                    "failure_policy": "MANUAL_REVIEW",
+                }
+            ],
+            "binding_declarations": [{"capability_id": "vehicle_source_model"}],
+        },
     }
     with pytest.raises(ValueError, match=r"vehicle_source_model.*vehicle.vin"):
         compile_page(PageDefinition.model_validate(data))
@@ -204,19 +222,25 @@ def test_search_can_use_license_model_when_auxiliary_has_only_engine():
     ],
 )
 def test_ordinary_fields_only_use_license_full_values(field, value, other):
-    policy = field_policy(field)
+    policy = field_policy(field, business=TEST_BUSINESS)
     page = FieldObservation(field=field, value=value, source_type="page", source_id="page")
     result = aggregate_by_authority(
         field,
         [observation(field, value), observation(field, other, "registration_certificate"), page],
         policy.authority,
+        business=TEST_BUSINESS,
     )
     assert result.status == FieldStatus.MATCH
     missing_license = aggregate_by_authority(
-        field, [observation(field, value, "vehicle_nameplate"), page], policy.authority
+        field,
+        [observation(field, value, "vehicle_nameplate"), page],
+        policy.authority,
+        business=TEST_BUSINESS,
     )
     assert missing_license.status != FieldStatus.MATCH
-    mismatch = aggregate_by_authority(field, [observation(field, other), page], policy.authority)
+    mismatch = aggregate_by_authority(
+        field, [observation(field, other), page], policy.authority, business=TEST_BUSINESS
+    )
     assert mismatch.status == FieldStatus.CONFLICT
 
 

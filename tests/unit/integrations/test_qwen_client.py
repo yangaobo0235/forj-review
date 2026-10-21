@@ -3,7 +3,6 @@ import json
 import httpx
 import pytest
 
-from forj_review_service.businesses.materials import DOCUMENT_POLICIES
 from forj_review_service.config.settings import QwenConfig
 from forj_review_service.contracts.recognition import QwenExtraction
 from forj_review_service.integrations.recognition.client import (
@@ -12,6 +11,7 @@ from forj_review_service.integrations.recognition.client import (
     QwenResponseSyntaxError,
     parse_qwen_extraction,
 )
+from tests.support.pages import SCRAP_BUSINESS as TEST_BUSINESS
 
 CONFIG = QwenConfig("key", "https://dashscope.test/v1", "qwen3.7-plus")
 IMAGE = {"index": 2, "src": "https://images.example.test/synthetic.jpg"}
@@ -26,13 +26,15 @@ async def test_qwen_client_classifies_without_requesting_fields() -> None:
         assert payload["enable_thinking"] is False
         assert "不要提取业务字段" in prompt
         assert "invoice.code" not in prompt
-        assert payload["messages"][0]["content"][1]["image_url"]["url"].startswith("https://images.example.test/synthetic.jpg")
+        assert payload["messages"][0]["content"][1]["image_url"]["url"].startswith(
+            "https://images.example.test/synthetic.jpg"
+        )
         assert payload["response_format"] == {"type": "json_object"}
         result = {"document_type": "invoice", "confidence": 0.98, "reason": "含发票标题"}
         return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(result)}}]})
 
     client = QwenClient(CONFIG, transport=httpx.MockTransport(handler))
-    result = await client.classify_document(IMAGE)
+    result = await client.classify_document(IMAGE, business=TEST_BUSINESS)
 
     assert result.document_type == "invoice"
     assert result.confidence == 0.98
@@ -60,7 +62,7 @@ async def test_qwen_client_uses_policy_prompt_and_preserves_evidence_box() -> No
     client = QwenClient(CONFIG, transport=httpx.MockTransport(handler))
     result = await client.extract_fields(
         {**IMAGE, "business_scope": "new_vehicle"},
-        DOCUMENT_POLICIES["invoice"],
+        TEST_BUSINESS.document_policies["invoice"],
     )
 
     assert result.fields == {"invoice.invoice_no": "123"}
@@ -71,7 +73,7 @@ async def test_qwen_client_uses_policy_prompt_and_preserves_evidence_box() -> No
 async def test_qwen_client_requires_api_key() -> None:
     client = QwenClient(QwenConfig(None, "https://dashscope.test/v1", "qwen3.7-plus"))
     with pytest.raises(RuntimeError, match="DASHSCOPE_API_KEY"):
-        await client.extract_fields(IMAGE, DOCUMENT_POLICIES["invoice"])
+        await client.extract_fields(IMAGE, TEST_BUSINESS.document_policies["invoice"])
 
 
 @pytest.mark.asyncio
@@ -93,7 +95,7 @@ async def test_qwen_client_unknown_prompt_classifies_and_extracts_in_one_request
         )
 
     client = QwenClient(CONFIG, transport=httpx.MockTransport(handler))
-    result = await client.extract_unknown(IMAGE)
+    result = await client.extract_unknown(IMAGE, business=TEST_BUSINESS)
 
     assert result.document_type == "invoice"
     assert result.fields == {"invoice.code": "123"}
@@ -123,7 +125,7 @@ async def test_qwen_client_restricts_new_registration_certificate_prompt() -> No
         "document_type_hint": "registration_certificate",
     }
 
-    result = await client.extract_unknown(registration_image)
+    result = await client.extract_unknown(registration_image, business=TEST_BUSINESS)
 
     assert result.fields == {"vehicle.vin": "TESTVIN"}
 
@@ -145,7 +147,7 @@ async def test_qwen_client_accepts_fenced_extraction_json() -> None:
 
     client = QwenClient(CONFIG, transport=httpx.MockTransport(handler))
 
-    extraction = await client.extract_unknown(IMAGE)
+    extraction = await client.extract_unknown(IMAGE, business=TEST_BUSINESS)
 
     assert extraction.fields == {"vehicle_license.vin": "TESTVIN"}
 
@@ -167,7 +169,7 @@ async def test_qwen_client_accepts_extraction_json_surrounded_by_text() -> None:
 
     client = QwenClient(CONFIG, transport=httpx.MockTransport(handler))
 
-    extraction = await client.extract_unknown(IMAGE)
+    extraction = await client.extract_unknown(IMAGE, business=TEST_BUSINESS)
 
     assert extraction.document_type == "vehicle_license"
 
@@ -189,7 +191,7 @@ async def test_qwen_client_prefers_fenced_json_over_a_preceding_example() -> Non
 
     client = QwenClient(CONFIG, transport=httpx.MockTransport(handler))
 
-    extraction = await client.extract_unknown(IMAGE)
+    extraction = await client.extract_unknown(IMAGE, business=TEST_BUSINESS)
 
     assert extraction.document_type == "vehicle_license"
     assert extraction.fields == {"vehicle_license.vin": "TESTVIN"}
@@ -210,7 +212,7 @@ async def test_qwen_client_rejects_multiple_unfenced_json_objects() -> None:
     client = QwenClient(CONFIG, transport=httpx.MockTransport(handler))
 
     with pytest.raises(RuntimeError, match="响应格式无效"):
-        await client.extract_unknown(IMAGE)
+        await client.extract_unknown(IMAGE, business=TEST_BUSINESS)
 
 
 @pytest.mark.asyncio
@@ -230,7 +232,7 @@ async def test_qwen_client_normalizes_nullable_extraction_collections() -> None:
 
     client = QwenClient(CONFIG, transport=httpx.MockTransport(handler))
 
-    extraction = await client.extract_unknown(IMAGE)
+    extraction = await client.extract_unknown(IMAGE, business=TEST_BUSINESS)
 
     assert extraction.fields == {}
     assert extraction.evidence_regions == []
@@ -255,19 +257,23 @@ async def test_qwen_client_drops_null_extraction_field_values() -> None:
 
     client = QwenClient(CONFIG, transport=httpx.MockTransport(handler))
 
-    extraction = await client.extract_unknown(IMAGE)
+    extraction = await client.extract_unknown(IMAGE, business=TEST_BUSINESS)
 
     assert extraction.fields == {"vehicle_license.vin": "TESTVIN"}
 
 
 def test_parser_drops_a_field_path_echoed_as_its_own_value() -> None:
-    extraction = parse_qwen_extraction(json.dumps({
-        "document_type": "invoice",
-        "fields": {
-            "invoice.code": "invoice.code",
-            "invoice.amount": "355000",
-        },
-    }))
+    extraction = parse_qwen_extraction(
+        json.dumps(
+            {
+                "document_type": "invoice",
+                "fields": {
+                    "invoice.code": "invoice.code",
+                    "invoice.amount": "355000",
+                },
+            }
+        )
+    )
 
     assert extraction.fields == {"invoice.amount": "355000"}
 
@@ -283,7 +289,7 @@ async def test_qwen_client_rejects_extraction_without_json_object() -> None:
     client = QwenClient(CONFIG, transport=httpx.MockTransport(handler))
 
     with pytest.raises(RuntimeError, match="响应格式无效"):
-        await client.extract_unknown(IMAGE)
+        await client.extract_unknown(IMAGE, business=TEST_BUSINESS)
 
 
 @pytest.mark.asyncio
@@ -304,7 +310,7 @@ async def test_qwen_client_retries_rate_limit_once() -> None:
     client = QwenClient(CONFIG, transport=httpx.MockTransport(handler))
     result = await client.extract_fields(
         {**IMAGE, "business_scope": "new_vehicle"},
-        DOCUMENT_POLICIES["invoice"],
+        TEST_BUSINESS.document_policies["invoice"],
     )
 
     assert attempts == 2
@@ -312,13 +318,17 @@ async def test_qwen_client_retries_rate_limit_once() -> None:
 
 
 def test_qwen_parser_drops_common_field_label_echoes() -> None:
-    extraction = parse_qwen_extraction(json.dumps({
-        "document_type": "invoice",
-        "fields": {
-            "invoice.amount": "价税合计（小写）",
-            "invoice.invoice_no": "123",
-        },
-    }))
+    extraction = parse_qwen_extraction(
+        json.dumps(
+            {
+                "document_type": "invoice",
+                "fields": {
+                    "invoice.amount": "价税合计（小写）",
+                    "invoice.invoice_no": "123",
+                },
+            }
+        )
+    )
 
     assert extraction.fields == {"invoice.invoice_no": "123"}
 
@@ -354,15 +364,17 @@ def test_qwen_parser_reports_safe_schema_paths_without_field_values() -> None:
 
 
 def test_qwen_extraction_accepts_structured_registration_values() -> None:
-    extraction = QwenExtraction.model_validate({
-        "document_type": "registration_certificate",
-        "fields": {
-            "registration.covered_pages": [1, 2],
-            "registration.transfer_records": [
-                {"owner": "甲公司", "date": "2025-01-02", "page": 2, "order": 1},
-            ],
-        },
-    })
+    extraction = QwenExtraction.model_validate(
+        {
+            "document_type": "registration_certificate",
+            "fields": {
+                "registration.covered_pages": [1, 2],
+                "registration.transfer_records": [
+                    {"owner": "甲公司", "date": "2025-01-02", "page": 2, "order": 1},
+                ],
+            },
+        }
+    )
 
     assert extraction.fields["registration.covered_pages"] == [1, 2]
 
@@ -403,22 +415,30 @@ def test_qwen_parser_normalizes_single_uncertain_field_string(
     raw_value: str,
     expected: list[str],
 ) -> None:
-    extraction = parse_qwen_extraction(json.dumps({
-        "document_type": "registration_certificate",
-        "fields": {},
-        "uncertain_fields": raw_value,
-    }))
+    extraction = parse_qwen_extraction(
+        json.dumps(
+            {
+                "document_type": "registration_certificate",
+                "fields": {},
+                "uncertain_fields": raw_value,
+            }
+        )
+    )
 
     assert extraction.uncertain_fields == expected
 
 
 def test_qwen_parser_still_rejects_non_string_uncertain_field_values() -> None:
     with pytest.raises(QwenResponseSchemaError) as captured:
-        parse_qwen_extraction(json.dumps({
-            "document_type": "registration_certificate",
-            "fields": {},
-            "uncertain_fields": {"field": "registration.transfer_records"},
-        }))
+        parse_qwen_extraction(
+            json.dumps(
+                {
+                    "document_type": "registration_certificate",
+                    "fields": {},
+                    "uncertain_fields": {"field": "registration.transfer_records"},
+                }
+            )
+        )
 
     assert captured.value.detail == "uncertain_fields:list_type"
 
@@ -426,20 +446,26 @@ def test_qwen_parser_still_rejects_non_string_uncertain_field_values() -> None:
 @pytest.mark.asyncio
 async def test_qwen_client_logs_duration_and_token_usage(caplog) -> None:
     """每次模型调用留一行耗时与用量：没有它，"慢在网络还是慢在推理"无法判断。"""
+
     def handler(request: httpx.Request) -> httpx.Response:
         result = {"document_type": "invoice", "confidence": 0.98, "reason": "含发票标题"}
-        return httpx.Response(200, json={
-            "choices": [{"message": {"content": json.dumps(result)}}],
-            "usage": {
-                "prompt_tokens": 4210,
-                "completion_tokens": 186,
-                "prompt_tokens_details": {"image_tokens": 3980},
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": json.dumps(result)}}],
+                "usage": {
+                    "prompt_tokens": 4210,
+                    "completion_tokens": 186,
+                    "prompt_tokens_details": {"image_tokens": 3980},
+                },
             },
-        })
+        )
 
     client = QwenClient(CONFIG, transport=httpx.MockTransport(handler))
     with caplog.at_level("INFO", logger="forj_review_service"):
-        await client.classify_document({**IMAGE, "image_id": "old_vehicle-03"})
+        await client.classify_document(
+            {**IMAGE, "image_id": "old_vehicle-03"}, business=TEST_BUSINESS
+        )
 
     lines = [
         record.getMessage()
@@ -462,6 +488,7 @@ async def test_qwen_client_logs_duration_and_token_usage(caplog) -> None:
 @pytest.mark.asyncio
 async def test_qwen_client_logs_rate_limited_failure_without_leaking_body(caplog) -> None:
     """限流和失败同样要留耗时与原因码，但响应正文一个字都不能进日志。"""
+
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(429, json={"error": "含身份证号 110101199001011234"})
 
@@ -470,7 +497,7 @@ async def test_qwen_client_logs_rate_limited_failure_without_leaking_body(caplog
         caplog.at_level("INFO", logger="forj_review_service"),
         pytest.raises(RuntimeError, match="HTTP 429"),
     ):
-        await client.classify_document({**IMAGE, "image_id": "id_card-01"})
+        await client.classify_document({**IMAGE, "image_id": "id_card-01"}, business=TEST_BUSINESS)
 
     lines = [
         record.getMessage()

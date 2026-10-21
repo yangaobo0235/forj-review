@@ -14,45 +14,9 @@ import {
 
   const normalize = (value: unknown) => String(value || "").replace(/\s+/g, "").replace(/[：:]+$/, "");
 
-  const labels = new Map([
-    ["报废车辆资料", { scope: "old_vehicle", title: "报废车辆资料" }],
-    // 生产报废置换页使用“报废车辆信息”作为分组标题；两种标题
-    // 指向同一个旧车材料槽位，不能因为文案不同而丢失业务分区。
-    ["报废车辆信息", { scope: "old_vehicle", title: "报废车辆信息" }],
-    ["报废车资料", { scope: "old_vehicle", title: "报废车资料" }],
-    ["旧车资料", { scope: "old_vehicle", title: "旧车资料" }],
-    ["新车资料", { scope: "new_vehicle", title: "新车资料" }],
-    ["新车及发票信息", { scope: "new_vehicle", title: "新车及发票信息" }],
-    ["新车及发票资料", { scope: "new_vehicle", title: "新车及发票资料" }],
-    ["发票资料", { scope: "new_vehicle", title: "发票资料" }],
-    ["营业执照", { scope: "business_license", title: "营业执照" }],
-    ["身份证正面", { scope: "identity", title: "身份证正面" }],
-    ["身份证反面", { scope: "identity", title: "身份证反面" }],
-    ["身份证", { scope: "identity", title: "身份证" }],
-    ["其他图片", { scope: "other", title: "其他图片" }],
-  ]);
-
-  const physicalDocumentTypes = new Map([
-    ["scrap_certificate", "scrap_certificate"],
-    ["vehicle_license", "vehicle_license"],
-    ["registration_certificate", "registration_certificate"],
-    ["vehicle_nameplate", "vehicle_nameplate"],
-    ["invoice", "invoice"],
-    ["business_license", "business_license"],
-    ["id_card", "identity_card"],
-    ["identity_card", "identity_card"],
-  ]);
-
-  /**
-   * 页面分组标题表：后端下发了采集清单就用清单，否则用内置表兜底。
-   * 清单里的标题同样按去空白归一化，保证与页面实际文案的匹配方式一致。
-   */
-  const groupLabels = () => {
-    const entries = manifestGroupLabelEntries();
-    return entries
-      ? new Map(entries.map(([label, value]) => [normalize(label), value]))
-      : labels;
-  };
+  const groupLabels = () => new Map(
+    (manifestGroupLabelEntries() ?? []).map(([label, value]) => [normalize(label), value]),
+  );
 
   const scopeForLabel = (text: string) => groupLabels().get(normalize(text)) || null;
 
@@ -64,7 +28,6 @@ import {
 
   const documentTypeFor = (businessScope: string, groupOrder: number, categoryHint: string) =>
     manifestDocumentType(String(categoryHint || ""))
-    || physicalDocumentTypes.get(String(categoryHint || ""))
     || slotsFor().get(`${businessScope || "unknown"}:${groupOrder || 0}`)
     || "unknown";
 

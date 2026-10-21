@@ -1,51 +1,14 @@
 from forj_review_service.businesses.materials import (
-    DOCUMENT_POLICIES,
     build_classification_prompt,
     build_unknown_extraction_prompt,
 )
-
-
-def test_each_supported_document_has_a_specific_allowlist() -> None:
-    assert DOCUMENT_POLICIES["scrap_certificate"].fields == (
-        "vehicle.type",
-        "old_vehicle.recycle_date",
-        "scrap_certificate.certificate_no",
-        "vehicle.vin",
-        "vehicle.plate_no",
-        "vehicle.owner",
-    )
-    assert DOCUMENT_POLICIES["vehicle_license"].fields == (
-        "vehicle.type", "vehicle.vin", "vehicle.plate_no", "vehicle.owner", "vehicle.registration_date",
-        "vehicle.engine_no", "vehicle.license_type", "vehicle.issue_date", "vehicle.brand_model",
-    )
-    assert DOCUMENT_POLICIES["registration_certificate"].fields == (
-        "vehicle.owner", "vehicle.vin", "vehicle.engine_model", "vehicle.type",
-        "vehicle.fuel_type", "vehicle.emission_standard", "vehicle.brand",
-        "vehicle.registration_date", "registration.covered_pages",
-        "vehicle.announcement_model",
-        "transfer_registration.vin",
-    )
-    assert DOCUMENT_POLICIES["invoice"].fields == (
-        "invoice.invoice_no",
-        "invoice.amount",
-        "invoice.invoice_date",
-        "new_vehicle.origin",
-        "invoice.terminal_certificate_no",
-        "vehicle.vin",
-        "vehicle.owner",
-        "transfer_new_invoice.invoice_date",
-        "transfer_new_invoice.invoice_no",
-        "transfer_new_invoice.amount", "transfer_new_invoice.vin",
-    )
-    assert DOCUMENT_POLICIES["business_license"].fields == (
-        "business_license.company_name",
-        "business_license.legal_representative",
-        "business_license.unified_social_credit_code",
-    )
+from tests.support.pages import SCRAP_BUSINESS as TEST_BUSINESS
 
 
 def test_prompts_restrict_model_scope_and_output_contract() -> None:
-    invoice_prompt = DOCUMENT_POLICIES["invoice"].build_extraction_prompt(image_index=3)
+    invoice_prompt = TEST_BUSINESS.document_policies["invoice"].build_extraction_prompt(
+        image_index=3
+    )
 
     assert "机动车销售发票" in invoice_prompt
     assert "invoice.code" in invoice_prompt
@@ -53,13 +16,13 @@ def test_prompts_restrict_model_scope_and_output_contract() -> None:
     assert '"box"' in invoice_prompt
     assert "image_index=3" in invoice_prompt
 
-    classification_prompt = build_classification_prompt()
+    classification_prompt = build_classification_prompt(business=TEST_BUSINESS)
     assert "unsupported" in classification_prompt
     assert "不要提取业务字段" in classification_prompt
     assert "identity_card" in classification_prompt
     assert "身份证号码" in classification_prompt
 
-    identity_prompt = DOCUMENT_POLICIES["identity_card"].build_extraction_prompt(
+    identity_prompt = TEST_BUSINESS.document_policies["identity_card"].build_extraction_prompt(
         image_index=4,
         business_scope="identity",
     )
@@ -69,29 +32,35 @@ def test_prompts_restrict_model_scope_and_output_contract() -> None:
 
 
 def test_materials_keep_scrap_scopes_isolated() -> None:
-    policy = DOCUMENT_POLICIES["vehicle_license"]
+    policy = TEST_BUSINESS.document_policies["vehicle_license"]
     assert policy.fields_for_scope("old_vehicle") == (
-        "vehicle.type", "vehicle.vin", "vehicle.plate_no", "vehicle.owner",
+        "vehicle.type",
+        "vehicle.vin",
+        "vehicle.plate_no",
+        "vehicle.owner",
     )
     assert policy.fields_for_scope("new_vehicle") == (
-        "vehicle.vin", "vehicle.plate_no", "vehicle.owner", "vehicle.registration_date",
+        "vehicle.vin",
+        "vehicle.plate_no",
+        "vehicle.owner",
+        "vehicle.registration_date",
     )
 
 
 def test_engine_model_is_extracted_only_from_auxiliary_materials() -> None:
     engine_field = "vehicle.engine_model"
 
-    assert engine_field in DOCUMENT_POLICIES["registration_certificate"].fields
+    assert engine_field in TEST_BUSINESS.document_policies["registration_certificate"].fields
     assert all(
         engine_field not in policy.fields
-        for document_type, policy in DOCUMENT_POLICIES.items()
+        for document_type, policy in TEST_BUSINESS.document_policies.items()
         if document_type not in {"registration_certificate", "vehicle_nameplate"}
     )
-    assert "registration_certificate" in build_classification_prompt()
+    assert "registration_certificate" in build_classification_prompt(business=TEST_BUSINESS)
 
 
 def test_registration_certificate_prompt_fields_follow_business_scope() -> None:
-    policy = DOCUMENT_POLICIES["registration_certificate"]
+    policy = TEST_BUSINESS.document_policies["registration_certificate"]
 
     old_prompt = policy.build_extraction_prompt(
         image_index=2,
@@ -115,17 +84,25 @@ def test_registration_certificate_prompt_fields_follow_business_scope() -> None:
 def test_new_owner_allowlist_excludes_registration_certificate() -> None:
     from forj_review_service.businesses.field_policies import field_policy
 
-    policy = field_policy("new_vehicle.owner")
+    policy = field_policy("new_vehicle.owner", business=TEST_BUSINESS)
     assert policy is not None
     assert policy.allowed_document_types == ("vehicle_license", "invoice")
 
 
 def test_scrap_replacement_prompts_use_scope_specific_allowlists_and_confusion_guards() -> None:
-    old_license = DOCUMENT_POLICIES["vehicle_license"].build_extraction_prompt(1, "old_vehicle")
-    new_license = DOCUMENT_POLICIES["vehicle_license"].build_extraction_prompt(1, "new_vehicle")
-    old_registration = DOCUMENT_POLICIES["registration_certificate"].build_extraction_prompt(2, "old_vehicle")
-    new_registration = DOCUMENT_POLICIES["registration_certificate"].build_extraction_prompt(2, "new_vehicle")
-    invoice = DOCUMENT_POLICIES["invoice"].build_extraction_prompt(3, "new_vehicle")
+    old_license = TEST_BUSINESS.document_policies["vehicle_license"].build_extraction_prompt(
+        1, "old_vehicle"
+    )
+    new_license = TEST_BUSINESS.document_policies["vehicle_license"].build_extraction_prompt(
+        1, "new_vehicle"
+    )
+    old_registration = TEST_BUSINESS.document_policies[
+        "registration_certificate"
+    ].build_extraction_prompt(2, "old_vehicle")
+    new_registration = TEST_BUSINESS.document_policies[
+        "registration_certificate"
+    ].build_extraction_prompt(2, "new_vehicle")
+    invoice = TEST_BUSINESS.document_policies["invoice"].build_extraction_prompt(3, "new_vehicle")
 
     assert "发动机号码不是发动机型号" in old_license
     assert "注册日期" in new_license
@@ -138,15 +115,15 @@ def test_scrap_replacement_prompts_use_scope_specific_allowlists_and_confusion_g
 
 
 def test_combined_prompt_restricts_registration_fields_by_business_scope() -> None:
-    old_prompt = build_unknown_extraction_prompt(2, "old_vehicle")
-    new_prompt = build_unknown_extraction_prompt(2, "new_vehicle")
+    old_prompt = build_unknown_extraction_prompt(2, "old_vehicle", business=TEST_BUSINESS)
+    new_prompt = build_unknown_extraction_prompt(2, "new_vehicle", business=TEST_BUSINESS)
 
     assert "vehicle.engine_model" in old_prompt
     assert "vehicle.engine_model" not in new_prompt
 
 
 def test_combined_prompt_uses_physical_vehicle_type_and_neutral_fields() -> None:
-    prompt = build_unknown_extraction_prompt(image_index=2)
+    prompt = build_unknown_extraction_prompt(image_index=2, business=TEST_BUSINESS)
 
     assert "vehicle_license" in prompt
     assert "vehicle.vin" in prompt
@@ -160,7 +137,7 @@ def test_retired_transfer_fields_are_not_in_any_material_whitelist() -> None:
     """新版过户不推断初始车主和过户记录；旧版推断字段不能重新混入识别白名单。"""
     retired = {"registration.initial_owner", "registration.transfer_records"}
 
-    for document_type, policy in DOCUMENT_POLICIES.items():
+    for document_type, policy in TEST_BUSINESS.document_policies.items():
         for scope in ("old_vehicle", "new_vehicle", "transfer", "unknown"):
             leaked = retired & set(policy.fields_for_scope(scope))
             assert not leaked, (

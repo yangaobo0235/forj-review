@@ -1,6 +1,5 @@
 """新旧车所有人一致性：先比页面原值，再比对材料。"""
 
-from forj_review_service.businesses.profiles import SCRAP_REPLACEMENT_QINGDAO
 from forj_review_service.businesses.rules.owner_consistency import (
     OWNER_CONSISTENCY_CHECK_ID,
     build_owner_consistency_check,
@@ -9,6 +8,7 @@ from forj_review_service.capabilities.specs import ReviewExecutionContext
 from forj_review_service.contracts.recognition import RecognitionBatchResult
 from forj_review_service.contracts.review import FieldObservation, ReviewRequest
 from forj_review_service.presentation.routing import build_review_tasks
+from tests.support.pages import SCRAP_REPLACEMENT_QINGDAO
 
 OLD = "old_vehicle"
 NEW = "new_vehicle"
@@ -134,8 +134,16 @@ def test_page_mismatch_is_stated_under_the_page_values_block() -> None:
 def test_a_close_match_is_highlighted_character_by_character() -> None:
     """差一个字也是冲突：整串标红会让审核员看不出差在哪。"""
     observations = all_materials()
-    observations[0] = observation("old_vehicle.owner", "南城珺顺物流有限公司", "vehicle_license", OLD)
-    check = run(page_fields={"old_vehicle.owner": "南城瑞顺物流有限公司", "new_vehicle.owner": "南城瑞顺物流有限公司"}, observations=observations)
+    observations[0] = observation(
+        "old_vehicle.owner", "南城珺顺物流有限公司", "vehicle_license", OLD
+    )
+    check = run(
+        page_fields={
+            "old_vehicle.owner": "南城瑞顺物流有限公司",
+            "new_vehicle.owner": "南城瑞顺物流有限公司",
+        },
+        observations=observations,
+    )
 
     differing = check.values[0]
     assert differing.conflicting is True
@@ -186,7 +194,9 @@ def test_one_material_submitted_several_times_yields_one_value() -> None:
 def test_unreadable_material_values_do_not_invent_a_conflict() -> None:
     """「无法识别」不是一个人名，不能被当作与页面不符。"""
     observations = all_materials()
-    observations[1] = observation("old_vehicle.owner", "无法识别", "scrap_certificate", OLD, index=2)
+    observations[1] = observation(
+        "old_vehicle.owner", "无法识别", "scrap_certificate", OLD, index=2
+    )
     check = run(observations=observations)
 
     assert check.status == "INSUFFICIENT"
@@ -241,7 +251,9 @@ def test_uncertain_owner_difference_requires_review_but_reliable_difference_conf
 
 
 def test_missing_other_side_does_not_hide_confirmed_owner_conflict():
-    check = run(observations=[observation("old_vehicle.owner", "明确不同的公司", "vehicle_license", OLD)])
+    check = run(
+        observations=[observation("old_vehicle.owner", "明确不同的公司", "vehicle_license", OLD)]
+    )
     assert check.status == "CONFLICT"
 
 

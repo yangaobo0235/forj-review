@@ -15,6 +15,7 @@ from forj_review_service.integrations.recognition.client import QwenClient
 from forj_review_service.integrations.recognition.extraction import RecognitionService
 from forj_review_service.runtime.review_service import ReviewService
 from forj_review_service.runtime.scheduling.fair_scheduler import FairAsyncScheduler
+from tests.support.pages import business_registry
 
 
 def test_scheduler_close_cancels_running_and_pending_work_and_releases_thread():
@@ -51,8 +52,8 @@ def test_applications_have_isolated_runtimes_and_close_them():
     from forj_review_service.runtime.review_service import ReviewService
 
     first, second = (
-        create_app(review_service=ReviewService(load_model=False)),
-        create_app(review_service=ReviewService(load_model=False)),
+        create_app(review_service=ReviewService(load_model=False, registry=business_registry())),
+        create_app(review_service=ReviewService(load_model=False, registry=business_registry())),
     )
     assert not hasattr(first.state, "review_jobs")
     with TestClient(first) as a, TestClient(second) as b:
@@ -86,9 +87,18 @@ class LoopBoundModelTransport(httpx.AsyncBaseTransport):
             if self.block:
                 self.started.set()
                 await asyncio.Event().wait()
-            return httpx.Response(200, json={"choices": [{"message": {
-                "content": '{"document_type":"invoice","confidence":0.98}',
-            }}]})
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {
+                            "message": {
+                                "content": '{"document_type":"invoice","confidence":0.98}',
+                            }
+                        }
+                    ]
+                },
+            )
         finally:
             self.active.remove(loop)
 
@@ -105,7 +115,7 @@ def model_app(transport=None, *, base_url="https://model.example.test/v1"):
         QwenConfig("test-only", base_url, "test-model"),
         transport=transport,
     )
-    service = ReviewService(load_model=False)
+    service = ReviewService(load_model=False, registry=business_registry())
     service.recognition = RecognitionService(model)
     return create_app(review_service=service), model
 
@@ -168,7 +178,7 @@ def test_synchronous_assist_closes_pool_before_its_temporary_loop(monkeypatch, f
         QwenConfig("test-only", "https://model.example.test/v1", "test-model"),
         transport=transport,
     )
-    service = ReviewService(load_model=False)
+    service = ReviewService(load_model=False, registry=business_registry())
     service.recognition = RecognitionService(model)
 
     async def assist_async(request, *, business):
@@ -190,9 +200,16 @@ def test_synchronous_assist_closes_pool_before_its_temporary_loop(monkeypatch, f
     assert all(loop.is_closed() for loop in transport.closed)
 
 
-@pytest.mark.parametrize("proactor", [False, pytest.param(
-    True, marks=pytest.mark.skipif(sys.platform != "win32", reason="Windows event loop"),
-)])
+@pytest.mark.parametrize(
+    "proactor",
+    [
+        False,
+        pytest.param(
+            True,
+            marks=pytest.mark.skipif(sys.platform != "win32", reason="Windows event loop"),
+        ),
+    ],
+)
 def test_real_http_keepalive_connections_close_before_worker_loops(monkeypatch, proactor):
     """真实 TCP 长连接覆盖 Windows Proactor，避免 MockTransport 掩盖关闭错误。"""
     if proactor:
@@ -204,9 +221,17 @@ def test_real_http_keepalive_connections_close_before_worker_loops(monkeypatch, 
 
         def do_POST(self):
             self.rfile.read(int(self.headers["Content-Length"]))
-            body = json.dumps({"choices": [{"message": {
-                "content": '{"document_type":"invoice","confidence":0.98}',
-            }}]}).encode()
+            body = json.dumps(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": '{"document_type":"invoice","confidence":0.98}',
+                            }
+                        }
+                    ]
+                }
+            ).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
@@ -226,7 +251,9 @@ def test_real_http_keepalive_connections_close_before_worker_loops(monkeypatch, 
                 jobs = app.state.review_jobs
                 for scheduler in (jobs.scheduler, jobs.finalize_scheduler):
                     for _ in range(2):
-                        future = scheduler.submit("real-http", lambda: model.classify_document(image))
+                        future = scheduler.submit(
+                            "real-http", lambda: model.classify_document(image)
+                        )
                         assert future.result(timeout=5).document_type == "invoice"
                 pools = list(model._clients.values())
                 assert len(pools) == 2 and all(not pool.is_closed for pool in pools)

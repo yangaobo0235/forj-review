@@ -21,6 +21,8 @@ import { requestModelCatalog } from "../src/platform/extension/vehicle-model-ser
 import { queryVehicleModels, fillVehicleModel, vehicleModelMessage, searchVehicleModels } from "../src/platform/extension/vehicle-model-client.ts";
 import { ReviewPageFieldWriter } from "../src/platform/browser/actions/page-field-writer.ts";
 
+const mappings = sourceManifest.actions.find(a => a.handler_id === "vehicle_model_fill").mappings;
+const fieldLabels = Object.fromEntries(sourceManifest.fields.map(f => [f.key, f.label]));
 const input = {announcementModel: "MODEL100A80", engineModel: "ENGINE42-E6",
   pageScope: {brandName: "示例品牌", seriesName: "示例车系", typeLevel: "牵引车"}};
 const candidate = () => ({modelId: "10", modelName: "示例品牌 完整车型名称 420马力 6X4 手动版 (MODEL100A80)",
@@ -36,7 +38,7 @@ async function settle() { await new Promise(setImmediate); await nextTick(); }
 function modelHarness(query = async () => ({ok: true, candidates: [candidate()], searchId: "search-1"}), extra = {}) {
 
   const props = reactive({review: {business_type: "vehicle_source", cross_checks: [materialCheck()]},
-    pageData: {sourceTabId: 12, pageUrl: "https://example.test/consistency", pageInstanceId: "instance-1",
+    pageData: {actions: sourceManifest.actions, fieldLabels, sourceTabId: 12, pageUrl: "https://example.test/consistency", pageInstanceId: "instance-1",
       pageFingerprint: "record-1", collectionId: "collection-1", pageFields: {"vehicle.model": "页面原车型", "spec.brand": "示例品牌", "spec.series": "示例车系", "vehicle.type": "牵引车"}}, disabled: false, ...extra});
   const calls = [], results = [], fills = [], busy = [];
   const scope = effectScope();
@@ -352,26 +354,26 @@ test("two complete codes retain suffixes and reject incomplete or injected queri
 });
 
 test("model plan maps all visible spec fields and preserves absent cargo length", () => {
-  const plan = modelFillPlan(candidate());
+  const plan = modelFillPlan(candidate(), {}, mappings);
   assert.deepEqual(plan.values.slice(0, 3).map(item => [item.field, item.optionValue]),
     [["spec.brand", "2"], ["spec.series", "3"], ["vehicle.model", "10"]]);
   assert.equal(plan.values.length, 9);
   assert.equal(plan.values.find(item => item.field === "spec.engine_model").value, "ENGINE42-E6");
   assert.deepEqual(plan.missing, []);
   assert.match(plan.warnings.join(""), /不改写/);
-  const preserved = modelFillPlan(candidate(), {"spec.cargo_length": "6.8"});
+  const preserved = modelFillPlan(candidate(), {"spec.cargo_length": "6.8"}, mappings, fieldLabels);
   assert.equal(preserved.values.at(-1).value, "6.8");
   assert.match(preserved.warnings.join(""), /保留页面原值/);
   for (const cargo of [null, "--", "0", "-1", "未知"]) {
     const item = candidate(); item.config.packingCaseLength = cargo;
-    const empty = modelFillPlan(item);
+    const empty = modelFillPlan(item, {}, mappings, fieldLabels);
     assert.ok(!empty.values.some(value => value.field === "spec.cargo_length"));
     assert.match(empty.warnings.join(""), /不改写/);
   }
   const complete = candidate(); complete.config.packingCaseLength = "6.8";
-  assert.equal(modelFillPlan(complete).values.at(-1).value, "6.8");
+  assert.equal(modelFillPlan(complete, {}, mappings, fieldLabels).values.at(-1).value, "6.8");
   complete.config.fuelType = null;
-  assert.deepEqual(modelFillPlan(complete).missing, ["燃料种类"]);
+  assert.deepEqual(modelFillPlan(complete, {}, mappings, fieldLabels).missing, ["燃料种类"]);
 });
 
 test("same-name records may be filled by ID while invalid IDs are rejected", () => {
@@ -438,6 +440,8 @@ test("background only calls review service query endpoint and surfaces unavailab
   assert.equal(result.candidates[0].modelId, "10");
   const failure = await requestModelCatalog(input, async () => ({ok: false, json: async () => ({detail: "正式车型库尚未配置"})}));
   assert.deepEqual(failure, {ok: false, message: "正式车型库尚未配置"});
+  const currentFailure = await requestModelCatalog(input, async () => ({ok: false, json: async () => ({code: "VEHICLE_CATALOG_UNAVAILABLE", message: "车型目录暂时不可用"})}));
+  assert.deepEqual(currentFailure, {ok: false, message: "车型目录暂时不可用"});
 });
 
 test("search and fill carry the original tab, record, step and collection identity", async () => {

@@ -46,10 +46,10 @@ jobs:
         run: uv sync --locked
 
       - name: Unit and contract tests (no database)
-        run: uv run pytest -q tests/unit tests/contracts
+        run: uv run pytest -q tests/unit tests/contracts tests/configuration/unit tests/tooling
 
       - name: Integration tests (isolated PostgreSQL)
-        run: uv run pytest -q tests/integration tests/release
+        run: uv run pytest -q tests/integration tests/configuration/integration tests/database tests/release
 
       - name: Run Ruff
         run: uv run ruff check src tests scripts
@@ -96,7 +96,7 @@ jobs:
       - name: Build extension
         run: npm run build
 
-      # 发布给用户的是 build:public（见 docs/部署运维.md）。之前 CI 只验证了
+      # 发布给用户的是 build:public（见 docs/运维/部署运维.md）。之前 CI 只验证了
       # 开发模式构建，发布路径没有任何门禁。
       - name: Build extension (release)
         run: npm run build:public

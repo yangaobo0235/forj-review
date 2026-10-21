@@ -6,10 +6,17 @@ from forj_review_service.integrations.qr.image_transport import ImageTransport
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("addresses", [
-    ["127.0.0.1"], ["10.0.0.1"], ["169.254.169.254"], ["::1"],
-    ["::ffff:127.0.0.1"], ["93.184.216.34", "192.168.0.1"],
-])
+@pytest.mark.parametrize(
+    "addresses",
+    [
+        ["127.0.0.1"],
+        ["10.0.0.1"],
+        ["169.254.169.254"],
+        ["::1"],
+        ["::ffff:127.0.0.1"],
+        ["93.184.216.34", "192.168.0.1"],
+    ],
+)
 async def test_internal_and_mixed_dns_results_are_rejected_before_connecting(addresses):
     async def resolver(host, port):
         return addresses
@@ -57,7 +64,9 @@ async def test_redirect_to_metadata_service_is_rechecked_and_blocked():
         calls.append(request)
         return httpx.Response(302, headers={"location": "http://169.254.169.254/latest/meta-data"})
 
-    decoder = QrImageDecoder(transport=ImageTransport(resolver=resolver, transport=httpx.MockTransport(receive)))
+    decoder = QrImageDecoder(
+        transport=ImageTransport(resolver=resolver, transport=httpx.MockTransport(receive))
+    )
     result = await decoder.decode("https://images.example.test/proof.jpg")
     assert result.error_code == "image_rejected"
     assert len(calls) == 1
@@ -68,8 +77,11 @@ async def test_internal_images_require_an_exact_operator_configured_host():
     async def resolver(host, port):
         return ["192.168.1.2"]
 
-    transport = ImageTransport(private_hosts=("images.internal",), resolver=resolver,
-        transport=httpx.MockTransport(lambda request: httpx.Response(200, content=b"image")))
+    transport = ImageTransport(
+        private_hosts=("images.internal",),
+        resolver=resolver,
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, content=b"image")),
+    )
     async with httpx.AsyncClient(transport=transport, trust_env=False) as client:
         assert (await client.get("https://images.internal/proof.jpg")).status_code == 200
         with pytest.raises(ValueError):
@@ -79,5 +91,9 @@ async def test_internal_images_require_an_exact_operator_configured_host():
 @pytest.mark.asyncio
 async def test_malformed_authority_and_embedded_credentials_are_rejected():
     decoder = QrImageDecoder()
-    for url in ("http://user:secret@example.test/a", "https://example.test:invalid/a", "file:///etc/passwd"):
+    for url in (
+        "http://user:secret@example.test/a",
+        "https://example.test:invalid/a",
+        "file:///etc/passwd",
+    ):
         assert (await decoder.decode(url)).error_code == "invalid_url"

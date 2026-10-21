@@ -42,6 +42,7 @@ def configured_profile(specs, *, authority=()):
                         "evidence": [{"material": "permit", "field": "license.vin"}],
                     }
                 ],
+                "settings": {},
             }
         )
     )
@@ -117,7 +118,9 @@ async def test_registered_output_reaches_comparison_with_accurate_provenance(kin
         business_rule_handlers={"lookup": rule} if kind == "RULE" else None,
         external_check_handlers={"lookup": external} if kind == "EXTERNAL" else None,
     )
-    response, _ = await service.assist_with_batch_async(request(), initial_batch=RecognitionBatchResult())
+    response, _ = await service.assist_with_batch_async(
+        request(), initial_batch=RecognitionBatchResult()
+    )
     comparison = response.comparisons[0]
     assert comparison.status == expected
     assert (response.recommendation == "PASS") == (case == "match")
@@ -148,7 +151,9 @@ async def test_explicit_capability_authority_uses_the_same_evidence_pipeline():
             ),
         },
     )
-    response, _ = await service.assist_with_batch_async(request(), initial_batch=RecognitionBatchResult())
+    response, _ = await service.assist_with_batch_async(
+        request(), initial_batch=RecognitionBatchResult()
+    )
     assert response.comparisons[0].status == "MATCH"
     assert "登记系统" in response.comparisons[0].message
 
@@ -261,7 +266,9 @@ async def test_failure_from_every_stage_remains_in_final_review(stage):
     service = ReviewService(
         registry=BusinessRegistry((profile,)), business_rule_handlers={"failure": fail}
     )
-    response, _ = await service.assist_with_batch_async(request(), initial_batch=RecognitionBatchResult())
+    response, _ = await service.assist_with_batch_async(
+        request(), initial_batch=RecognitionBatchResult()
+    )
     assert response.capability_results[0].status == "FAILED"
     assert any("failure" in issue for issue in response.issues)
     assert any(check.check_id == "CAPABILITY-failure" for check in response.cross_checks)
@@ -304,7 +311,9 @@ async def test_late_qr_fields_fail_instead_of_bypassing_frozen_comparisons():
     service = ReviewService(
         registry=BusinessRegistry((profile,)), external_check_handlers={"late_qr": external}
     )
-    response, _ = await service.assist_with_batch_async(request(), initial_batch=RecognitionBatchResult())
+    response, _ = await service.assist_with_batch_async(
+        request(), initial_batch=RecognitionBatchResult()
+    )
     assert response.capability_results[0].status == "FAILED"
     assert response.recommendation == "REVIEW_REQUIRED"
 

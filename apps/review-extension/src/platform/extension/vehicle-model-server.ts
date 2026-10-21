@@ -8,6 +8,6 @@ export async function requestModelCatalog(input: ModelSearchInput, fetcher: type
     body: JSON.stringify(input), signal: AbortSignal.timeout(20000),
   });
   const body = await response.json();
-  if (!response.ok) return {ok: false, message: typeof body?.detail === "string" ? body.detail : "车型查询失败，请检查搜索条件和审核服务"};
+  if (!response.ok) return {ok: false, message: typeof body?.message === "string" ? body.message : typeof body?.detail === "string" ? body.detail : "车型查询失败，请检查搜索条件和审核服务"};
   return {ok: true, candidates: body};
 }

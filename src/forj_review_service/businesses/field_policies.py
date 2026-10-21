@@ -19,7 +19,6 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
 
 from forj_review_service.businesses.context import DEFAULT_BUSINESS, BusinessContext
-from forj_review_service.businesses.packs import BUSINESS_PACKS
 from forj_review_service.businesses.packs.model import (
     AuthorityRule,
     BusinessExtensionPack,
@@ -41,7 +40,7 @@ class FieldEvidencePolicy:
     max_age_days: int | None = None
 
 
-def _build_policies(pack: BusinessExtensionPack) -> dict[str, FieldEvidencePolicy]:
+def build_policies(pack: BusinessExtensionPack) -> dict[str, FieldEvidencePolicy]:
     policies = {
         item.key: FieldEvidencePolicy(
             field=item.key,
@@ -62,40 +61,6 @@ def _build_policies(pack: BusinessExtensionPack) -> dict[str, FieldEvidencePolic
         if item.material_field is not None:
             policies[item.key] = replace(policies[item.material_field], field=item.key)
     return policies
-
-
-def _merge_policies(
-    packs: tuple[BusinessExtensionPack, ...],
-) -> tuple[dict[str, FieldEvidencePolicy], dict[str, str]]:
-    """把所有业务的证据策略合成一张表，字段键重复即启动期报错。
-
-    字段键带业务分区前缀（`old_vehicle.` / `vehicle.`），各业务之间不重叠；
-    这里显式校验，避免后者静默覆盖前者——那类问题只有在生产上才会表现为
-    “字段按错误的来源策略比对”。
-    """
-    policies: dict[str, FieldEvidencePolicy] = {}
-    owners: dict[str, str] = {}
-    for pack in packs:
-        for key, policy in _build_policies(pack).items():
-            previous = owners.get(key)
-            if previous is not None and previous != pack.business_type:
-                raise ValueError(
-                    f"字段 {key} 同时被 {previous} 和 {pack.business_type} 声明了证据策略"
-                )
-            policies[key] = policy
-            owners[key] = pack.business_type
-    material_fields = {
-        item.key: item.material_field
-        for pack in packs
-        for item in pack.fields
-        if item.material_field is not None
-    }
-    return policies, material_fields
-
-
-FIELD_EVIDENCE_POLICIES, MATERIAL_FIELD_BY_PAGE_FIELD = _merge_policies(
-    tuple(BUSINESS_PACKS.values())
-)
 
 
 def field_policy(

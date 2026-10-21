@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, Protocol
 
@@ -159,4 +159,6 @@ class ExternalCheckHandler(Protocol):
 
 
 class BusinessRuleHandler(Protocol):
-    def __call__(self, context: ReviewExecutionContext) -> RuleExecutionResult: ...
+    def __call__(
+        self, context: ReviewExecutionContext,
+    ) -> RuleExecutionResult | Awaitable[RuleExecutionResult]: ...

@@ -25,7 +25,7 @@ def main() -> None:
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-        from tests.support.postgres import isolated_database
+        from tests.support.postgres import isolated_database, seed_complete_pages
 
         docker("network", "create", network)
         docker("run", "--rm", "-d", "--name", pg_name, "--network", network,
@@ -41,6 +41,7 @@ def main() -> None:
         else:
             raise RuntimeError("Smoke PostgreSQL timeout")
         database = stack.enter_context(isolated_database(pg_url))
+        seed_complete_pages(database)
         docker("run", "-d", "--name", name, "--network", network,
                "-e", "PGHOST=" + pg_name, "-e", "PGPORT=5432", "-e", "PGDATABASE=postgres",
                "-e", "PGUSER=postgres", "-e", "PGPASSWORD=smoke-only", "-e", "PGSSLMODE=disable",

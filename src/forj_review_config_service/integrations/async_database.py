@@ -6,36 +6,20 @@ from contextlib import asynccontextmanager, suppress
 import psycopg
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psycopg.rows import dict_row
-from psycopg_pool import AsyncConnectionPool
+from sqlalchemy import BigInteger, column, func, select, table
 
 from forj_review_config_service.contracts.models import ConfigurationError
 from forj_review_config_service.integrations.database import Database
+from forj_review_database.database import AsyncDatabase as SharedAsyncDatabase
 
 
-class AsyncDatabase:
+class AsyncDatabase(SharedAsyncDatabase):
     def __init__(self, database: Database):
-        self.settings = database
-        self.schema = database.schema
-        self.pool = AsyncConnectionPool(
-            database.conninfo,
-            min_size=1,
-            max_size=6,
-            open=False,
-            timeout=5,
-            kwargs={"prepare_threshold": 0},
-        )
+        super().__init__(database)
         self.owner = None
         self.identity = None
         self.lost = asyncio.Event()
         self.monitor = None
-
-    async def __aenter__(self):
-        try:
-            await self.pool.open(wait=True, timeout=5)
-        except BaseException:
-            await self.pool.close()
-            raise
-        return self
 
     async def __aexit__(self, *exc):
         self.lost.set()
@@ -49,11 +33,13 @@ class AsyncDatabase:
                 if self.owner is not None:
                     await self.owner.close()
             finally:
-                await self.pool.close()
+                await self.engine.dispose()
 
     def require_executor(self):
         if self.identity is None or self.lost.is_set():
-            raise ConfigurationError("EXECUTOR_LOST", "配置执行器已失去数据库所有权，请重启配置服务", 503)
+            raise ConfigurationError(
+                "EXECUTOR_LOST", "配置执行器已失去数据库所有权，请重启配置服务", 503
+            )
 
     async def acquire_executor(self):
         """Serialize takeover against every in-flight authoritative transaction."""
@@ -84,48 +70,62 @@ class AsyncDatabase:
             (self.schema + ":executor-fence",),
         )
 
-    async def _assert_owner(self, connection):
+    @asynccontextmanager
+    async def session(self, *, write=False, readonly=False, repeatable=False, timeout_ms=None):
+        async with super().session(
+            readonly=readonly, repeatable=repeatable, timeout_ms=timeout_ms
+        ) as session:
+            if write:
+                await self._guard_session(session)
+            yield session
+
+    async def _guard_session(self, session):
         self.require_executor()
-        cursor = await connection.execute(
-            "SELECT 1 FROM pg_locks l JOIN pg_stat_activity a ON a.pid=l.pid "
-            "WHERE l.locktype='advisory' AND l.granted AND l.mode='ExclusiveLock' "
-            "AND l.objsubid=1 AND l.pid=%s AND a.backend_start=%s "
-            "AND l.classid::bigint=((hashtextextended(%s,0)>>32)&4294967295) "
-            "AND l.objid::bigint=(hashtextextended(%s,0)&4294967295)",
-            (*self.identity, *([self.schema + ":configuration-executor"] * 2)),
+        await session.execute(
+            select(
+                func.pg_advisory_xact_lock(
+                    func.hashtextextended(self.schema + ":executor-fence", 0)
+                )
+            )
         )
-        if await cursor.fetchone() is None:
+        locks = table(
+            "pg_locks",
+            *(
+                column(n)
+                for n in ("pid", "locktype", "granted", "mode", "objsubid", "classid", "objid")
+            ),
+        )
+        activity = table("pg_stat_activity", column("pid"), column("backend_start"))
+        key = func.hashtextextended(self.schema + ":configuration-executor", 0)
+        found = await session.scalar(
+            select(1)
+            .select_from(locks.join(activity, activity.c.pid == locks.c.pid))
+            .where(
+                locks.c.locktype == "advisory",
+                locks.c.granted,
+                locks.c.mode == "ExclusiveLock",
+                locks.c.objsubid == 1,
+                locks.c.pid == self.identity[0],
+                activity.c.backend_start == self.identity[1],
+                locks.c.classid.cast(BigInteger) == key.op(">>")(32).op("&")(4294967295),
+                locks.c.objid.cast(BigInteger) == key.op("&")(4294967295),
+            )
+        )
+        if found is None:
             self.lost.set()
             self.require_executor()
 
     @asynccontextmanager
-    async def connect(self, *, write=False):
-        async with self.pool.connection() as connection:
-            async with connection.transaction():
-                if write:
-                    await self._fence(connection)
-                    await self._assert_owner(connection)
-                yield connection
+    async def checkpoint_connection(self):
+        """The official checkpointer borrows this session's physical connection.
 
-    async def require_ready(self):
-        async with self.connect() as connection:
-            cursor = await connection.execute("SELECT version FROM storage_version")
-            if await cursor.fetchall() != [(2,)]:
-                raise ValueError("PostgreSQL 存储版本不兼容")
-            for table in (
-                "page_snapshots",
-                "sessions",
-                "captures",
-                "events",
-                "requests",
-                "checkpoints",
-                "checkpoint_blobs",
-                "checkpoint_writes",
-                "checkpoint_migrations",
-            ):
-                cursor = await connection.execute("SELECT to_regclass(%s)", (table,))
-                if (await cursor.fetchone())[0] is None:
-                    raise ValueError("PostgreSQL 存储结构不完整")
+        Fence validation and checkpoint cursor writes commit in one transaction;
+        no second driver pool or detached checkpoint transaction is introduced.
+        """
+        async with self.session(write=True) as session:
+            connection = await session.connection()
+            raw = await connection.get_raw_connection()
+            yield raw.driver_connection
 
     def watch_executor(self, stop):
         async def watch():
@@ -144,13 +144,13 @@ class ExecutorCheckpointer(AsyncPostgresSaver):
     """Fence checkpoint writes using the same transaction as their SQL updates."""
 
     def __init__(self, database: AsyncDatabase):
-        super().__init__(database.pool)
+        super().__init__(database.owner)
         self.database = database
 
     @asynccontextmanager
     async def _cursor(self, *, pipeline=False):
         # All cursor operations are guarded, including deletion/pruning methods
         # whose upstream implementations do not mark their cursor as a pipeline.
-        async with self.database.connect(write=True) as connection:
+        async with self.database.checkpoint_connection() as connection:
             async with connection.cursor(row_factory=dict_row, binary=True) as cursor:
                 yield cursor

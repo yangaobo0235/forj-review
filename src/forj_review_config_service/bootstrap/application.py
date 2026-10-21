@@ -1,19 +1,18 @@
 """Separate app factory: importing this module starts neither backend."""
 
+import asyncio
 import logging
 import re
-from contextlib import AsyncExitStack, asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager, suppress
 from logging.handlers import RotatingFileHandler
 from uuid import uuid4
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from filelock import FileLock
-from pydantic import ValidationError
 
 from forj_review_config_service.application.service import ConfigurationService
 from forj_review_config_service.config.settings import Settings, load_settings
-from forj_review_config_service.contracts.models import ConfigurationError
 from forj_review_config_service.integrations.async_database import (
     AsyncDatabase,
     ExecutorCheckpointer,
@@ -23,7 +22,9 @@ from forj_review_config_service.integrations.configuration_store.async_postgres 
 )
 from forj_review_config_service.integrations.conversation.client import ConversationClient
 from forj_review_config_service.integrations.database import Database
+from forj_review_config_service.integrations.logging import ConfigurationLogFormatter
 from forj_review_config_service.integrations.review_kernel.postgres import PostgresReviewKernel
+from forj_review_config_service.interfaces.errors import install_error_handlers
 from forj_review_config_service.interfaces.http import router
 
 
@@ -46,7 +47,7 @@ def create_app(settings: Settings | None = None, *, model=None, kernel=None):
         )
         instance_id = uuid4().hex
         handler.setFormatter(
-            logging.Formatter(
+            ConfigurationLogFormatter(
                 "%(asctime)s service=review-config-service instance="
                 + instance_id
                 + " %(levelname)s %(message)s"
@@ -77,10 +78,25 @@ def create_app(settings: Settings | None = None, *, model=None, kernel=None):
                 )
                 app.state.database = database
                 database.watch_executor(app.state.service.close)
+
+                async def cleanup_loop():
+                    while True:
+                        try:
+                            await store.cleanup(saver)
+                        except Exception as exc:
+                            logger.error(
+                                "workflow cleanup failed error_type=%s", type(exc).__name__
+                            )
+                        await asyncio.sleep(3600)
+
+                cleanup_task = asyncio.create_task(cleanup_loop(), name="configuration-retention")
                 logger.info("started")
                 try:
                     yield
                 finally:
+                    cleanup_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await cleanup_task
                     await app.state.service.close()
         finally:
             if hasattr(client, "close"):
@@ -92,27 +108,15 @@ def create_app(settings: Settings | None = None, *, model=None, kernel=None):
 
     app = FastAPI(title="FORJ Review Configuration Service", lifespan=lifespan)
 
-    @app.exception_handler(ConfigurationError)
-    async def configuration_error(request: Request, exc: ConfigurationError):
-        return JSONResponse({"code": exc.code, "message": exc.message}, status_code=exc.status)
-
-    @app.exception_handler(ValueError)
-    async def invalid_configuration(request: Request, exc: ValueError):
-        return JSONResponse(
-            {"code": "INVALID_CONFIGURATION", "message": str(exc)[:2000]}, status_code=422
-        )
-
-    @app.exception_handler(ValidationError)
-    async def invalid_contract(request: Request, exc: ValidationError):
-        return JSONResponse(
-            {"code": "INVALID_CONFIGURATION", "message": str(exc)[:2000]}, status_code=422
-        )
+    install_error_handlers(app)
 
     @app.middleware("http")
     async def local_access(request, call_next):
         host = request.headers.get("host", "").split(":")[0].lower()
         if host not in {"127.0.0.1", "localhost", "testserver"}:
-            return JSONResponse({"code": "LOCAL_ONLY"}, status_code=403)
+            return JSONResponse(
+                {"code": "LOCAL_ONLY", "message": "配置服务仅允许本机访问"}, status_code=403
+            )
         if request.url.path == "/health":
             return await call_next(request)
         if request.app.state.database.lost.is_set():

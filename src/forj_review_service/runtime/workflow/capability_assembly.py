@@ -25,7 +25,6 @@ from forj_review_service.contracts.evidence import EvidenceFact
 from forj_review_service.contracts.recognition import CheckResult
 from forj_review_service.contracts.review import QrCheck
 from forj_review_service.evidence.comparison.check_results import qr_review_checks
-from forj_review_service.integrations.engine_emissions import lookup_engine_emissions
 
 
 class WorkflowCapabilities:
@@ -50,7 +49,8 @@ class WorkflowCapabilities:
             }
         )
         builtin_rules = build_rule_handlers(
-            tuple(sorted(policy_rule_ids)), engine_emission_lookup=lookup_engine_emissions,
+            tuple(sorted(policy_rule_ids)),
+            engine_emission_lookup=service.lookup_engine_emissions,
         )
         overridden = builtin_rules.keys() & (business_rule_handlers or {}).keys()
         if overridden:
@@ -99,7 +99,7 @@ class WorkflowCapabilities:
     async def execute_rule(
         self, context: ReviewExecutionContext, spec: CapabilitySpec
     ) -> CapabilityResult:
-        result = self.business_rules.execute((spec.capability_id,), context)
+        result = await self.business_rules.execute((spec.capability_id,), context)
         profile = context.profile
         pack = profile.pack_declaration
         return CapabilityResult(

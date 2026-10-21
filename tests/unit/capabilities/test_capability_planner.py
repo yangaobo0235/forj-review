@@ -2,12 +2,10 @@ from dataclasses import replace
 
 import pytest
 
-from forj_review_service.businesses.profiles import (
-    CONSISTENCY_DEFAULT,
-    SCRAP_REPLACEMENT_QINGDAO,
-)
+from forj_review_service.businesses.profiles import CONSISTENCY_DEFAULT
 from forj_review_service.capabilities.specs import CapabilityBinding, CapabilitySpec
 from forj_review_service.runtime.workflow.planner import plan_capabilities
+from tests.support.pages import SCRAP_REPLACEMENT_QINGDAO
 
 
 def test_configured_profile_plans_declared_capabilities_only():
