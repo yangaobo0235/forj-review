@@ -258,6 +258,7 @@ class VehicleBrand(Base):
 class VehicleSeries(Base):
     __tablename__ = "forj_vehicle_series"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    brand_id: Mapped[int | None] = mapped_column(BigInteger)
     series_id: Mapped[int | None] = mapped_column(BigInteger)
     series_name: Mapped[str | None]
     del_flag: Mapped[int | None]

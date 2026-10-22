@@ -121,26 +121,27 @@ test("source review collects actual MyForm sibling fields through the full conte
   const filter = f.add(f.document.body, "input", {"aria-label": "车牌号码"}); filter.value = "FILTER-PLATE";
   let handler;
   const modelInput = {announcementModel: "MODEL100A80", engineModel: "ENGINE42-E6",
-    pageScope: {brandName: "示例品牌", seriesName: "示例车系", typeLevel: "牵引车"}};
+    pageScope: {brandId: "2", brandName: "示例品牌", seriesId: "3", seriesName: "示例车系", typeLevel: "牵引车"}};
   const catalogModel = {modelId: "10", modelName: "合成完整车型 420马力 6X4", brandId: "2", brandName: "示例品牌",
-    seriesId: "3", seriesName: "示例车系", sameNameCount: 1, warnings: [], config: {
+    seriesId: "3", seriesName: "示例车系", typeLevel: "牵引车", sameNameCount: 1, warnings: [], config: {
       driveForm: "6X4", fuelType: "柴油", emissionStandard: "国六", maxHp: "420", engineBrand: "示例发动机", engineType: "ENGINE42-E6"}};
   let sessionResult = {ok: false, message: "车型查询已失效，请重新搜索并选择"};
   let catalogResult = catalogModel;
   const modelMessages = [];
   await runContent({document: f.document, URL,
     window: {location: {href: "https://admin.forjtruck.com/consistency-changchun?showPageModel=1"}},
-    chrome: {runtime: {onMessage: {addListener(fn) { handler = fn; }}, sendMessage: async request => {
+    chrome: {runtime: {id: "extension", onMessage: {addListener(fn) { handler = fn; }}, sendMessage: async request => {
       modelMessages.push(request);
       return request.type === "RESOLVE_REVIEW_MODEL_SEARCH" ? sessionResult : {ok: true, candidates: [catalogResult]};
     }}}, console: {info() {}},
     globalThis: {crypto: {randomUUID: () => "source-form-test"}},
   });
-  const message = body => new Promise(resolve => handler(body, null, resolve));
+  const message = body => new Promise(resolve => handler(body, {id: "extension"}, resolve));
   const manifest = JSON.parse(readFileSync(new URL("./fixtures/collect-manifest-vehicle-source.json", import.meta.url), "utf8"));
   const catalog = JSON.parse(readFileSync(new URL("./fixtures/page-catalog.json", import.meta.url), "utf8"));
   const result = await message({type: "COLLECT_PAGE_MANIFEST", pageCatalog: catalog, collectManifests: [manifest]});
   assert.equal(result.businessType, "vehicle_source");
+  assert.deepEqual(result.pageSelection, {brand: {id: "2", label: "示例品牌"}, series: {id: "3", label: "示例车系"}, model: {id: "9", label: "示例完整销售车型"}, vehicleType: "牵引车"});
   assert.equal(result.pageFields["vehicle.plate_no"], license["车牌号码"]);
   assert.equal(result.pageFields["vehicle.vin"], license.VIN);
   assert.equal(result.pageFields["vehicle.owner"], license["所有人"]);
@@ -156,13 +157,15 @@ test("source review collects actual MyForm sibling fields through the full conte
   assert.ok(result.pageFingerprint, "live VIN is available to the write guard");
   const target = {expectedPageUrl: result.pageUrl, expectedPageInstanceId: result.pageInstanceId,
     expectedCollectionId: result.collectionId, expectedPageFingerprint: result.pageFingerprint};
+  const queryScope = () => message({...target, type: "READ_REVIEW_MODEL_SCOPE"});
+  assert.deepEqual((await queryScope()).pageScope, modelInput.pageScope);
   const filled = await message({...target, type: "APPLY_PAGE_FIELD_VALUE", action: {
     field: "vehicle.brand_model", value: "解放牌MODEL100A80", expectedValue: license["品牌型号"],
   }});
   assert.equal(filled.ok, true, filled.message);
   assert.equal(inputs.get("品牌型号").value, "解放牌MODEL100A80");
   assert.equal(inputs.get("车牌号码").value, license["车牌号码"]);
-  const applyModel = () => message({...target, type: "APPLY_VEHICLE_MODEL", searchId: "trusted-search", modelId: "10",
+  const applyModel = () => message({...target, type: "APPLY_VEHICLE_MODEL", searchId: "trusted-search", modelId: catalogModel.modelId,
     candidate: {...catalogModel, modelName: "不得使用消息内伪造的配置"}});
   const rejected = await applyModel();
   assert.equal(rejected.ok, false);
@@ -176,6 +179,7 @@ test("source review collects actual MyForm sibling fields through the full conte
   assert.equal(inputs.get("车型").value, "9");
   catalogResult = catalogModel;
   inputs.get("车辆类型").value = "载货车";
+  assert.equal((await queryScope()).code, "MODEL_PAGE_SCOPE_CHANGED");
   const scopeChanged = await applyModel();
   assert.equal(scopeChanged.ok, false);
   // 页面业务范围改变后，旧的车型选择不能继续回填。
@@ -189,9 +193,30 @@ test("source review collects actual MyForm sibling fields through the full conte
   const modelFilled = await applyModel();
   assert.equal(modelFilled.ok, true, modelFilled.message);
   assert.equal(inputs.get("车型").value, "10");
-  assert.equal(modelFilled.actions.length, 9);
+  assert.equal(modelFilled.actions.length, 7);
+  assert.ok(modelFilled.actions.every(item => item.field !== "spec.brand"));
+  assert.equal(inputs.get("品牌").value, "2");
+  assert.equal(inputs.get("车系").value, "3");
   assert.equal(modelMessages[0].type, "RESOLVE_REVIEW_MODEL_SEARCH");
   assert.equal(modelMessages.filter(item => item.type === "QUERY_VEHICLE_MODEL_CATALOG").length, 2);
+  // Neither a forged query scope nor a manual same-label series edit can change
+  // fixed parents through the content entry, even after a verified model write.
+  assert.equal((await applyModel()).ok, true, "verified baseline permits repeated controlled writes");
+  f.add(inputs.get("车系"), "option", {value: "4"}, "示例车系");
+  f.add(inputs.get("车型"), "option", {value: "11"}, catalogModel.modelName);
+  catalogModel.modelId = "11";
+  sessionResult = {ok: true, candidate: structuredClone(catalogModel),
+    input: {...modelInput, pageScope: {...modelInput.pageScope, seriesId: "4"}}};
+  const switched = await applyModel();
+  assert.equal(switched.code, "MODEL_PAGE_SCOPE_CHANGED");
+  assert.equal(inputs.get("车系").value, "3");
+  assert.equal(inputs.get("车型").value, "10");
+  assert.equal(inputs.get("品牌").value, "2");
+  sessionResult.input = modelInput;
+  inputs.get("车系").value = "4";
+  assert.equal((await queryScope()).code, "MODEL_PAGE_SCOPE_CHANGED");
+  assert.equal((await applyModel()).code, "MODEL_PAGE_SCOPE_CHANGED", "manual same-label ID change remains blocked");
+  inputs.get("车系").value = "3";
   f.select(1);
   const messagesBefore = modelMessages.length;
   const staleModel = await applyModel();

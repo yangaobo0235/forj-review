@@ -6,13 +6,13 @@ from sqlalchemy.orm import Session
 
 from forj_review_database.migrations import migration_history, validate_history
 from forj_review_database.models import SchemaMigration
-from forj_review_database.schema import TABLES
+from forj_review_database.schema import RUNTIME_TABLES
 
 
 def require_ready_sync(session: Session, schema: str) -> None:
     # Qualified lookup is intentional: absent local tables never resolve via public.
     missing = []
-    for table in TABLES:
+    for table in RUNTIME_TABLES:
         if session.scalar(select(func.to_regclass(schema + "." + table))) is None:
             missing.append(table)
     if missing:

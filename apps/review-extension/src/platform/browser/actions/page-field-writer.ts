@@ -4,11 +4,18 @@ import { antDatePicker, formControlKind, isSelectControl, logicalFormControl, re
 import { calendarDate, selectCalendarDate } from "./date-picker.ts";
 import type { PageWriteAction, PageWriteGroupAction } from "../../../shared/contracts/review.ts";
 import type { InspectExactOption } from "./exact-select.ts";
+import { SelectInspectionError } from "./exact-select.ts";
 type SequenceWriteValue = PageWriteAction & {label: string};
+export interface WriteObservation {
+  wait: () => Promise<{ok: boolean; code?: string; message?: string}>;
+  dispose: () => void;
+}
 interface SequenceWritePolicy extends WritePolicy {
   label?: string;
   focusField?: string;
-  settleAfter?: Readonly<Record<string, number>>;
+  observeWrite?: (item: SequenceWriteValue, control: DomElement) => WriteObservation | undefined;
+  useLiveOptionLabels?: boolean;
+  optionValueFields?: Readonly<Record<string, readonly string[]>>;
 }
 type Guard = (() => boolean) | undefined;
 const activeWrites = new WeakSet<DomRoot>();
@@ -481,6 +488,49 @@ async function executeValueGroup(
   return { ok: true, message: "组合字段已同时回填并回读，已定位到页面字段", actions: results };
 }
 
+/** Read a cached current identity before requiring options for a new selection. */
+async function resolveSequenceOptionLabel(root: DomRoot, control: DomElement, item: SequenceWriteValue,
+  guard: Guard, policy: SequenceWritePolicy): Promise<string> {
+  const inspect = policy.inspectOption;
+  if (!inspect) throw new SelectInspectionError("SELECT_INSPECTION_FAILED", "无法核验真实选项 ID");
+  const check = (snapshot: Awaited<ReturnType<InspectExactOption>>) => {
+    if (!sameCollectedRecord(guard) || !connected(control)) throw new SelectInspectionError("PAGE_IDENTITY_CHANGED", guardError);
+    const allowed = policy.optionValueFields?.[item.field];
+    if (allowed && !allowed.includes(snapshot.valueField || "")) {
+      throw new SelectInspectionError("SELECT_VALUE_FIELD_CHANGED", "真实 ID 字段语义已变化，已停止回填");
+    }
+    return snapshot;
+  };
+  const selected = check(await inspect(control));
+  if (selected.selectedValue === item.optionValue && selected.selectedLabel
+    && normalize(selected.selectedLabel) === normalize(readValueControl(control))) return selected.selectedLabel;
+  const resolved = {control, trigger: customTrigger(control),
+    listboxId: control.getAttribute("aria-controls") || control.getAttribute("aria-owns")};
+  let opened = false;
+  try {
+    for (let attempt = 0; ; attempt++) {
+      check(selected);
+      try {
+        const option = check(await inspect(control, {id: item.optionValue!, label: item.value, prepare: false, resolveLabel: true}));
+        if (!option.optionLabel) throw new SelectInspectionError("SELECT_LABEL_MISSING", "无法读取真实选项名称");
+        return option.optionLabel;
+      } catch (error) {
+        // Parent linkage and lazy loading can leave options temporarily empty. Only missing IDs
+        // may wait; ambiguity, disabled options, changed field semantics and identity fail at once.
+        if (!(error instanceof SelectInspectionError) || error.code !== "SELECT_OPTION_MISSING" || attempt >= 99) throw error;
+        if (attempt === 0) {
+          if (control.getAttribute("aria-expanded") !== "true") { toggleCustomControl(resolved); opened = true; }
+          if (control.tagName === "INPUT" && control.value && !control.readOnly) dispatchValue(control, "", root);
+        }
+        await settle();
+      }
+    }
+  } catch (error) {
+    if (opened && sameCollectedRecord(guard) && connected(control) && control.getAttribute("aria-expanded") === "true") toggleCustomControl(resolved);
+    throw error;
+  }
+}
+
 /** 不同值的依赖序列：父级变更后重新定位子控件，最终逐项读回。 */
 async function executeSequence(
   root: DomRoot, values: SequenceWriteValue[],
@@ -489,6 +539,7 @@ async function executeSequence(
 ) {
   const label = policy?.label ?? "字段组";
   const actions: Array<{field: string; label: string; value: string; status: string}> = [];
+  let optionsMayLoad = false;
   if (!values.length || new Set(values.map(item => item.field)).size !== values.length
     || values.some(item => !fieldAllowed(item.field, policy) || !String(item.value ?? "").trim())) {
     return {ok: false, message: `${label}回填范围或值无效，请重新采集`, actions};
@@ -497,21 +548,54 @@ async function executeSequence(
     if (!sameCollectedRecord(guard)) return { ok: false, code: "PAGE_IDENTITY_CHANGED", message: guardError, actions };
     const element = resolve(item.field);
     if (!element) return { ok: false, message: `${item.label}控件不存在或存在歧义，${label}未完整回填`, actions };
-    const snapshot = captureValue(element);
+    let snapshot = captureValue(element);
+    // Resolve aliases by the exact target ID on the current child control after parent linkage.
+    if (item.optionValue && snapshot && policy?.useLiveOptionLabels) {
+      let control = snapshot.control;
+      if (control.tagName === "SELECT") {
+        for (let attempt = 0; ; attempt++) {
+          const options = Array.from(control.options || []).filter(option => String(option.value) === item.optionValue);
+          if (options.length === 1 && !options[0]!.disabled) { item.value = text(options[0]); break; }
+          if (options.length || !optionsMayLoad || attempt >= 99) return {ok: false,
+            code: options.length > 1 ? "SELECT_OPTION_DUPLICATE" : options.length ? "SELECT_OPTION_DISABLED" : "SELECT_OPTION_MISSING",
+            message: `${item.label}原页面不存在唯一可用 ID（目标 ${item.optionValue}）`, actions};
+          await settle();
+          if (!sameCollectedRecord(guard)) return {ok: false, code: "PAGE_IDENTITY_CHANGED", message: guardError, actions};
+          snapshot = captureValue(resolve(item.field));
+          if (!snapshot || snapshot.control.tagName !== "SELECT") return {ok: false, message: `${item.label}控件已变化，请重新采集`, actions};
+          control = snapshot.control;
+        }
+      } else {
+        try {
+          item.value = await resolveSequenceOptionLabel(root, control, item, guard, policy);
+        } catch (error) {
+          return {ok: false, code: error instanceof SelectInspectionError ? error.code : "SELECT_INSPECTION_FAILED",
+            message: `${item.label}回填预检失败：${error instanceof Error ? error.message : "无法核验选项"}；请核对页面，已停止后续写入`, actions};
+        }
+      }
+      if (!sameCollectedRecord(guard) || !connected(control)) return {ok: false, message: guardError, actions};
+    }
     if (snapshot && normalize(snapshot.value) === normalize(item.value)
       && (!item.optionValue || await optionId(snapshot.control, policy) === item.optionValue)) {
       if (!sameCollectedRecord(guard)) return {ok: false, message: guardError, actions};
       actions.push({field: item.field, label: item.label, value: snapshot.value, status: "UNCHANGED"});
       continue;
     }
-    const result = await executeValue(root, element, {field: item.field, value: item.value, optionValue: item.optionValue}, guard, policy);
+    const target = resolve(item.field);
+    const control = target && writableValueControl(target);
+    const observation = control && policy?.observeWrite?.(item, control);
+    let result: Awaited<ReturnType<typeof executeValue>>;
+    try {
+      result = await executeValue(root, target, {field: item.field, value: item.value, optionValue: item.optionValue}, guard, policy);
+      if (result.ok && observation) {
+        const ready = await observation.wait();
+        if (!ready.ok) return {...ready, message: `${item.label}联动未完成：${ready.message}；请核对已写入字段`, actions: [...actions, ...(result.actions || [])]};
+      }
+    } finally { observation?.dispose(); }
     if (!result.ok) return {...result, message: `${item.label}回填失败：${result.message}；请核对已写入字段`, actions};
     actions.push(...(result.actions || []).map(action => ({...action, label: item.label})));
-    // 联动等待由调用方声明；每次等待仍检查记录身份，随后整组回读。
-    for (let i = 0; i < (policy?.settleAfter?.[item.field] ?? 0); i++) {
-      await settle();
-      if (!sameCollectedRecord(guard)) return {ok: false, code: "PAGE_IDENTITY_CHANGED", message: guardError, actions};
-    }
+    if (item.optionValue) optionsMayLoad = true;
+    if (!sameCollectedRecord(guard)) return {ok: false, code: "PAGE_IDENTITY_CHANGED", message: guardError, actions};
   }
   const finalControls: DomElement[] = [];
   for (let pass = 0; pass < 20; pass++) {

@@ -26,7 +26,7 @@ export function fillVehicleModel(page: PageData, searchId: string, modelId: stri
   return chrome.tabs.sendMessage(page.sourceTabId, { type: "APPLY_VEHICLE_MODEL", searchId, modelId, ...identity(page) });
 }
 
-/** content 回填前重新查询同一离线目录，拒绝页面变更期间返回的配置。 */
+/** content 回填前重新查询同一业务接口，拒绝页面变更期间返回的配置。 */
 export async function searchVehicleModels(input: ModelSearchInput, guard: () => boolean, expectedPageUrl: string): Promise<VehicleModelCandidate[]> {
   const query = validatedModelInput(input);
   if (!guard()) throw new Error("页面已变化，请重新采集");

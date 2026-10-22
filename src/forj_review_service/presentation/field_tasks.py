@@ -298,6 +298,14 @@ def _check_backed_field_step(
         for value in check.values
         if value.source == PAGE_VALUE_SOURCE
     )
+    completion = next(
+        (
+            check.details["brand_model_completion"]
+            for check in checks
+            if "brand_model_completion" in check.details
+        ),
+        None,
+    )
     return make_task(
         step_id=f"FIELD-{field}",
         category="FIELD",
@@ -331,6 +339,7 @@ def _check_backed_field_step(
         evidence=[item for check in checks for item in check.evidence],
         details={
             "check_ids": [item.check_id for item in checks],
+            **({"brand_model_completion": completion} if completion is not None else {}),
             **({"not_applicable": True} if not_applicable else {}),
             **(
                 {
@@ -620,8 +629,6 @@ def field_tasks(
         if f"FIELD-{field}" not in emitted_step_ids
     )
     return _deduplicate_dom_field_steps(
-        _restore_missing_fields(
-        steps, profile, snapshots_by_field, comparisons_by_field, request
-        ),
+        _restore_missing_fields(steps, profile, snapshots_by_field, comparisons_by_field, request),
         business,
     )

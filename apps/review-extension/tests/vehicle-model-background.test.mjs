@@ -7,7 +7,7 @@ const panel = {id: "extension", url: "chrome-extension://extension/index.html"};
 const content = {id: "extension", tab: {id: 12, url: "http://test.forjtruck.com/"},
   url: "http://test.forjtruck.com/login", origin: "http://test.forjtruck.com", frameId: 0, documentId: "doc-1"};
 const input = {announcementModel: "DFH4250A4", engineModel: "DCI450-51",
-  pageScope: {brandName: "东风商用车", seriesName: "东风天龙", typeLevel: "牵引车"}};
+  pageScope: {brandId: "6", brandName: "东风商用车", seriesId: "23", seriesName: "示例车系", typeLevel: "牵引车"}};
 const identity = {expectedPageUrl: pageUrl, expectedPageInstanceId: "instance-1",
   expectedPageFingerprint: "record-1", expectedCollectionId: "collection-1"};
 
@@ -17,7 +17,13 @@ async function background({inspectionError} = {}) {
   const candidate = {modelId: "45759", modelName: "完整车型名称", config: {maxHp: "450"}};
   const chrome = {runtime: {id: "extension", onMessage: {addListener: fn => listeners.push(fn)},
     onMessageExternal: {addListener() {}}, onInstalled: {addListener() {}}},
-  tabs: {get: async id => {
+  tabs: {sendMessage: async (id, message, options) => {
+    assert.equal(id, 12);
+    assert.equal(options.frameId, 0);
+    assert.equal(message.type, "READ_REVIEW_MODEL_SCOPE");
+    for (const [key, value] of Object.entries(identity)) assert.equal(message[key], value);
+    return {ok: true, pageScope: structuredClone(input.pageScope)};
+  }, get: async id => {
     if (!tabs.has(id)) throw new Error("No tab with id");
     return tabs.get(id);
   }},
@@ -37,7 +43,7 @@ async function background({inspectionError} = {}) {
   vi.stubGlobal("chrome", chrome);
   vi.stubGlobal("crypto", {randomUUID: () => "search-1"});
   vi.doMock("../src/features/configuration-capture/bridge.ts", () => ({handleCollectionTrial: async () => ({})}));
-  vi.doMock("../src/platform/extension/vehicle-model-server.ts", () => ({requestModelCatalog: async query => {
+  vi.doMock("../src/platform/extension/vehicle-model-server.ts", () => ({requestModelSeries: async () => [{id: "23", label: "东风天龙", aliases: []}], requestModelCatalog: async query => {
     queries.push(query); return {ok: true, candidates: [candidate]};
   }}));
   await import("../src/entrypoints/background.ts");

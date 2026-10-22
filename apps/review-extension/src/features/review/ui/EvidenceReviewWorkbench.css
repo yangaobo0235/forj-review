@@ -47,6 +47,9 @@ span.value-diff, mark.value-diff { color: var(--review-danger); background: #fff
 .manual-fill input:focus { outline: 2px solid var(--review-accent); outline-offset: 1px; }
 .manual-fill .fill-value-button { width: auto; min-height: var(--review-control-height); align-self: flex-end; white-space: nowrap; border: 1px solid var(--review-accent-border); border-radius: 4px; padding: 5px 8px; color: #096dd9; background: #fff; font-size: var(--review-font-meta); cursor: pointer; }
 .manual-fill button:disabled { opacity: .5; cursor: not-allowed; }
+.brand-manual { display: grid; gap: 8px; min-width: 0; border-top: 1px solid var(--review-border); padding-top: 12px; }
+.brand-manual h3 { margin: 0; color: var(--review-secondary); font-size: var(--review-font-body); font-weight: 500; }
+.brand-manual p { margin: 0; color: var(--review-muted); font-size: var(--review-font-meta); }
 .qr-technical-details summary { cursor: pointer; margin-bottom: 8px; }
 .qr-technical-details p { margin: 6px 0 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .evidence-row-actions { display: flex; align-items: center; gap: 7px; width: auto; min-width: max-content; }

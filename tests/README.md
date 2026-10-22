@@ -46,7 +46,7 @@ uv run pytest -q tests/integration tests/configuration/integration tests/databas
 uv run pytest -q
 ```
 
-可通过 `FORJ_TEST_POSTGRES_URL` 复用本机专用测试实例。仅允许 loopback 地址；每个用例创建唯一的 `forj_test_*` Schema 并在结束时删除。不要填写 IDEA 转发到真实业务库的连接。测试会屏蔽工作区私密数据库配置，日志写临时目录。
+可通过 `FORJ_TEST_POSTGRES_URL` 复用本机专用测试实例。仅允许 loopback 地址；每个用例创建唯一的 `forj_test_*` Schema 并在结束时删除。不要填写 IDEA 转发到真实业务库的连接。测试会屏蔽工作区私密数据库及车型业务接口配置，日志写临时目录。业务接口契约由 `unit/integrations/test_vehicle_api.py` 的 HTTP MockTransport 验证，不访问真实业务服务。
 
 四个业务页面夹具保存在 `fixtures/pages`，使用独立完整 2.0 声明，业务版本固定为 `1.0`。它们是可审查的固定输入，修改生产数据库不会改变测试预期。`fixtures/permit.json` 用于配置功能的合成页面；`fixtures/replay` 保存人工确定的结果。生产程序不会读取这些目录。
 

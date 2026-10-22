@@ -7,7 +7,6 @@
 import asyncio
 import inspect
 import logging
-import threading
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -67,11 +66,9 @@ class ReviewService:
         page_action_handlers: Mapping[str, PageActionHandler] | None = None,
         qr_decoder: QrImageDecoder | None = None,
         load_model: bool = True,
-        database_settings=None,
+        vehicle_api=None,
     ) -> None:
-        self.database_settings = database_settings
-        self._databases = {}
-        self._database_lock = threading.Lock()
+        self.vehicle_api = vehicle_api
         config = load_qwen_config() if load_model else None
         self.qr_web = QrWebVerifier(allowed_hosts=["qclt.mofcom.gov.cn"])
         self.qr_decoder = qr_decoder or QrImageDecoder(private_hosts=image_private_hosts())
@@ -89,31 +86,14 @@ class ReviewService:
         )
 
     async def lookup_engine_emissions(self, models):
-        from forj_review_service.contracts.engine_emissions import EngineEmissionLookupUnavailable
-        from forj_review_service.integrations.database import AsyncDatabase, review_database
         from forj_review_service.integrations.engine_emissions import lookup_engine_emissions_async
 
-        try:
-            loop = asyncio.get_running_loop()
-            with self._database_lock:
-                database = self._databases.get(loop)
-                if database is None:
-                    database = AsyncDatabase(self.database_settings or review_database())
-                    self._databases[loop] = database
-            return await lookup_engine_emissions_async(models, database=database)
-        except ValueError:
-            raise EngineEmissionLookupUnavailable("发动机排放对应表读取失败，请检查数据库配置") from None
+        return await lookup_engine_emissions_async(models, api=self.vehicle_api)
 
     async def aclose(self) -> None:
-        """释放当前事件循环的模型连接池，须在该循环停止前调用。"""
-        try:
-            if self.recognition is not None:
-                await self.recognition.client.aclose()
-        finally:
-            with self._database_lock:
-                database = self._databases.pop(asyncio.get_running_loop(), None)
-            if database is not None:
-                await database.engine.dispose()
+        """Release recognition resources on their owning event loop."""
+        if self.recognition is not None:
+            await self.recognition.client.aclose()
 
     def assist(
         self, request: ReviewRequest, *, business: BusinessContext = DEFAULT_BUSINESS

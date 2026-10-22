@@ -7,7 +7,7 @@ const pageUrl = "http://test.forjtruck.com/consistency-qingdao?showPageModel=1";
 const sender = {id: "extension", tab: {id: 12, url: "http://test.forjtruck.com/home"}, frameId: 0,
   documentId: "document-1", url: "http://test.forjtruck.com/login", origin: "http://test.forjtruck.com"};
 const input = {announcementModel: "DFH4250A4", engineModel: "DCI450-51",
-  pageScope: {brandName: "东风商用车", seriesName: "东风天龙", typeLevel: "牵引车"}};
+  pageScope: {brandId: "2", brandName: "东风商用车", seriesId: "3", seriesName: "示例车系", typeLevel: "牵引车"}};
 
 function harness() {
   const state = {tab: {url: pageUrl}, reads: [], queries: [], inspections: []};

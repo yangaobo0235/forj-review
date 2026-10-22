@@ -77,6 +77,62 @@ def test_full_license_model_matches_full_auxiliary_model():
 
 
 @pytest.mark.parametrize(
+    "page,status",
+    [
+        ("陕汽牌SX4259MD4TL", "CONFLICT"),
+        ("陕汽牌SX4259MD4TLQ1", "MATCH"),
+        ("陕汽牌 ｓｘ４２５９ｍｄ４ｔｌｑ１", "MATCH"),
+        ("陕汽牌SX4259MD4TLQ2", "CONFLICT"),
+    ],
+)
+def test_shaanxi_brand_compares_page_to_complete_model_from_registration(page, status):
+    brand, _ = checks(
+        observation("vehicle.announcement_model", "SX4259MD4TLQ1", "registration_certificate"),
+        license_model="陕汽牌SX4259MD4TL",
+        model=None,
+        page=page,
+    )
+    assert brand.status == status
+    assert brand.details["brand_model_completion"]["completed_value"] == "陕汽牌SX4259MD4TLQ1"
+    assert brand.details["permitted_fill_values"] == ["陕汽牌SX4259MD4TLQ1"]
+
+
+def test_user_example_exposes_derivation_and_only_complete_brand_model_can_fill():
+    brand, _ = checks(
+        license_model="欧曼牌BJ4259SNFKB-X",
+        model="BJ4259SNFKB-XJ",
+        page="欧曼牌BJ4259SNFKB-X",
+    )
+    assert brand.details["brand_model_completion"] == {
+        "license_value": "欧曼牌BJ4259SNFKB-X",
+        "brand_text": "欧曼牌",
+        "license_model": "BJ4259SNFKB-X",
+        "auxiliary_model": "BJ4259SNFKB-XJ",
+        "completed_value": "欧曼牌BJ4259SNFKB-XJ",
+        "status": "READY",
+        "basis": "行驶证品牌文字＋辅助材料完整整车型号",
+        "issues": [],
+    }
+    assert brand.details["permitted_fill_values"] == ["欧曼牌BJ4259SNFKB-XJ"]
+
+
+def test_vin_conflict_exposes_provisional_combination_without_authorizing_fill():
+    brand, _ = checks(
+        observation("vehicle.vin", "LFV00000000000001"),
+        observation("vehicle.vin", "LFV00000000000002", "vehicle_nameplate"),
+        license_model="欧曼牌BJ4259SNFKB-X",
+        model="BJ4259SNFKB-XJ",
+    )
+    completion = brand.details["brand_model_completion"]
+    assert completion["completed_value"] == "欧曼牌BJ4259SNFKB-XJ"
+    assert completion["status"] == "BLOCKED"
+    assert "VIN不一致" in "；".join(completion["issues"])
+    assert brand.status == "INSUFFICIENT"
+    assert brand.details["permitted_fill_values"] == []
+    assert not any(value.derived_from for value in brand.values)
+
+
+@pytest.mark.parametrize(
     "extra",
     [
         observation("vehicle.announcement_model", "CA4255P25K2T1E6A90", "registration_certificate"),
@@ -92,12 +148,15 @@ def test_auxiliary_conflicts_and_uncertainty_never_vote_or_complete(extra):
     brand, model = checks(extra)
     assert brand.status == "INSUFFICIENT" and brand.details["permitted_fill_values"] == []
     assert not model.details["model_search"]["announcement_model"]
+    assert brand.details["brand_model_completion"]["completed_value"] == ""
+    assert brand.details["brand_model_completion"]["status"] == "UNAVAILABLE"
 
 
 def test_incompatible_model_is_not_treated_as_suffix_completion():
     brand, model = checks(model="CA4255P25K2T1E6B80")
     assert brand.status == "INSUFFICIENT"
     assert not model.details["model_search"]["announcement_model"]
+    assert brand.details["brand_model_completion"]["completed_value"] == ""
 
 
 def test_engine_uncertainty_only_blocks_engine_search_default():
@@ -211,6 +270,78 @@ def test_wrong_vehicle_auxiliary_material_never_provides_search_defaults():
 def test_search_can_use_license_model_when_auxiliary_has_only_engine():
     _, model = checks(model=None, license_model="解放牌CA4255P25K2T1E6A80")
     assert model.details["model_search"]["announcement_model"] == "CA4255P25K2T1E6A80"
+    assert any(
+        item.document_type == "vehicle_license" and item.field == "vehicle.brand_model"
+        for item in model.evidence
+    )
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        observation("vehicle.brand_model", "解放牌OTHER100"),
+        observation("vehicle.brand_model", "解放牌CA4255P25K2T1E6A", uncertain=True),
+    ],
+)
+def test_license_model_conflict_or_uncertainty_blocks_default_just_like_brand_completion(extra):
+    brand, model = checks(extra)
+    assert brand.details["permitted_fill_values"] == []
+    assert model.details["model_search"]["announcement_model"] == ""
+    assert model.details["model_search"]["engine_model"] == "CA6DM2-42E6"
+    assert model.details["model_search"]["issues"]
+
+
+@pytest.mark.parametrize("with_images", [False, True])
+def test_page_model_fields_never_supply_or_override_material_search_defaults(with_images):
+    request = ReviewRequest(
+        page_url="https://example.test",
+        business_type="vehicle_source",
+        page_fields={
+            "vehicle.brand_model": "错误牌WRONG100",
+            "vehicle.announcement_model": "WRONG200",
+            "spec.engine_model": "WRONG42",
+            "vehicle.engine_model": "WRONG60",
+        },
+    )
+    materials = (
+        [
+            observation("vehicle.brand_model", "欧曼牌BJ4259SNFKB-X", image_id="license"),
+            observation(
+                "vehicle.announcement_model",
+                "BJ4259SNFKB-XJ",
+                "registration_certificate",
+                image_id="registration",
+            ),
+            observation(
+                "vehicle.engine_model", "ENGINE42-E6", "vehicle_nameplate", image_id="plate"
+            ),
+        ]
+        if with_images
+        else []
+    )
+    # 页面观测即使伪装成相同材料字段也不能参与图片型号推导。
+    materials.append(
+        FieldObservation(
+            field="vehicle.engine_model",
+            value="WRONG60",
+            source_type="page",
+            source_id="page",
+            business_scope="vehicle",
+            document_type="vehicle_nameplate",
+        )
+    )
+    _, model = run_vehicle_source_model(
+        ReviewExecutionContext(request, PROFILE, RecognitionBatchResult(), tuple(materials))
+    ).checks
+    search = model.details["model_search"]
+    assert search["announcement_model"] == ("BJ4259SNFKB-XJ" if with_images else "")
+    assert search["engine_model"] == ("ENGINE42-E6" if with_images else "")
+    if with_images:
+        assert search["issues"] == []
+        assert {item.image_id for item in model.evidence} == {"license", "registration", "plate"}
+    else:
+        assert len(search["issues"]) == 2
+        assert not model.evidence
 
 
 @pytest.mark.parametrize(
@@ -341,3 +472,33 @@ def test_ambiguous_page_brand_cannot_prove_material_conflict():
     ).checks[0]
     assert brand.status == "INSUFFICIENT"
     assert brand.reason_codes == ["PAGE_VALUE_MISSING"]
+
+
+def test_new_model_actions_use_six_specs_without_rewriting_explicit_published_mappings():
+    import json
+    from copy import deepcopy
+    from pathlib import Path
+
+    from tests.support.pages import page_definition
+
+    stored = page_definition(PROFILE)
+    # A checked-in v1 browser manifest preserves the old explicit ten mappings.
+    manifest = Path(__file__).resolve().parents[3] / (
+        "apps/review-extension/tests/fixtures/collect-manifest-vehicle-source.json"
+    )
+    stored["actions"] = json.loads(manifest.read_text(encoding="utf-8"))["actions"]
+    historical = deepcopy(stored["actions"])
+    loaded = PageDefinition.model_validate(stored)
+    assert [action.model_dump(mode="json") for action in loaded.actions] == historical
+    old = next(action for action in loaded.actions if action.handler_id == "vehicle_model_fill")
+    assert any(mapping.target_field == "spec.series" for mapping in old.mappings)
+
+    # Only authoring a definition without explicit actions invokes the new default.
+    stored.pop("actions")
+    generated = PageDefinition.model_validate(stored)
+    action = next(item for item in generated.actions if item.handler_id == "vehicle_model_fill")
+    assert [mapping.target_field for mapping in action.mappings] == [
+        "vehicle.model", "spec.drive_form", "spec.fuel_type", "spec.emission_standard",
+        "spec.max_hp", "spec.engine_brand", "spec.engine_model",
+    ]
+    assert all(mapping.missing_policy == "BLOCK" for mapping in action.mappings)

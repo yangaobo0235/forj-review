@@ -4,7 +4,7 @@ import { createModelSessionHandler } from "../src/platform/extension/vehicle-mod
 import { createModelPageVerifier } from "../src/platform/extension/vehicle-model-page.ts";
 
 const input = {announcementModel: "MODEL100A80", engineModel: "ENGINE42-E6",
-  pageScope: {brandName: "示例品牌", seriesName: "示例车系", typeLevel: "牵引车"}};
+  pageScope: {brandId: "2", brandName: "示例品牌", seriesId: "3", seriesName: "示例车系", typeLevel: "牵引车"}};
 const context = {sourceTabId: 12, expectedPageUrl: "https://admin.forjtruck.com/consistency-changchun?showPageModel=1",
   expectedPageInstanceId: "instance", expectedPageFingerprint: "record", expectedCollectionId: "collection"};
 const panel = {id: "extension", url: "chrome-extension://extension/index.html"};
@@ -22,8 +22,12 @@ function harness(query = async () => ({ok: true, candidates: [candidate]})) {
     if (!tabs.has(id)) throw new Error("No tab with id");
     return tabs.get(id);
   });
-  const create = () => createModelSessionHandler("extension", store, query, verifyPage, () => `session-${++n}`);
-  return {records, store, tabs, handle: create(), create};
+  const live = {ok: true, pageScope: structuredClone(input.pageScope)};
+  const scopeReads = [];
+  const create = () => createModelSessionHandler("extension", store, query, verifyPage, async context => {
+    scopeReads.push(context); return structuredClone(live);
+  }, () => `session-${++n}`);
+  return {records, store, tabs, live, scopeReads, handle: create(), create};
 }
 
 test("sidepanel searches review service directly and trusted session survives worker restart for content fill", async () => {
@@ -147,4 +151,95 @@ test("service and storage failures remain errors, never successful empty lists o
   assert.match((await network.handle(search(), panel)).message, /审核服务连接失败/);
   h.store.set = async () => { throw new Error("QUOTA_BYTES"); };
   assert.match((await h.handle(search(), panel)).message, /会话保存或读取失败/);
+});
+
+
+test("one query retains every candidate with the same verified fixed scope", async () => {
+  const rows = Array.from({length: 101}, (_, i) => ({...candidate, modelId: String(i + 1)}));
+  const h = harness(async () => ({ok: true, candidates: rows}));
+  const result = await h.handle(search(), panel);
+  assert.equal(result.candidates.length, 101);
+  const found = await h.create()(resolve(result.searchId, {modelId: "101"}), content);
+  assert.equal(found.ok, true);
+  assert.deepEqual(found.input, input);
+});
+
+
+test("panel cannot override the fixed page brand or vehicle type", async () => {
+  const calls = [];
+  const h = harness(async query => {calls.push(query); return {ok: true, candidates: []};});
+  for (const change of [{brandId: "9"}, {brandId: ""}, {brandName: "伪造品牌"}, {typeLevel: "载货车"}, {typeLevel: ""}]) {
+    const result = await h.handle(search({input: {...input, pageScope: {...input.pageScope, ...change}}}), panel);
+    assert.equal(result.ok, false);
+  }
+  assert.deepEqual(calls, []);
+  assert.equal((await h.handle({type: "LOAD_REVIEW_MODEL_CHOICES", ...context}, panel)).ok, false);
+});
+
+test("page scope is verified before and after the request and changed-page results cannot be resolved", async () => {
+  const h = harness(async () => {
+    h.live.pageScope.brandId = "9";
+    return {ok: true, candidates: [candidate]};
+  });
+  const result = await h.handle(search(), panel);
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "MODEL_PAGE_SCOPE_CHANGED");
+  assert.equal(h.scopeReads.length, 2);
+  assert.deepEqual(h.scopeReads[0], context);
+  assert.equal(h.records["reviewVehicleModel:12"].candidates, null);
+  assert.equal((await h.handle(resolve(h.records["reviewVehicleModel:12"].id), content)).ok, false);
+});
+
+test("live page identity failure prevents any catalog request", async () => {
+  let count = 0;
+  const h = harness(async () => {count++; return {ok: true, candidates: []};});
+  Object.assign(h.live, {ok: false, code: "PAGE_IDENTITY_CHANGED", message: "页面已变化，请重新采集"});
+  const result = await h.handle(search(), panel);
+  assert.equal(result.code, "PAGE_IDENTITY_CHANGED");
+  assert.equal(count, 0);
+});
+
+test("changing the basic vehicle type during a catalog request discards its candidates", async () => {
+  const h = harness(async () => {
+    h.live.pageScope.typeLevel = "载货车";
+    return {ok: true, candidates: [candidate]};
+  });
+  const result = await h.handle(search(), panel);
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "MODEL_PAGE_SCOPE_CHANGED");
+  assert.equal(h.records["reviewVehicleModel:12"].candidates, null);
+});
+
+test("panel cannot override or clear the fixed page series", async () => {
+  let calls = 0;
+  const h = harness(async () => {calls++; return {ok: true, candidates: [candidate]};});
+  for (const seriesId of ["4", ""]) {
+    const result = await h.handle(search({input: {...input, pageScope: {...input.pageScope, seriesId}}}), panel);
+    assert.equal(result.ok, false);
+  }
+  assert.equal(calls, 0);
+});
+
+
+test("changing the series during a query discards the result", async () => {
+  let h;
+  h = harness(async () => {
+    h.live.pageScope.seriesId = "4";
+    return {ok: true, candidates: [candidate]};
+  });
+  const result = await h.handle(search(), panel);
+  assert.equal(result.code, "MODEL_PAGE_SCOPE_CHANGED");
+  assert.equal(h.records["reviewVehicleModel:12"].candidates, null);
+});
+
+
+test("a new query replaces configuration and invalidates the previous preview", async () => {
+  let rows = [candidate];
+  const h = harness(async () => ({ok: true, candidates: rows}));
+  const first = await h.handle(search(), panel);
+  rows = [{...candidate, config: {engineType: "CHANGED42"}}];
+  const second = await h.handle(search(), panel);
+  assert.notEqual(first.searchId, second.searchId);
+  assert.equal((await h.handle(resolve(first.searchId), content)).code, "MODEL_SEARCH_CHANGED");
+  assert.equal((await h.handle(resolve(second.searchId), content)).candidate.config.engineType, "CHANGED42");
 });

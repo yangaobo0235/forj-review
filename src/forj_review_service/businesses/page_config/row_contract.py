@@ -68,8 +68,6 @@ class RuleBinding(Declaration):
 
 def vehicle_model_action():
     pairs = [
-        ("brand", "brandName", "spec.brand", "brandId"),
-        ("series", "seriesName", "spec.series", "seriesId"),
         ("model", "modelName", "vehicle.model", "modelId"),
         ("drive_form", "config.driveForm", "spec.drive_form", None),
         ("fuel_type", "config.fuelType", "spec.fuel_type", None),
@@ -77,7 +75,6 @@ def vehicle_model_action():
         ("hp", "config.maxHp", "spec.max_hp", None),
         ("engine_brand", "config.engineBrand", "spec.engine_brand", None),
         ("engine", "config.engineType", "spec.engine_model", None),
-        ("cargo", "config.packingCaseLength", "spec.cargo_length", None),
     ]
     return ActionBinding(
         action_id="vehicle_model_fill",
@@ -92,8 +89,8 @@ def vehicle_model_action():
                 target_field=target,
                 order=order,
                 depends_on=(() if order == 0 else (pairs[order - 1][0],)),
-                converter_id="positive_number" if key == "cargo" else "text",
-                missing_policy="RESTORE_ORIGINAL" if key == "cargo" else "BLOCK",
+                converter_id="text",
+                missing_policy="BLOCK",
                 wait_condition_id="options_ready" if option else "none",
             )
             for order, (key, source, target, option) in enumerate(pairs)

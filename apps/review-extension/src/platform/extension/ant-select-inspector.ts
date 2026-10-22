@@ -1,6 +1,6 @@
 /** 在 MAIN world 读取 Vue/Ant 控件身份。只读组件状态，滚动并标记真实选项供 DOM 点击。 */
 export function inspectAntSelect(token: string, expectedUrl: string,
-  target?: {id: string; label: string; prepare: boolean}) {
+  target?: {id: string; label: string; prepare: boolean; resolveLabel?: boolean}) {
   // 此函数被 chrome.scripting 序列化，所有运行依赖必须放在函数内部。
   interface VNode {
     key?: unknown; el?: Element; children?: unknown; component?: Instance;
@@ -12,7 +12,7 @@ export function inspectAntSelect(token: string, expectedUrl: string,
       itemKey?: string; data?: {key: unknown; value: unknown; data: Record<string, unknown>}[]};
     exposed?: {scrollTo?: (value: {key: unknown}) => void};
   }
-  const fail = (message: string) => ({ok: false as const, message});
+  const fail = (message: string, code = "SELECT_INSPECTION_FAILED") => ({ok: false as const, code, message});
   if (location.href !== expectedUrl || !/^[a-zA-Z0-9-]{1,100}$/.test(token)) return fail("页面或控件身份已变化");
   const controls = document.querySelectorAll(`[data-review-select-token="${token}"]`);
   if (controls.length !== 1) return fail("未找到唯一的当前车型控件");
@@ -40,14 +40,32 @@ export function inspectAntSelect(token: string, expectedUrl: string,
   if (instances.size !== 1) return fail("无法读取当前下拉控件的真实选项 ID，请刷新业务页面后重试");
   const instance = [...instances][0]!;
   const selectedValue = instance.props.value == null ? "" : String(instance.props.value);
-  if (!target) return {ok: true as const, selectedValue};
   const {value = "value", label = "label"} = instance.props.fieldNames || {};
   const fields = [{value: "id", label: "brandName"}, {value: "brandId", label: "brandName"},
     {value: "seriesId", label: "seriesName"}, {value: "modelId", label: "modelName"}];
   if (!fields.some(fields => fields.value === value && fields.label === label)) return fail("当前控件不是品牌、车系或车型选择框");
-  const options = (instance.props.options || []).filter(option => String(option[value]) === target.id
-    && String(option[label] ?? "").replace(/\s+/g, "") === target.label.replace(/\s+/g, ""));
-  if (instance.props.disabled || options.length !== 1 || options[0]!.disabled) return fail("原页面当前下拉列表中没有对应的可用车型 ID，请核对页面范围与离线目录");
+  const selected = (instance.props.options || []).filter(option => String(option[value]) === selectedValue);
+  if (!target) {
+    // ASelect can keep a historical selection in its label cache after remote options change.
+    // Identity comes from props.value, never from a name lookup or the search input's value.
+    const display = control.closest(".ant-select")?.querySelector(
+      ".ant-select-selection-item, .ant-select-selection-selected-value",
+    );
+    const selectedLabel = selectedValue ? String(display?.getAttribute("title") || display?.textContent || "").trim() : "";
+    const normalize = (text: string) => text.normalize("NFKC").replace(/\s+/g, "");
+    if (selected.length && !selected.some(option => normalize(String(option[label] ?? "")) === normalize(selectedLabel))) {
+      return fail("选中 ID 的目录标签与当前显示不一致，请重新读取页面");
+    }
+    return {ok: true as const, selectedValue, selectedLabel, valueField: value};
+  }
+  const options = (instance.props.options || []).filter(option => String(option[value]) === target.id);
+  if (instance.props.disabled) return fail("原页面下拉控件已禁用", "SELECT_CONTROL_DISABLED");
+  if (!options.length) return fail(`原页面选项中未找到目标 ID ${target.id}（已加载 ${instance.props.options?.length || 0} 项），请核对页面范围与业务车型数据`, "SELECT_OPTION_MISSING");
+  if (options.length !== 1) return fail("原页面目标 ID 对应多个选项，无法唯一选择", "SELECT_OPTION_DUPLICATE");
+  if (options[0]!.disabled) return fail("原页面目标选项已禁用", "SELECT_OPTION_DISABLED");
+  const optionLabel = String(options[0]![label] ?? "");
+  if (!target.resolveLabel && optionLabel.replace(/\s+/g, "") !== target.label.replace(/\s+/g, "")) return fail("目标 ID 与实时选项名称不一致，已停止回填");
+  if (!optionLabel.trim()) return fail("目标选项缺少显示名称，已停止回填");
   const popupIds = `${control.getAttribute("aria-controls") || ""} ${control.getAttribute("aria-owns") || ""}`.trim().split(/\s+/);
   const popup = popupIds.map(id => document.getElementById(id)?.closest(".ant-select-dropdown")).find(Boolean);
   const lists = new Map<Instance, unknown>();
@@ -60,7 +78,7 @@ export function inspectAntSelect(token: string, expectedUrl: string,
   });
   if (lists.size > 1) return fail("当前车型存在多个选项列表，已停止回填");
   const list = [...lists.keys()][0];
-  if (!list) return {ok: true as const, selectedValue}; // 弹层可能仍在挂载，调用方稍后重读。
+  if (!list) return {ok: true as const, selectedValue, optionLabel, valueField: value}; // 弹层可能仍在挂载，调用方稍后重读。
   // 使用实时过滤后的扁平列表 key。自定义 fieldNames 时它可能是 rc-index-key-N，不能假设等于车型 ID。
   const key = lists.get(list);
   const matches = new Set<Element>();
@@ -75,5 +93,5 @@ export function inspectAntSelect(token: string, expectedUrl: string,
   const optionToken = element ? `${token}-option` : undefined;
   popup?.querySelectorAll("[data-review-option-token]").forEach(el => el.removeAttribute("data-review-option-token"));
   if (element) element.setAttribute("data-review-option-token", optionToken!);
-  return {ok: true as const, selectedValue, optionToken};
+  return {ok: true as const, selectedValue, optionLabel, valueField: value, optionToken};
 }

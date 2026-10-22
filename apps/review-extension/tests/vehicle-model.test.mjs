@@ -3,7 +3,7 @@ import { useVehicleModelReview } from "../src/features/review/model/use-vehicle-
 import Picker from "../src/features/review/ui/VehicleModelPicker.vue";
 import Detail from "../src/features/review/ui/ReviewStepDetail.vue";
 import Workbench from "../src/features/review/ui/ReviewWorkbench.vue";
-import { onTestFinished } from "vitest";
+import { vi, onTestFinished } from "vitest";
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import sourceManifest from "./fixtures/collect-manifest-vehicle-source.json";
@@ -22,12 +22,12 @@ import { queryVehicleModels, fillVehicleModel, vehicleModelMessage, searchVehicl
 import { ReviewPageFieldWriter } from "../src/platform/browser/actions/page-field-writer.ts";
 
 const mappings = sourceManifest.actions.find(a => a.handler_id === "vehicle_model_fill").mappings;
+const selection = {brand: {id: "2", label: "示例品牌"}, series: {id: "3", label: "示例车系"}, model: {id: "1", label: "原车型"}, vehicleType: "牵引车"};
 const fieldLabels = Object.fromEntries(sourceManifest.fields.map(f => [f.key, f.label]));
 const input = {announcementModel: "MODEL100A80", engineModel: "ENGINE42-E6",
-  pageScope: {brandName: "示例品牌", seriesName: "示例车系", typeLevel: "牵引车"}};
+  pageScope: {brandId: "2", brandName: "示例品牌", seriesId: "3", seriesName: "示例车系", typeLevel: "牵引车"}};
 const candidate = () => ({modelId: "10", modelName: "示例品牌 完整车型名称 420马力 6X4 手动版 (MODEL100A80)",
-  brandId: "2", brandName: "示例品牌", seriesId: "3", seriesName: "示例车系", sameNameCount: 1,
-  warnings: [], config: {driveForm: "6X4", fuelType: "柴油", emissionStandard: "国六", maxHp: "420",
+  config: {driveForm: "6X4", fuelType: "柴油", emissionStandard: "国六", maxHp: "420",
     engineBrand: "示例发动机", engineType: "ENGINE42-E6", packingCaseLength: null}});
 
 const materialCheck = (announcement = input.announcementModel, engine = input.engineModel) => ({
@@ -39,7 +39,8 @@ function modelHarness(query = async () => ({ok: true, candidates: [candidate()],
 
   const props = reactive({review: {business_type: "vehicle_source", cross_checks: [materialCheck()]},
     pageData: {actions: sourceManifest.actions, fieldLabels, sourceTabId: 12, pageUrl: "https://example.test/consistency", pageInstanceId: "instance-1",
-      pageFingerprint: "record-1", collectionId: "collection-1", pageFields: {"vehicle.model": "页面原车型", "spec.brand": "示例品牌", "spec.series": "示例车系", "vehicle.type": "牵引车"}}, disabled: false, ...extra});
+      pageFingerprint: "record-1", collectionId: "collection-1",
+      pageSelection: {brand: {id: "2", label: "示例品牌"}, series: {id: "3", label: "示例车系"}, model: {id: "1", label: "页面原车型"}, vehicleType: "牵引车"}, pageFields: {"vehicle.brand_model": "错误牌WRONG100", "spec.engine_model": "WRONG42", "vehicle.model": "页面原车型", "spec.brand": "示例品牌", "spec.series": "示例车系", "vehicle.type": "牵引车"}}, disabled: false, ...extra});
   const calls = [], results = [], fills = [], busy = [];
   const scope = effectScope();
   const model = scope.run(() => useVehicleModelReview({
@@ -85,12 +86,12 @@ test("model picker shows permanent two-row inputs and a visible disabled fill bu
   assert.match(html, /请确认辅助材料/);
   assert.match(html, /<button[^>]*disabled[^>]*>回填整个规格参数<\/button>/);
   assert.match(html, /请先选择候选车型/);
-  assert.doesNotMatch(html, /checked|<article|<h2|修改搜索条件|候选车型分页|变速箱未提供|换挡形式未提供/);
+  assert.doesNotMatch(html, /<article|<h2|修改搜索条件|候选车型分页|变速箱未提供|换挡形式未提供/);
   assert.match(html, /搜索车型/);
   assert.equal((html.match(/<input[^>]*maxlength="80"/g) || []).length, 2);
 });
 
-test("model auto-search waits for both material codes and enabled review, then queries once", async () => {
+test("model auto-search waits for enabled review, uses latest image codes and ignores equivalent OCR updates", async () => {
   const harness = modelHarness(undefined, {disabled: true,
     review: {business_type: "vehicle_source", cross_checks: [materialCheck(input.announcementModel, "")]}});
   const {model, props, calls} = harness;
@@ -101,6 +102,8 @@ test("model auto-search waits for both material codes and enabled review, then q
   assert.equal(calls.length, 1);
   await settle();
   assert.equal(model.state.status, "FOUND");
+  assert.equal(calls[0][1].announcementModel, input.announcementModel);
+  assert.equal(calls[0][1].engineModel, input.engineModel);
   assert.equal(model.state.selectedId, ""); // 一个候选也不自动选择。
   props.review.cross_checks = [materialCheck(" model100a80 ", " engine42-e6 ")];
   props.disabled = true; props.disabled = false;
@@ -110,30 +113,21 @@ test("model auto-search waits for both material codes and enabled review, then q
   assert.equal(model.fillDisabledReason, "");
 });
 
-test("page scope is required, sent with both codes, displayed and changing it invalidates old choices", async () => {
+test("captured series IDs default independently of labels and basic vehicle type is required", async () => {
   const {model, props, calls} = modelHarness();
   await settle();
   assert.deepEqual(JSON.parse(JSON.stringify(calls[0][1].pageScope)), input.pageScope);
   model.select("10");
-  props.pageData.pageFields["spec.series"] = "其他车系";
+  props.pageData.pageSelection.series = {id: "4", label: "示例车系"};
   assert.equal(model.state.selectedId, "");
-  assert.equal(model.state.candidates.length, 0);
   await settle();
-  assert.equal(calls.length, 2);
-  assert.equal(calls[1][1].pageScope.seriesName, "其他车系");
-
-  const html = await renderToString(h(Picker, {disabled: false, model, pageData: props.pageData}));
-  assert.match(html, /查询范围：示例品牌 \/ 其他车系 \/ 牵引车/);
-  props.pageData.pageFields["vehicle.type"] = "";
+  assert.equal(calls[1][1].pageScope.seriesId, "4");
+  props.pageData = {...props.pageData, pageFields: {...props.pageData.pageFields, "vehicle.type": ""},
+    pageSelection: {...props.pageData.pageSelection, vehicleType: ""}};
   await settle();
   assert.equal(model.scopeReady, false);
-  assert.equal(model.state.candidates.length, 0);
-  assert.match(model.state.message, /缺少页面品牌、车系或车辆类型/);
-  await model.search();
   assert.equal(calls.length, 2);
-  props.pageData.pageFields["vehicle.type"] = "牵引车";
-  await settle();
-  assert.equal(calls.length, 3);
+  assert.match(model.state.message, /车源基础信息.*车辆类型/);
 });
 
 test("raw dropdown IDs cannot silently become a successful empty catalog search", async () => {
@@ -142,11 +136,11 @@ test("raw dropdown IDs cannot silently become a successful empty catalog search"
   await settle();
   assert.equal(calls.length, 0);
   assert.equal(model.scopeReady, false);
-  assert.match(model.state.message, /内部编号.*选中名称/);
+  assert.match(model.state.message, /真实选项 ID/);
   await model.search();
   assert.equal(calls.length, 0);
   assert.equal(model.state.status, "ERROR");
-  assert.match(model.state.message, /内部编号/);
+  assert.match(model.state.message, /真实选项 ID/);
 });
 
 test("manual input invalidates old choices and survives later OCR, with explicit material reset", async () => {
@@ -162,7 +156,7 @@ test("manual input invalidates old choices and survives later OCR, with explicit
   assert.equal(calls.length, 1);
   await model.search();
   assert.equal(calls[1][1].engineModel, "ENGINE50-E6");
-  model.useMaterials();
+  model.restoreMaterials();
   await settle();
   assert.equal(calls[2][1].engineModel, "ENGINE60-E6");
   assert.equal(model.state.manual, false);
@@ -256,19 +250,20 @@ test("connection failures remain recoverable errors rather than empty results or
   fail = false;
   await model.search();
   assert.equal(model.state.status, "EMPTY");
-  assert.match(model.state.message, /未找到/);
+  assert.match(model.state.message, /没有匹配/);
   assert.equal(calls.length, 2);
 });
 
 test("selected model previews the whole spec group and fills only on explicit action", async () => {
   const {model, props, fills, results, busy} = modelHarness();
+  props.pageData.pageFields["spec.engine_model"] = input.engineModel;
   await settle();
   await model.fill();
   assert.equal(fills.length, 0);
   model.state.selectedId = "10";
 
   const html = await renderToString(h(Picker, {disabled: false, model, pageData: props.pageData}));
-  assert.match(html, /回填预览：将更新 7 项参数/);
+  assert.match(html, /回填预览：将更新 6 项参数/); // Page already has the same engine model.
   assert.match(html, /<button(?![^>]*disabled)[^>]*>回填整个规格参数<\/button>/);
   await model.fill();
   assert.deepEqual(fills, [["search-1", "10"]]);
@@ -344,42 +339,54 @@ test("brand evidence only offers the completed brand and model as one-click fill
   assert.match(html.replace(/<[^>]*>/g, ""), /解放牌MODEL100A80/);
 });
 
-test("two complete codes retain suffixes and reject incomplete or injected queries", () => {
+test("optional full codes retain suffixes and reject invalid or injected queries", () => {
   assert.deepEqual(validatedModelInput({announcementModel: " model100a80 ", engineModel: "锡柴 engine42-e6 ", pageScope: input.pageScope}), input);
   assert.equal(normalizeEngineCode("潍柴MC13H.51-61"), "MC13H.51-61");
-  for (const code of ["", "MODEL%", "MODEL' OR 1=1", "MODEL_A"]) {
+  for (const code of ["MODEL%", "MODEL' OR 1=1", "MODEL_A"]) {
     assert.throws(() => validatedModelInput({...input, announcementModel: code}), /完整/);
   }
-  assert.throws(() => validatedModelInput(null), /完整/);
+  assert.throws(() => validatedModelInput(null), /品牌/);
 });
 
 test("model plan maps all visible spec fields and preserves absent cargo length", () => {
-  const plan = modelFillPlan(candidate(), {}, mappings);
-  assert.deepEqual(plan.values.slice(0, 3).map(item => [item.field, item.optionValue]),
-    [["spec.brand", "2"], ["spec.series", "3"], ["vehicle.model", "10"]]);
-  assert.equal(plan.values.length, 9);
+  const plan = modelFillPlan(candidate(), {}, mappings, fieldLabels, selection);
+  assert.deepEqual(plan.values.slice(0, 1).map(item => [item.field, item.optionValue]),
+    [["vehicle.model", "10"]]);
+  assert.equal(plan.values.length, 7);
   assert.equal(plan.values.find(item => item.field === "spec.engine_model").value, "ENGINE42-E6");
   assert.deepEqual(plan.missing, []);
   assert.match(plan.warnings.join(""), /不改写/);
-  const preserved = modelFillPlan(candidate(), {"spec.cargo_length": "6.8"}, mappings, fieldLabels);
+  const preserved = modelFillPlan(candidate(), {"spec.cargo_length": "6.8"}, mappings, fieldLabels, selection);
   assert.equal(preserved.values.at(-1).value, "6.8");
   assert.match(preserved.warnings.join(""), /保留页面原值/);
   for (const cargo of [null, "--", "0", "-1", "未知"]) {
     const item = candidate(); item.config.packingCaseLength = cargo;
-    const empty = modelFillPlan(item, {}, mappings, fieldLabels);
+    const empty = modelFillPlan(item, {}, mappings, fieldLabels, selection);
     assert.ok(!empty.values.some(value => value.field === "spec.cargo_length"));
     assert.match(empty.warnings.join(""), /不改写/);
   }
   const complete = candidate(); complete.config.packingCaseLength = "6.8";
-  assert.equal(modelFillPlan(complete, {}, mappings, fieldLabels).values.at(-1).value, "6.8");
+  assert.equal(modelFillPlan(complete, {}, mappings, fieldLabels, selection).values.at(-1).value, "6.8");
   complete.config.fuelType = null;
-  assert.deepEqual(modelFillPlan(complete, {}, mappings, fieldLabels).missing, ["燃料种类"]);
+  assert.deepEqual(modelFillPlan(complete, {}, mappings, fieldLabels, selection).missing, ["燃料种类"]);
 });
 
 test("same-name records may be filled by ID while invalid IDs are rejected", () => {
   verifyModelOption(candidate());
   verifyModelOption({...candidate(), sameNameCount: 2});
-  assert.throws(() => verifyModelOption({...candidate(), brandId: "undefined"}), /ID/);
+  assert.throws(() => verifyModelOption({...candidate(), modelId: "undefined"}), /ID/);
+});
+
+test("fill preview counts different option IDs even when model names are identical", async () => {
+  const {model, props} = modelHarness();
+  await settle();
+  model.select("10");
+  for (const item of model.plan.values) props.pageData.pageFields[item.field] = item.value;
+  assert.equal(props.pageData.pageSelection.model.id, "1");
+  assert.equal(model.changedCount, 1);
+  props.pageData.pageSelection.model = {id: "10", label: candidate().modelName};
+  await settle(); model.select("10");
+  assert.equal(model.changedCount, 0);
 });
 
 test("serialized candidates compare by values, including nested config, never by dictionary order", () => {
@@ -404,7 +411,7 @@ test("same-name candidate cards show record ID and differences without pretendin
   const html = await renderToString(h(Picker, {disabled: false, model, pageData: props.pageData}));
   assert.match(html, /车型编号 10/);
   assert.match(html, /车型编号 11/);
-  assert.match(html, /后桥速比 3.73/);
+  assert.doesNotMatch(html, /后桥速比|DT1420/);
   assert.match(html, /名称与页面一致/);
   assert.doesNotMatch(html, /页面当前选择|无法可靠定位|原页面人工选择/);
   assert.equal(model.fillDisabledReason, "");
@@ -435,7 +442,7 @@ test("background only calls review service query endpoint and surfaces unavailab
     assert.ok(!url.includes("forjtruck.com"));
     assert.deepEqual(JSON.parse(init.body), input);
     assert.equal(init.headers.Authorization, undefined);
-    return {ok: true, json: async () => [candidate()]};
+    return {ok: true, json: async () => ({candidates: [candidate()], total: 1})};
   });
   assert.equal(result.candidates[0].modelId, "10");
   const failure = await requestModelCatalog(input, async () => ({ok: false, json: async () => ({detail: "正式车型库尚未配置"})}));
@@ -518,42 +525,22 @@ test("late page overwrite fails final readback instead of reporting completed sp
   assert.match(result.message, /最终回读不一致/);
 });
 
-test("pagination retains selection across pages without querying and resets on new search or edit", async () => {
-  const candidates = Array.from({length: 12}, (_, i) => ({...candidate(), modelId: String(i + 1), modelName: `完整车型名称 ${i + 1}`}));
-  const {model, props, calls} = modelHarness(async () => ({ok: true, candidates, searchId: "all-12"}));
+test("all candidates are displayed without pagination and a new query clears selection", async () => {
+  const rows = Array.from({length: 11}, (_, i) => ({...candidate(), modelId: String(i + 1)}));
+  const {model, props, calls} = modelHarness(async () => ({ok: true, candidates: rows, searchId: "all"}));
   await settle();
-
-  assert.equal(model.pageCount, 3);
-  assert.equal(model.pageCandidates.length, 5);
-  model.select("3");
-  model.setPage(3);
-  assert.equal(model.state.selectedId, "3");
-  assert.equal(model.selectedPage, 1);
-  assert.equal(model.pageCandidates.length, 2);
-  assert.equal(model.range, "11–12");
+  assert.equal(model.state.candidates.length, 11);
+  model.select("11");
+  const wrapper = mount(Picker, {props: {model, pageData: props.pageData, disabled: false}});
+  onTestFinished(() => wrapper.unmount());
+  assert.equal(wrapper.findAll('input[type="radio"]').length, 11);
+  assert.equal(wrapper.find('nav').exists(), false);
   assert.equal(calls.length, 1);
-  const html = await renderToString(h(Picker, {disabled: false, model, pageData: props.pageData}));
-  assert.equal((html.match(/type="radio"/g) || []).length, 2);
-  assert.match(html, /回到所选页 · 第 1 页/);
-  assert.match(html, /完整车型名称 3/);
-  assert.match(html, /当前 11–12 条/);
-  assert.match(html, /aria-current="page"/);
-  props.disabled = true; model.setPage(1);
-  assert.equal(model.state.page, 3);
-  props.disabled = false; model.setPage(model.selectedPage);
-  assert.equal(model.pageCandidates[2].modelId, "3");
-  model.setPage(0); model.setPage(4); model.setPage(1.5);
-  assert.equal(model.state.page, 1);
-  model.setPage(2);
-  await model.search();
-  assert.equal(model.state.page, 1);
+  model.edit("engineModel", "MANUAL42");
   assert.equal(model.state.selectedId, "");
-  model.setPage(2); model.select("6");
-  model.edit("engineModel", "ENGINE50-E6");
-  assert.equal(model.state.page, 1);
-  assert.equal(model.state.selectedId, "");
-  assert.equal(model.pageCandidates.length, 0);
+  assert.equal(model.state.candidates.length, 0);
 });
+
 
 test("compact model evidence preserves readings and uncertainty with one original image per material", async () => {
   const {model, props} = modelHarness();
@@ -571,4 +558,230 @@ test("compact model evidence preserves readings and uncertainty with one origina
   assert.match(html, /整车型号/);
   assert.match(html, /发动机型号/);
   assert.match(html, /材料依据/);
+});
+
+
+test("missing or conflicting materials never fall back to page codes, and scope-only browsing stays optional", async () => {
+  const {model, props, calls} = modelHarness(undefined, {review: {business_type: "vehicle_source", cross_checks: [materialCheck("", "")]}});
+  await settle();
+  assert.equal(calls.length, 0);
+  assert.equal(model.state.input.announcementModel, "");
+  assert.equal(model.state.input.engineModel, "");
+  await model.search();
+  assert.equal(calls[0][1].announcementModel, "");
+  assert.equal(calls[0][1].engineModel, "");
+  assert.equal("modelName" in calls[0][1], false);
+  props.review.cross_checks = [materialCheck("OTHER100", "OTHER42")];
+  await settle();
+  assert.equal(calls.length, 2);
+  assert.equal(model.state.input.announcementModel, "OTHER100");
+  model.select("10");
+  props.review.cross_checks = [materialCheck("", "")];
+  props.review.cross_checks[0].details.model_search.issues.push("型号在材料中存在不同读值");
+  await settle();
+  assert.equal(calls.length, 2);
+  assert.equal(model.state.input.announcementModel, "");
+  assert.equal(model.state.input.engineModel, "");
+  assert.equal(model.state.selectedId, "");
+  assert.equal(model.state.searchId, "");
+  assert.equal(model.state.candidates.length, 0);
+  props.disabled = true; props.disabled = false;
+  await settle();
+  assert.equal(calls.length, 2);
+  const html = await renderToString(h(Picker, {disabled: false, model, pageData: props.pageData}));
+  assert.match(html, /型号在材料中存在不同读值/);
+  assert.doesNotMatch(html, /WRONG100|WRONG42|恢复页面条件/);
+});
+
+test("late image recognition initializes defaults but never overwrites manual inputs", async () => {
+  const {model, props, calls} = modelHarness(undefined, {review: {business_type: "vehicle_source", cross_checks: []}});
+  await settle();
+  assert.equal(calls.length, 0);
+  assert.equal(model.state.status, "WAITING");
+  assert.equal(model.state.input.announcementModel, "");
+  assert.equal(model.state.input.engineModel, "");
+  props.review.cross_checks = [materialCheck(input.announcementModel, "")];
+  await settle();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][1].announcementModel, input.announcementModel);
+  assert.equal(calls[0][1].engineModel, "");
+  props.review.cross_checks = [];
+  model.edit("engineModel", "MANUAL42");
+  props.review.cross_checks = [materialCheck("LATE100", "LATE42")];
+  await settle();
+  assert.equal(calls.length, 1);
+  assert.equal(model.state.input.engineModel, "MANUAL42");
+  assert.equal(model.state.input.announcementModel, "");
+  model.restoreMaterials();
+  await settle();
+  assert.equal(calls[1][1].announcementModel, "LATE100");
+  assert.equal(calls[1][1].engineModel, "LATE42");
+});
+
+test("material changes invalidate in-flight queries and disabled review waits before searching updated codes", async () => {
+  const resolvers = [];
+  const {model, props, calls} = modelHarness(() => new Promise(resolve => resolvers.push(resolve)));
+  props.disabled = true;
+  props.review.cross_checks = [materialCheck("", "ENGINE60-E6")];
+  assert.equal(calls.length, 1);
+  resolvers[0]({ok: true, candidates: [candidate()], searchId: "obsolete-image"});
+  await settle();
+  assert.equal(model.state.candidates.length, 0);
+  assert.equal(model.state.input.announcementModel, "");
+  assert.equal(model.state.input.engineModel, "ENGINE60-E6");
+  props.disabled = false;
+  assert.equal(calls.length, 2);
+  props.review.cross_checks = [materialCheck("", "")];
+  resolvers[1]({ok: true, candidates: [candidate()], searchId: "obsolete-conflict"});
+  await settle();
+  assert.equal(model.state.candidates.length, 0);
+  assert.equal(model.state.searchId, "");
+  assert.equal(calls.length, 2);
+});
+
+test("code edits and restoring image defaults always retain the captured page scope", async () => {
+  const {model, props, calls} = modelHarness();
+  await settle(); model.select("10");
+  model.edit("announcementModel", ""); model.edit("engineModel", "");
+  assert.equal(model.state.candidates.length, 0);
+  assert.equal(model.state.selectedId, "");
+  await model.search();
+  assert.equal(calls[1][1].announcementModel, ""); assert.equal(calls[1][1].engineModel, "");
+  model.restoreMaterials(); await settle();
+  assert.equal(calls.length, 3);
+  for (const [, query] of calls) assert.deepEqual(JSON.parse(JSON.stringify(query.pageScope)), input.pageScope);
+  assert.equal(props.pageData.pageSelection.brand.id, "2");
+  assert.equal(props.pageData.pageSelection.series.id, "3");
+});
+
+
+test("partial page identity still defaults search but never enables unverified writes", async () => {
+  const {model, props, calls} = modelHarness();
+  await settle();
+  const page = {...props.pageData, collectionId: "partial", pageModelScope: {...input.pageScope},
+    pageSelection: undefined, pageSelectionError: "车型：选中身份无法核验"};
+  props.pageData = page;
+  await settle();
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1][1].pageScope.seriesId, "3");
+  model.select("10");
+  assert.match(model.fillDisabledReason, /未取得原页面选项身份/);
+  model.edit("engineModel", "OTHER42");
+  props.pageData.pageFields["spec.engine_model"] = "AFTER42";
+  model.restoreMaterials();
+  await settle();
+  assert.equal(calls[2][1].engineModel, "ENGINE42-E6");
+  assert.equal("modelName" in calls[2][1], false);
+});
+
+
+test("sales model stays in results while page scope and two image codes drive the automatic query", async () => {
+  const {model, calls, props} = modelHarness();
+  await settle();
+  const wrapper = mount(Picker, {props: {model, pageData: props.pageData, disabled: false}});
+  onTestFinished(() => wrapper.unmount());
+  assert.equal(wrapper.find('#model-name').exists(), false);
+  assert.equal(wrapper.findAll('input[role="combobox"], select').length, 0);
+  assert.equal(wrapper.findAll('form input').length, 2);
+  assert.match(wrapper.text(), /页面限定品牌：示例品牌/);
+  assert.doesNotMatch(wrapper.text(), /不限车辆类型/);
+  assert.match(wrapper.text(), /完整车型名称/);
+  assert.equal('modelName' in calls[0][1], false);
+  assert.equal(calls[0][1].pageScope.seriesId, '3');
+  assert.equal(calls[0][1].pageScope.typeLevel, '牵引车');
+  model.edit('engineModel', 'OTHER42');
+  await model.search();
+  assert.equal(calls[1][1].engineModel, 'OTHER42');
+  assert.equal('modelName' in calls[1][1], false);
+});
+
+test("basic vehicle type is fixed and never borrows the license full type", async () => {
+  const {model, props, calls} = modelHarness();
+  await settle();
+  props.pageData = {...props.pageData, collectionId: 'basic-type',
+    pageSelection: {...props.pageData.pageSelection, vehicleType: '自卸车'},
+    pageFields: {...props.pageData.pageFields, 'vehicle.type': '自卸车', 'vehicle.license_type': '重型半挂牵引车'}};
+  await settle();
+  assert.equal(calls[1][1].pageScope.typeLevel, '自卸车');
+  props.pageData = {...props.pageData, collectionId: 'empty-basic-type',
+    pageSelection: {...props.pageData.pageSelection, vehicleType: ''},
+    pageFields: {...props.pageData.pageFields, 'vehicle.type': ''}};
+  await settle();
+  assert.equal(calls.length, 2);
+  assert.equal(model.scopeReady, false);
+  assert.match(model.state.message, /车源基础信息.*车辆类型/);
+});
+
+test("a live-page scope failure clears the selection and reports required recollection", async () => {
+  let response = {ok: true, candidates: [candidate()], searchId: "first"};
+  const {model, results} = modelHarness(async () => response);
+  await settle(); model.select("10");
+  response = {ok: false, candidates: [], code: "MODEL_PAGE_SCOPE_CHANGED", message: "页面车系已变化，请重新采集"};
+  await model.search();
+  assert.equal(model.state.selectedId, "");
+  assert.equal(model.state.candidates.length, 0);
+  assert.equal(results.at(-1).code, "MODEL_PAGE_SCOPE_CHANGED");
+});
+
+
+test("series stays fixed to the captured page and has no dropdown or independent filter", async () => {
+  const {model, props, calls} = modelHarness();
+  await settle();
+  assert.equal(calls[0][1].pageScope.seriesId, "3");
+  assert.equal(Object.hasOwn(calls[0][1], "seriesId"), false);
+  const wrapper = mount(Picker, {props: {model, pageData: props.pageData, disabled: false}});
+  onTestFinished(() => wrapper.unmount());
+  assert.equal(wrapper.find('select, [role="combobox"]').exists(), false);
+  assert.match(wrapper.text(), /车系：示例车系/);
+});
+
+
+test("changing the captured series invalidates pending candidates", async () => {
+  let finish;
+  const {model, props} = modelHarness(() => new Promise(resolve => {finish = resolve;}));
+  const old = finish;
+  props.pageData.pageSelection.series = {id: "4", label: "新车系"};
+  old({ok: true, candidates: [candidate()], searchId: "old"});
+  await settle();
+  assert.equal(model.state.candidates.length, 0);
+  finish({ok: true, candidates: [], searchId: "new"});
+  await settle();
+  assert.equal(model.state.status, "EMPTY");
+});
+
+
+test("missing page series blocks automatic queries and never widens the scope", async () => {
+  const {props, model, calls} = modelHarness(undefined, {disabled: true});
+  props.pageData.pageSelection.series = {id: "", label: ""};
+  props.disabled = false;
+  await settle();
+  assert.equal(calls.length, 0);
+  assert.match(model.state.message, /车系/);
+});
+
+
+test("new mapping contract fills only model and six specs; published scope mappings stay compatible", () => {
+  const selection = {brand: {id: "2", label: "示例品牌"}, series: {id: "3", label: "示例车系"},
+    model: {id: "1", label: "原车型"}, vehicleType: "牵引车"};
+  const old = modelFillPlan(candidate(), {}, mappings, fieldLabels, selection);
+  const modern = mappings.filter(item => !["spec.brand", "spec.series", "spec.cargo_length"].includes(item.target_field))
+    .map((item, index, list) => ({...item, order: index, depends_on: index ? [list[index - 1].mapping_id] : []}));
+  const current = modelFillPlan(candidate(), {}, modern, fieldLabels, selection);
+  assert.deepEqual(old.values, current.values);
+  assert.equal(current.values.length, 7);
+  assert.deepEqual(current.missing, []);
+});
+
+
+
+test("catalog transport rejects malformed and duplicate IDs but accepts explicitly null specs", async () => {
+  const fetcher = candidates => async () => ({ok: true, json: async () => ({candidates})});
+  for (const rows of [[candidate(), candidate()], [{...candidate(), modelId: "0"}],
+    [{...candidate(), config: {maxHp: "420"}}]]) {
+    const result = await requestModelCatalog(input, fetcher(rows));
+    assert.equal(result.ok, false);
+    assert.match(result.message, /响应不完整|重复/);
+  }
+  const row = {...candidate(), config: Object.fromEntries(Object.keys(candidate().config).map(key => [key, null]))};
+  assert.equal((await requestModelCatalog(input, fetcher([row]))).ok, true);
 });

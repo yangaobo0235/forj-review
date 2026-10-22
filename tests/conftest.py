@@ -95,6 +95,10 @@ def database(postgres_url):
 
 @pytest.fixture(autouse=True)
 def isolate_private_database_settings(tmp_path, monkeypatch, request):
+    # Unit and replay tests must never call the developer's business API.
+    monkeypatch.setenv("REVIEW_VEHICLE_API_BASE_URL", "")
+    monkeypatch.setenv("REVIEW_VEHICLE_API_TOKEN", "")
+    monkeypatch.setenv("REVIEW_VEHICLE_API_TIMEOUT", "15")
     # Filling the developer's real password must not send ordinary tests to their server.
     from forj_review_database import settings as database_settings
 

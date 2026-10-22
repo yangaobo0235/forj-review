@@ -1,6 +1,6 @@
 import { onTestFinished } from "vitest";
 import assert from "node:assert/strict";
-import { test } from "vitest";
+import { test, vi } from "vitest";
 import { webcrypto } from "node:crypto";
 import { inspectAntSelect } from "../src/platform/extension/ant-select-inspector.ts";
 import { inspectExactOption } from "../src/platform/browser/actions/exact-select.ts";
@@ -67,7 +67,7 @@ test("MAIN inspector serializes without closures and maps custom-field virtual k
   const f = fixture(t, true);
   const inspect = new Function(`return (${inspectAntSelect.toString()})`)();
   f.control.setAttribute("data-review-select-token", "test-token");
-  assert.deepEqual(inspect("test-token", location.href), {ok: true, selectedValue: "10"});
+  assert.deepEqual(inspect("test-token", location.href), {ok: true, selectedValue: "10", selectedLabel: "同名销售车型", valueField: "modelId"});
   const first = inspect("test-token", location.href, {id: "11", label: "同名销售车型", prepare: true});
   assert.equal(first.ok, true);
   assert.equal(first.optionToken, undefined);
@@ -77,6 +77,79 @@ test("MAIN inspector serializes without closures and maps custom-field virtual k
   assert.equal(f.nodes.get(10).getAttribute("data-review-option-token"), null);
   assert.deepEqual(f.clicks, [], "inspector never chooses an option or writes business state");
   assert.equal(f.app.__vueParentComponent, undefined, "production root vnode works without development expandos");
+});
+
+test("parallel series loading and automatic search cannot overwrite one control's inspection token", async t => {
+  const f = fixture(t);
+  globalThis.chrome.runtime.sendMessage = async message => {
+    await new Promise(setImmediate);
+    return inspectAntSelect(message.token, message.expectedPageUrl, message.target);
+  };
+  const reads = await Promise.allSettled([inspectExactOption(f.control), inspectExactOption(f.control)]);
+  assert.deepEqual(reads.map(read => read.status), ["fulfilled", "fulfilled"]);
+  assert.ok(reads.every(read => read.value.selectedValue === "10"));
+  assert.equal(f.control.getAttribute("data-review-select-token"), null);
+});
+
+test("a failed scope inspection does not strand the next queued read", async t => {
+  const f = fixture(t);
+  let calls = 0;
+  globalThis.chrome.runtime.sendMessage = async message => {
+    await new Promise(setImmediate);
+    if (++calls === 1) throw new Error("inspection transport disconnected");
+    return inspectAntSelect(message.token, message.expectedPageUrl, message.target);
+  };
+  const reads = await Promise.allSettled([inspectExactOption(f.control), inspectExactOption(f.control)]);
+  assert.equal(reads[0].status, "rejected");
+  assert.equal(reads[1].status, "fulfilled");
+  assert.equal(reads[1].value.selectedValue, "10");
+  assert.equal(f.control.getAttribute("data-review-select-token"), null);
+});
+
+test("failed model linkage stops dependent writes and releases observation resources", async t => {
+  const f = fixture(t, true);
+  const hp = f.add(f.form, "input"); hp.value = "OLD";
+  let disposed = false;
+  const result = await ReviewPageFieldWriter.executeSequence(f.document, [
+    {field: "vehicle.model", label: "车型", value: "同名销售车型", optionValue: "11"},
+    {field: "spec.max_hp", label: "最大马力", value: "450"},
+  ], field => field === "vehicle.model" ? f.control : hp, () => true, {
+    fields: new Set(["vehicle.model", "spec.max_hp"]), inspectOption: inspectExactOption,
+    observeWrite: item => {
+      assert.equal(item.field, "vehicle.model");
+      assert.equal(f.instance.props.value, 10, "observation starts before the model selection");
+      return {wait: async () => {
+        assert.equal(f.instance.props.value, 11);
+        return {ok: false, code: "MODEL_LINKAGE_FAILED", message: "配置加载失败"};
+      }, dispose: () => {disposed = true;}};
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "MODEL_LINKAGE_FAILED");
+  assert.equal(hp.value, "OLD");
+  assert.equal(result.actions[0].status, "FILLED", "confirmed parent action remains available for identity validation");
+  assert.equal(disposed, true);
+});
+
+test("cached series selection retains actual ID and displayed label after remote options change", t => {
+  const f = fixture(t, false, {value: "seriesId", label: "seriesName"});
+  f.instance.props.options = [];
+  f.selected.textContent = "欧曼GTL";
+  f.control.setAttribute("data-review-select-token", "cached");
+  const result = inspectAntSelect("cached", location.href);
+  assert.deepEqual(result, {ok: true, selectedValue: "10", selectedLabel: "欧曼GTL", valueField: "seriesId"});
+  assert.equal(inspectAntSelect("cached", location.href, {id: "10", label: "欧曼GTL", prepare: true}).ok, false);
+  assert.deepEqual(f.clicks, []);
+});
+
+test("duplicate business IDs can be read but ambiguous target options cannot be written", t => {
+  const f = fixture(t, false, {value: "seriesId", label: "seriesName"});
+  f.instance.props.options.push({...f.instance.props.options[0]});
+  f.control.setAttribute("data-review-select-token", "duplicates");
+  assert.equal(inspectAntSelect("duplicates", location.href).selectedValue, "10");
+  assert.equal(inspectAntSelect("duplicates", location.href, {id: "10", label: "同名销售车型", prepare: true}).ok, false);
+  f.selected.textContent = "与选中 ID 无关的车系";
+  assert.equal(inspectAntSelect("duplicates", location.href).ok, false);
 });
 
 test("same current label with another ID is clicked and read back by ID through the full sequence", async t => {
@@ -203,5 +276,115 @@ test("invalid target IDs, disabled options and changed pages never fall back to 
   const result = await ReviewPageFieldWriter.executeValue(f.document, f.control,
     {field: "vehicle.model", value: "同名销售车型", optionValue: "11"}, () => true, {fields: new Set(["vehicle.model"])});
   assert.equal(result.ok, false);
+  assert.deepEqual(f.clicks, []);
+});
+
+
+test("live label resolution preserves aliases for the same verified ID", async t => {
+  const f = fixture(t);
+  const values = [{field: "spec.series", label: "车系", value: "目录别名", optionValue: "10"}];
+  const result = await ReviewPageFieldWriter.executeSequence(f.document, values, () => f.control, () => true,
+    {fields: new Set(["spec.series"]), inspectOption: inspectExactOption, useLiveOptionLabels: true});
+  assert.equal(result.ok, true, result.message);
+  assert.deepEqual(f.clicks, []);
+  assert.equal(values[0].value, "同名销售车型");
+});
+
+test("unchanged cached selections do not require remote options or click their parents", async t => {
+  const f = fixture(t, false, {value: "seriesId", label: "seriesName"});
+  f.instance.props.options = [];
+  const values = [{field: "spec.series", label: "车系", value: "目录别名", optionValue: "10"}];
+  const result = await ReviewPageFieldWriter.executeSequence(f.document, values, () => f.control, () => true,
+    {fields: new Set(["spec.series"]), inspectOption: inspectExactOption, useLiveOptionLabels: true,
+      optionValueFields: {"spec.series": ["seriesId"]}});
+  assert.equal(result.ok, true, result.message);
+  assert.equal(result.actions[0].status, "UNCHANGED");
+  assert.equal(values[0].value, "同名销售车型");
+  assert.deepEqual(f.clicks, []);
+});
+
+test("duplicate options for an already-selected ID do not block an unchanged field", async t => {
+  const f = fixture(t);
+  f.instance.props.options.push({...f.instance.props.options[0]});
+  const result = await ReviewPageFieldWriter.executeSequence(f.document,
+    [{field: "vehicle.model", label: "车型", value: "同名销售车型", optionValue: "10"}], () => f.control, () => true,
+    {fields: new Set(["vehicle.model"]), inspectOption: inspectExactOption, useLiveOptionLabels: true});
+  assert.equal(result.ok, true, result.message);
+  assert.deepEqual(f.clicks, []);
+});
+
+test("a different same-label model opens the dropdown and waits for lazy target options", async t => {
+  const f = fixture(t);
+  f.instance.props.options = [f.rows[0].data];
+  f.control.setAttribute("aria-expanded", "false");
+  const opens = [];
+  f.control.click = () => {
+    opens.push("open"); f.control.setAttribute("aria-expanded", "true");
+    f.instance.props.options = f.rows.map(row => row.data);
+  };
+  const result = await ReviewPageFieldWriter.executeSequence(f.document,
+    [{field: "vehicle.model", label: "车型", value: "同名销售车型", optionValue: "11"}], () => f.control, () => true,
+    {fields: new Set(["vehicle.model"]), inspectOption: inspectExactOption, useLiveOptionLabels: true});
+  assert.equal(result.ok, true, result.message);
+  assert.deepEqual(opens, ["open"]);
+  assert.deepEqual(f.clicks, [11]);
+  assert.equal(f.instance.props.value, 11);
+});
+
+test.each(["disabled", "duplicate"])("a %s target reports the specific field and never writes subsequent parameters", async kind => {
+  const f = fixture(null);
+  if (kind === "disabled") f.instance.props.options[1].disabled = true;
+  else f.instance.props.options.push({...f.instance.props.options[1]});
+  const hp = f.add(f.form, "input"); hp.value = "420";
+  const result = await ReviewPageFieldWriter.executeSequence(f.document,
+    [{field: "spec.brand", label: "品牌", value: "同名销售车型", optionValue: "11"},
+      {field: "spec.max_hp", label: "马力", value: "450"}], field => field === "spec.brand" ? f.control : hp, () => true,
+    {fields: new Set(["spec.brand", "spec.max_hp"]), inspectOption: inspectExactOption, useLiveOptionLabels: true});
+  assert.equal(result.ok, false);
+  assert.equal(result.code, kind === "disabled" ? "SELECT_OPTION_DISABLED" : "SELECT_OPTION_DUPLICATE");
+  assert.match(result.message, /^品牌回填预检失败/);
+  assert.equal(hp.value, "420");
+  assert.deepEqual(f.clicks, []);
+});
+
+test("identity changes while waiting for options stop without clicking", async t => {
+  const f = fixture(t);
+  f.instance.props.options = [f.rows[0].data];
+  f.control.setAttribute("aria-expanded", "false");
+  let current = true;
+  f.control.click = () => { f.control.setAttribute("aria-expanded", "true"); current = false; };
+  const result = await ReviewPageFieldWriter.executeSequence(f.document,
+    [{field: "vehicle.model", label: "车型", value: "同名销售车型", optionValue: "11"}], () => f.control, () => current,
+    {fields: new Set(["vehicle.model"]), inspectOption: inspectExactOption, useLiveOptionLabels: true});
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "PAGE_IDENTITY_CHANGED");
+  assert.deepEqual(f.clicks, []);
+});
+
+test("a genuinely missing target times out with field and ID diagnostics, without falling back to its name", async t => {
+  const f = fixture(t);
+  vi.useFakeTimers(); onTestFinished(() => vi.useRealTimers());
+  f.instance.props.options = [f.rows[0].data];
+  const pending = ReviewPageFieldWriter.executeSequence(f.document,
+    [{field: "vehicle.model", label: "车型", value: "同名销售车型", optionValue: "11"}], () => f.control, () => true,
+    {fields: new Set(["vehicle.model"]), inspectOption: inspectExactOption, useLiveOptionLabels: true});
+  await vi.runAllTimersAsync();
+  const result = await pending;
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "SELECT_OPTION_MISSING");
+  assert.match(result.message, /^车型回填预检失败：.*目标 ID 11.*已加载 1 项/);
+  assert.deepEqual(f.clicks, []);
+  assert.equal(f.instance.props.value, 10);
+});
+
+
+test("a remounted child with internal series ID semantics is blocked before clicking", async t => {
+  const f = fixture(t, false, {value: "id", label: "brandName"});
+  const result = await ReviewPageFieldWriter.executeSequence(f.document,
+    [{field: "spec.series", label: "车系", value: "目录别名", optionValue: "11"}], () => f.control, () => true,
+    {fields: new Set(["spec.series"]), inspectOption: inspectExactOption, useLiveOptionLabels: true,
+      optionValueFields: {"spec.series": ["seriesId"]}});
+  assert.equal(result.ok, false);
+  assert.match(result.message, /字段语义已变化/);
   assert.deepEqual(f.clicks, []);
 });

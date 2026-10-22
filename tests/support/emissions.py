@@ -7,7 +7,6 @@ from forj_review_service.businesses.rules.emission_standard import (
 from forj_review_service.capabilities.specs import ReviewExecutionContext
 from forj_review_service.contracts.recognition import RecognitionBatchResult
 from forj_review_service.contracts.review import FieldObservation, ReviewRequest
-from forj_review_service.integrations.engine_emissions import lookup_engine_emissions
 from tests.support.pages import SCRAP_REPLACEMENT_QINGDAO
 
 
@@ -25,7 +24,7 @@ def observation(field: str, value: object, *, index: int = 1, uncertain: bool = 
     )
 
 
-def run(page: object, materials: list[FieldObservation], *, lookup=lookup_engine_emissions):
+def run(page: object, materials: list[FieldObservation], *, lookup):
     result = run_emission_standard(
         ReviewExecutionContext(
             request=ReviewRequest(

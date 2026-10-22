@@ -1,4 +1,4 @@
-"""Exact engine model keys shared by the reference import and review lookup."""
+"""Exact engine model keys and lookup protocols for business API evidence."""
 
 import re
 import unicodedata

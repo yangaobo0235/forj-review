@@ -34,6 +34,15 @@ TABLES = (
     "forj_vehicle_model_config",
 )
 
+# Historical baseline/backup tables remain intact. Runtime no longer depends on
+# the retired copied catalog or its derived reference datasets.
+RETIRED_REFERENCE_TABLES = frozenset({
+    "ref_vehicle_model_key", "ref_engine_emission", "ref_dataset_import",
+    "forj_vehicle_brand", "forj_vehicle_series", "forj_vehicle_model",
+    "forj_vehicle_model_config",
+})
+RUNTIME_TABLES = tuple(table for table in TABLES if table not in RETIRED_REFERENCE_TABLES)
+
 
 def schema_checksum():
     checksum = hashlib.sha256(SCHEMA_SQL.read_bytes().replace(b"\r\n", b"\n")).hexdigest()

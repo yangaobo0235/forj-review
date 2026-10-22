@@ -35,7 +35,7 @@ def create_app(*, review_service: ReviewService | None = None) -> FastAPI:
                     database = await resources.enter_async_context(AsyncDatabase(settings))
                     await database.require_ready()
                     registry = await load_registry(database)
-                    service = ReviewService(registry=registry, database_settings=settings)
+                    service = ReviewService(registry=registry)
                 app.state.database = database
                 jobs = ReviewJobManager(service)
                 app.state.review_service = service

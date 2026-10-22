@@ -11,9 +11,6 @@ from forj_review_service.integrations.storage.configuration import (
     publish_state_async,
     read_state_async,
 )
-from forj_review_service.runtime.review_service import ReviewService
-from forj_review_service.runtime.scheduling.fair_scheduler import FairAsyncScheduler
-from tests.support.pages import business_registry
 from tests.support.postgres import seed_complete_pages
 
 
@@ -70,29 +67,17 @@ async def test_concurrent_same_operation_has_one_release_and_one_revision(databa
             assert head.revision == state.revision + 1
 
 
-@pytest.mark.asyncio
-async def test_review_reference_pools_belong_to_each_execution_loop(database):
-    async with AsyncDatabase(database) as runtime:
-        async with runtime.session() as session:
-            session.add(
-                EngineEmission(
-                    engine_model="LOOPTEST", emission_standard="国六", source_config_count=1
-                )
-            )
-    service = ReviewService(
-        load_model=False, database_settings=database, registry=business_registry()
-    )
+def test_runtime_readiness_excludes_retired_reference_tables_but_checks_current_storage(database):
+    from psycopg import sql
 
-    async def run():
-        assert await service.lookup_engine_emissions(["LOOPTEST"]) == {"LOOPTEST": "国六"}
-        assert await service.lookup_engine_emissions(["ABSENT"]) == {}
+    from forj_review_database.readiness import require_ready_sync
+    from forj_review_database.schema import RETIRED_REFERENCE_TABLES
 
-    schedulers = [FairAsyncScheduler(global_limit=1, per_job_limit=1) for _ in range(2)]
-    try:
-        await asyncio.gather(
-            *(asyncio.wrap_future(scheduler.submit("lookup", run)) for scheduler in schedulers)
-        )
-    finally:
-        for scheduler in schedulers:
-            await asyncio.to_thread(scheduler.close, cleanup=service.aclose)
-    assert not service._databases
+    # This database fixture owns a disposable schema, never the developer database.
+    with database.connect() as connection:
+        connection.execute(sql.SQL("DROP TABLE ") + sql.SQL(",").join(
+            sql.Identifier(table) for table in sorted(RETIRED_REFERENCE_TABLES)))
+        require_ready_sync(connection.orm, database.schema)
+        connection.execute("DROP TABLE cfg_idempotency")
+        with pytest.raises(ValueError, match="cfg_idempotency"):
+            require_ready_sync(connection.orm, database.schema)

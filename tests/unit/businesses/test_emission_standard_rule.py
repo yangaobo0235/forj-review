@@ -4,12 +4,11 @@ from unittest.mock import Mock
 
 import pytest
 
-from forj_review_service.integrations.engine_emissions import (
-    EngineEmissionLookupUnavailable,
-    lookup_engine_emissions,
-)
+from forj_review_service.contracts.engine_emissions import EngineEmissionLookupUnavailable
 from tests.support.emissions import observation
 from tests.support.emissions import run as evaluate_emission
+
+lookup_engine_emissions = None
 
 
 @pytest.fixture(autouse=True)
@@ -73,7 +72,7 @@ def test_exact_model_lookup_does_not_require_engine_manufacturer(model: str, exp
     assert check.status == "MATCH"
     assert check.details["source"] == "engine_model"
     assert check.details["standard"] == expected
-    assert check.details["lookup_table"] == "ref_engine_emission"
+    assert check.details["lookup_api"] == "/vehicle-model/engine-emission/query"
 
 
 def test_lng_engine_uses_the_same_explicit_registration_standard() -> None:

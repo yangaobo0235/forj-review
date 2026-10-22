@@ -1,3 +1,6 @@
+import { createModelScopeReader, readModelContext } from "../platform/browser/collection/model-selection";
+import { sameModelData } from "../shared/vehicle-model";
+import type { ModelPageScope, ModelPageSelection } from "../shared/contracts/vehicle-model";
 import { imageAssetMetadata } from "../platform/browser/collection/image-assets.ts";
 import { collectImageCandidates } from "../platform/browser/collection/collect-image-candidates.ts";
 import { applyCollectManifest, manifestIdentityAnchors, manifestRecordIdentityFields, manifestWritableControlKinds, manifestWritableFields } from "../platform/browser/catalog/collect-manifest.ts";
@@ -41,6 +44,8 @@ let collectionSequence = 0;
 let reviewTabGuard: ReturnType<typeof guardActiveReviewTab> | null = null;
 let activeReviewRoot: HTMLElement | null = null;
 let activeCollectionBusiness = "";
+let activeModelSelection: ModelPageSelection | undefined;
+let activeModelScope: ModelPageScope | undefined;
 const sameReviewStep = () => reviewTabGuard?.isCurrent() ?? true;
 const nextCollectionId = () => `${pageInstanceId}:${++collectionSequence}`;
 // 指纹锚点来自本次业务的采集清单；没有清单时不启用身份判定。
@@ -147,6 +152,7 @@ const modelFiller = createVehicleModelFiller({
   root: document,
   isCurrent: message => activeCollectionBusiness === "vehicle_source" && sameReviewIdentity(message),
   collectionId: () => activeCollectionId,
+  selectionSnapshot: () => activeModelSelection,
   fields: reviewFieldElements,
   collect: fields => ReviewPageFieldCollector.collect(activeReviewRoot ?? document, new Set(fields)),
   writableFields,
@@ -155,7 +161,23 @@ const modelFiller = createVehicleModelFiller({
   fieldLabels: () => manifestFieldLabels() ?? {},
 });
 
+const readModelScope = createModelScopeReader<ReviewMessage>({
+  isCurrent: message => activeCollectionBusiness === "vehicle_source" && sameReviewIdentity(message),
+  snapshot: () => activeModelScope,
+  collect: () => {
+    const fields = ReviewPageFieldCollector.collect(activeReviewRoot ?? document,
+      new Set(["spec.brand", "spec.series", "vehicle.model", "vehicle.type"]));
+    return {...fields, pageFields: controlFields(fields)};
+  },
+});
+
 chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendResponse) => {
+  if (message.type === "READ_REVIEW_MODEL_SCOPE") {
+    if (_sender?.id !== chrome.runtime.id) return;
+    void readModelScope(message).then(sendResponse).catch(() => sendResponse({ok: false,
+      code: "MODEL_PAGE_SCOPE_CHANGED", message: "无法核验页面品牌和车辆类型，请重新采集后搜索车型"}));
+    return true;
+  }
   if (message.type === "APPLY_VEHICLE_MODEL") {
     void modelFiller.fill(message).then(sendResponse);
     return true;
@@ -456,6 +478,8 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
     ...(business || {}), pageUrl: window.location.href, pageId: business?.pageId,
     pageInstanceId, pageFingerprint: pageFingerprint(pageFields), collectionId,
     pageTitle: document.title, pageFields, reviewFields,
+    pageSelection: undefined as ModelPageSelection | undefined, pageSelectionError: "",
+    pageModelScope: undefined as import("../shared/contracts/vehicle-model").ModelPageScope | undefined,
     businessDetectionError: businessResolution.error,
   };
   const fieldDiagnostics = {
@@ -466,7 +490,21 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
   const collectionIssues = selection.overflow
     ? [`候选资料超过 ${MAX_REVIEW_IMAGES} 张，请确认是否漏审`] : [];
   const collectionPayload = {writableTargets, fieldTargets, pageText: allText};
-  Promise.resolve().then(() => images.map(imageAssetMetadata))
+  Promise.resolve().then(async () => {
+    if (business?.businessType === "vehicle_source") {
+      try {
+        const selectionBefore = await readModelContext({...fieldCollection, pageFields});
+        const current = ReviewPageFieldCollector.collect(activeReviewRoot ?? document);
+        const selectionAfter = await readModelContext({...current, pageFields: controlFields(current)});
+        if (!sameModelData(selectionBefore, selectionAfter) || pageSnapshot.pageUrl !== window.location.href
+          || pageSnapshot.pageFingerprint !== pageFingerprint(controlFields(current))) throw new Error("采集期间页面选择已变化，请重新读取页面");
+        Object.assign(pageSnapshot, selectionBefore);
+      } catch (error) {
+        pageSnapshot.pageSelectionError = error instanceof Error ? error.message : "无法读取车型选择 ID，请重新采集";
+      }
+    }
+    return images.map(imageAssetMetadata);
+  })
     .then((imageAssets) => {
       collectionStepGuard?.isCurrent();
       if (latestCollectionId !== collectionId) {
@@ -490,6 +528,8 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
         reviewFieldElements.set(field, { element, collectionId, collectedValue: pageFields[field] ?? null,
           controlSnapshot: controlSnapshots.get(field) ?? null });
       }
+      activeModelSelection = pageSnapshot.pageSelection;
+      activeModelScope = pageSnapshot.pageModelScope;
       activeCollectionId = collectionId;
       activeCollectionBusiness = business?.businessType || "";
       const imageFailureCount = imageAssets.filter((image) => image.collectionError).length;

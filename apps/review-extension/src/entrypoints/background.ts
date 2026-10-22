@@ -25,7 +25,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
-const modelSession = createModelSessionHandler(chrome.runtime.id, chrome.storage.session, requestModelCatalog, verifyModelPage);
+const modelSession = createModelSessionHandler(chrome.runtime.id, chrome.storage.session, requestModelCatalog, verifyModelPage,
+  async context => {
+    const tab = await chrome.tabs.get(context.sourceTabId);
+    if (tab.url !== context.expectedPageUrl || (tab.pendingUrl && tab.pendingUrl !== context.expectedPageUrl)) {
+      return {ok: false, code: "PAGE_IDENTITY_CHANGED", message: "原业务标签页已切换页面，请重新采集"};
+    }
+    return chrome.tabs.sendMessage(context.sourceTabId, {type: "READ_REVIEW_MODEL_SCOPE", ...context}, {frameId: 0});
+  });
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!["SEARCH_REVIEW_VEHICLE_MODELS", "RESOLVE_REVIEW_MODEL_SEARCH"].includes(message?.type)) return;
   void modelSession(message, sender).then(sendResponse);

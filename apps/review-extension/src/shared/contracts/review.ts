@@ -64,6 +64,9 @@ export interface ReviewFieldSnapshot {
 }
 
 export interface PageData {
+    pageModelScope?: import("./vehicle-model").ModelPageScope;
+  pageSelection?: import("./vehicle-model").ModelPageSelection;
+  pageSelectionError?: string;
   actions?: import("@forj/configuration-contracts").ActionBinding[];
   fieldLabels?: Record<string, string>;
   pageId?: string;
@@ -231,6 +234,17 @@ export interface ReviewTaskDetails {
   /** 材料明确没有此栏位；仅在唯一空控件已采集且核验通过时展示为不适用。 */
   not_applicable?: boolean;
   permitted_fill_values?: string[];
+  brand_model_completion?: {
+    license_value: string;
+    brand_text: string;
+    license_model: string;
+    auxiliary_model: string;
+    completed_value: string;
+    status: "READY" | "BLOCKED" | "UNAVAILABLE";
+    basis: string;
+    issues: string[];
+  };
+  /** 后端判定可靠的图片型号；空值表示无可靠材料值，禁止用页面字段补值。 */
   model_search?: {announcement_model: string; engine_model: string; issues: string[]};
   differences?: number[];
   subject_requirements?: SubjectEvidenceRequirement[];

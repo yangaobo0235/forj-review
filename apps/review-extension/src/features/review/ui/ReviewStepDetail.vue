@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import ManualValueInput from "./ManualValueInput.vue";
+import BrandModelCompletion from "./BrandModelCompletion.vue";
 import CandidateValue from "./CandidateValue.vue";
 import QrUrl from "./QrUrl.vue";
 import StructuredEvidence from "./StructuredEvidence.vue";
@@ -17,6 +18,8 @@ const props = defineProps<{
   onChoose: (step: ReviewTask, decision: Decision) => void;
 }>();
 const field = computed(() => fieldFromStep(props.step));
+const brandCompletion = computed(() => props.step.details?.brand_model_completion);
+const specializedReview = computed(() => props.customFieldReview || Boolean(brandCompletion.value));
 const pageValue = computed(() => field.value ? props.pageData?.pageFields[field.value] ?? props.step.page_value : props.step.page_value);
 const values = computed(() => isQrTask(props.step) || props.step.details?.not_applicable ? [] : props.step.values.filter(item =>
   item.source !== "申请页面字段" && item.value != null && String(item.value).trim() && String(item.value) !== "[object Object]"));
@@ -47,12 +50,14 @@ const reasonLabels: Record<ReasonCode, string> = {
     <div class="workbench-card-title"><div><small>{{ categoryLabels[step.category] ?? "核验" }}</small><h2>{{ stepTitle(step) }}</h2></div><b :class="`status-${step.result_status.toLowerCase()}`">{{ step.details?.not_applicable && step.result_status === 'MATCH' ? '不适用' : statusText[step.result_status] }}</b></div>
     <div v-if="step.reason_codes?.length" class="decision-reasons"><span v-for="code in step.reason_codes" :key="code">{{ reasonLabels[code] ?? code }}</span></div>
     <div v-if="hasPageValues" class="page-value"><span>页面原始值</span><div v-for="item in pageValues" :key="item.source" class="page-value-row"><small v-if="fieldLabel(item.source) !== '页面原始值'">{{ fieldLabel(item.source) }}</small><strong>{{ cleanPageValue(item.value) || (step.details?.not_applicable ? "留空" : item.value != null ? "未填写" : "未采集") }}</strong></div><p v-if="step.details?.page_value_note" class="page-value-note">{{ step.details.page_value_note }}</p></div>
-    <div v-if="!customFieldReview && recommendations.length" class="recommendation-list"><span class="evidence-section-title">系统推荐结论</span><CandidateValue v-for="(item, index) in recommendations" :key="`recommendation-${item.source}-${index}`" :item="item" :image="imageFor(item)" :step-label="stepTitle(step)" :status="step.result_status" :can-fill="canFillValue(item)" :fill-text="`回填${String(item.value)}`" :disabled="disabled || !step.writable" :on-focus-image="onFocusImage" :on-fill="value => onFill(step, value)"/></div>
-    <div v-if="!customFieldReview && evidenceValues.length" class="candidate-list"><span class="evidence-section-title">材料提取值</span><CandidateValue v-for="(item, index) in evidenceValues" :key="`${item.source}-${index}`" :item="item" :image="imageFor(item)" :step-label="stepTitle(step)" :status="step.result_status" :can-fill="!hasFillRoles && canFillValue(item)" :disabled="disabled || !step.writable" :on-focus-image="onFocusImage" :on-fill="value => onFill(step, value)"/></div>
-    <p v-if="!customFieldReview && !step.details?.reason_distributed" class="workbench-reason">{{ step.reason }}</p>
-    <ManualValueInput v-if="field && !customFieldReview && !step.details?.not_applicable" :key="`${pageData?.collectionId}-${field}`" :initial-value="cleanPageValue(pageValue)" :label="stepTitle(step)" :disabled="disabled || !pageData || !step.writable" :on-fill="value => onFill(step, value)"/>
+    <div v-if="!specializedReview && recommendations.length" class="recommendation-list"><span class="evidence-section-title">系统推荐结论</span><CandidateValue v-for="(item, index) in recommendations" :key="`recommendation-${item.source}-${index}`" :item="item" :image="imageFor(item)" :step-label="stepTitle(step)" :status="step.result_status" :can-fill="canFillValue(item)" :fill-text="`回填${String(item.value)}`" :disabled="disabled || !step.writable" :on-focus-image="onFocusImage" :on-fill="value => onFill(step, value)"/></div>
+    <div v-if="!specializedReview && evidenceValues.length" class="candidate-list"><span class="evidence-section-title">材料提取值</span><CandidateValue v-for="(item, index) in evidenceValues" :key="`${item.source}-${index}`" :item="item" :image="imageFor(item)" :step-label="stepTitle(step)" :status="step.result_status" :can-fill="!hasFillRoles && canFillValue(item)" :disabled="disabled || !step.writable" :on-focus-image="onFocusImage" :on-fill="value => onFill(step, value)"/></div>
+    <p v-if="!specializedReview && !step.details?.reason_distributed" class="workbench-reason">{{ step.reason }}</p>
+    <ManualValueInput v-if="field && !specializedReview && !step.details?.not_applicable" :key="`${pageData?.collectionId}-${field}`" :initial-value="cleanPageValue(pageValue)" :label="stepTitle(step)" :disabled="disabled || !pageData || !step.writable" :on-fill="value => onFill(step, value)"/>
+    <BrandModelCompletion v-if="brandCompletion" :step="step" :page-data="pageData" :disabled="disabled" :on-focus-image="onFocusImage" :on-fill="onFill"/>
+    <section v-if="brandCompletion && field && !customFieldReview" class="brand-manual" aria-label="人工核对后填写"><h3>人工核对后填写</h3><ManualValueInput :key="`${pageData?.collectionId}-${field}`" :initial-value="cleanPageValue(pageValue)" :label="stepTitle(step)" :disabled="disabled || !pageData || !step.writable" :on-fill="value => onFill(step, value)"/><p>人工填写不消除材料冲突，回填后仍需重新审核。</p></section>
     <template v-if="isQrTask(step)"><QrUrl v-for="(check, index) in qrChecks" :key="`${check.image_index}-${index}`" :check="check"/></template>
-    <StructuredEvidence v-if="!customFieldReview" :evidence="step.evidence"/>
+    <StructuredEvidence v-if="!specializedReview" :evidence="step.evidence"/>
     <slot name="field-review"/>
     <div v-if="step.requires_reviewer_action" class="workbench-actions"><button type="button" :disabled="disabled" class="secondary-action" @click="onChoose(step, 'MARKED_EXCEPTION')">标记人工复核</button></div>
   </article>

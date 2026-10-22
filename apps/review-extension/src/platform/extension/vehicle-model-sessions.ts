@@ -1,6 +1,6 @@
-import { validatedModelInput } from "../../shared/vehicle-model.ts";
+import { sameModelData, validatedModelInput } from "../../shared/vehicle-model.ts";
 import { vehicleModelMessage } from "./vehicle-model-client.ts";
-import type { ModelSearchInput, VehicleModelCandidate } from "../../shared/contracts/vehicle-model.ts";
+import type { ModelScopeResult, ModelSearchInput, VehicleModelCandidate } from "../../shared/contracts/vehicle-model.ts";
 import { ModelPageError, supportedModelPage } from "./vehicle-model-page.ts";
 import type { VerifyModelPage } from "./vehicle-model-page.ts";
 import { createRandomId } from "../../shared/random-id.ts";
@@ -9,7 +9,7 @@ interface Context {
   sourceTabId: number; expectedPageUrl: string; expectedPageInstanceId: string;
   expectedPageFingerprint: string; expectedCollectionId: string;
 }
-interface Session { id: string; context: Context; input: ModelSearchInput; candidates: VehicleModelCandidate[] | null; }
+interface Session { revision: string; id: string; context: Context; input: ModelSearchInput; candidates: VehicleModelCandidate[] | null; }
 interface Store {
   get: (key: string) => Promise<Record<string, unknown>>;
   set: (values: Record<string, unknown>) => Promise<void>;
@@ -29,7 +29,17 @@ function contextFrom(message: Message): Context {
 export function createModelSessionHandler(extensionId: string, store: Store,
   query: (input: ModelSearchInput) => Promise<{ok: boolean; message?: string; candidates?: VehicleModelCandidate[]}>,
   verifyPage: VerifyModelPage,
+  readScope: (context: Context) => Promise<ModelScopeResult>,
   makeId = createRandomId) {
+  const verifyScope = async (context: Context, input: ModelSearchInput) => {
+    const live = await readScope(context);
+    if (!live?.ok || !sameModelData(live.pageScope, input.pageScope)) {
+      throw new ModelPageError(live?.code || "MODEL_PAGE_SCOPE_CHANGED",
+        live?.message || "查询范围与当前业务页面不一致，请重新采集后搜索车型");
+    }
+    // Use the verified page values rather than trusting the panel's object.
+    input.pageScope = live.pageScope!;
+  };
   // 串行存储操作，避免迟到请求覆盖较新的查询会话。
   let storageQueue: Promise<unknown> = Promise.resolve();
   const stored = <T>(action: () => Promise<T>) => {
@@ -45,19 +55,25 @@ export function createModelSessionHandler(extensionId: string, store: Store,
       if (message.type === "SEARCH_REVIEW_VEHICLE_MODELS") {
         const url = new URL(sender.url || "");
         if (sender.tab || url.protocol !== "chrome-extension:" || url.hostname !== extensionId || url.pathname !== "/index.html") return failure("请从审核侧栏查询车型");
-        const context = contextFrom(message), input = validatedModelInput(message.input!);
+        const context = contextFrom(message);
+        const input = validatedModelInput(message.input!);
         const key = keyFor(context.sourceTabId);
-        const session: Session = {id: makeId(), context, input, candidates: null};
-        await stored(() => store.set({[key]: session}));
+        const session = await stored(async () => {
+          const next: Session = {id: makeId(), revision: makeId(), context, input, candidates: null};
+          await store.set({[key]: {...next, candidates: null}});
+          return next;
+        });
+        await verifyScope(context, input);
         const result = await query(input);
+        await verifyScope(context, input);
         return await stored(async () => {
           const current = (await store.get(key))[key] as Session | undefined;
-          if (current?.id !== session.id) return failure("车型查询已过期，请使用最新搜索结果");
+          if (current?.revision !== session.revision) return failure("车型查询已过期，请使用最新搜索结果");
           if (!result.ok) return failure(result.message || "车型查询失败，请重试");
           if (!Array.isArray(result.candidates)) return failure("车型查询响应不完整，请重试");
           session.candidates = result.candidates;
           await store.set({[key]: session});
-          return {ok: true, searchId: session.id, candidates: session.candidates};
+          return {ok: true, searchId: session.id, candidates: result.candidates};
         });
       }
       if (message.type === "RESOLVE_REVIEW_MODEL_SEARCH") {

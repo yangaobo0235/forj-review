@@ -11,8 +11,10 @@ from tests.support.pages import business_registry
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("page_brand", ["解放牌MODEL100A", "错误牌WRONG100"])
 async def test_source_workflow_keeps_only_nine_review_items_and_never_chooses_sales_version(
     monkeypatch,
+    page_brand,
 ):
     values = {
         "vehicle.plate_no": "鲁A12345",
@@ -22,10 +24,11 @@ async def test_source_workflow_keeps_only_nine_review_items_and_never_chooses_sa
         "vehicle.registration_date": "2021-09-24",
         "vehicle.issue_date": "2025-08-19",
         "vehicle.owner": "合成示例公司",
-        "vehicle.brand_model": "解放牌MODEL100A",
+        "vehicle.brand_model": page_brand,
         "vehicle.model": "原页面车型",
         "spec.max_hp": "300",
         "spec.drive_form": "6X2",
+        "spec.engine_model": "WRONG42",
         "vehicle.usage": "营运",
         "vehicle.address": "无需核对的地址",
     }
@@ -122,8 +125,21 @@ async def test_source_workflow_keeps_only_nine_review_items_and_never_chooses_sa
     }
     assert all(fields[f"vehicle.{name}"].result_status == "MATCH" for name, *_ in LICENSE_FIELDS)
     assert fields["vehicle.brand_model"].details["permitted_fill_values"] == ["解放牌MODEL100A80"]
+    completion = fields["vehicle.brand_model"].details["brand_model_completion"]
+    assert completion["completed_value"] == "解放牌MODEL100A80"
+    assert completion["status"] == "READY"
+    assert completion["license_model"] == "MODEL100A"
     assert fields["vehicle.model"].result_status == "INSUFFICIENT"
     assert fields["vehicle.model"].requires_reviewer_action
+    model_check = next(
+        item for item in result.cross_checks if item.check_id == "VEHICLE-SOURCE-MODEL"
+    )
+    assert model_check.details["model_search"] == {
+        "announcement_model": "MODEL100A80",
+        "engine_model": "ENGINE42-E6",
+        "issues": [],
+    }
+    assert {item.image_id for item in fields["vehicle.model"].evidence} == {"license", "plate"}
     assert result.material_completeness.presence.status == "COMPLETE"
     assert not result.page_actions
     assert result.recommendation == "REVIEW_REQUIRED"

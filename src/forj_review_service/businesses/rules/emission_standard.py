@@ -1,4 +1,4 @@
-"""报废车辆排放标准核验：明确材料值优先，型号先精确查表、未命中再按系列推导。"""
+"""报废车辆排放标准核验：明确材料值优先，型号先精确查询业务接口、未命中再按系列推导。"""
 
 from __future__ import annotations
 
@@ -105,7 +105,7 @@ class _EmissionReference:
                     reason_codes=["EVIDENCE_MISSING"],
                     details={
                         "source": "engine_model",
-                        "lookup_table": "ref_engine_emission",
+                        "lookup_api": "/vehicle-model/engine-emission/query",
                         "engine_models": self.models,
                     },
                 ),
@@ -116,7 +116,7 @@ class _EmissionReference:
 def _prepare_emission(
     context: ReviewExecutionContext,
 ) -> RuleExecutionResult | _EmissionReference:
-    """核验旧车排放标准，登记证无明确值时先查表，再按已有系列规则兜底。"""
+    """核验旧车排放标准，登记证无明确值时先查询业务接口，再按已有系列规则兜底。"""
 
     if context.profile.business_type != "scrap_replacement":
         return RuleExecutionResult()
@@ -226,7 +226,7 @@ def _prepare_emission(
             checks=(
                 _check(
                     "INSUFFICIENT",
-                    "登记证书未明确记载排放标准，发动机型号识别不完整，无法查询排放对应表",
+                    "登记证书未明确记载排放标准，发动机型号识别不完整，无法查询排放业务接口",
                     values=page_values + _values_for_observations(engine_items),
                     evidence=evidence,
                     reason_codes=["EVIDENCE_MISSING", "RECOGNITION_UNCERTAIN"],
@@ -240,7 +240,7 @@ def _prepare_emission(
             checks=(
                 _check(
                     "INSUFFICIENT",
-                    "发动机型号不完整，无法查询排放对应表",
+                    "发动机型号不完整，无法查询排放业务接口",
                     values=page_values + _values_for_observations(engine_items),
                     evidence=evidence,
                     reason_codes=["RECOGNITION_UNCERTAIN"],
@@ -260,7 +260,7 @@ def _evaluate_reference(
     fuel_items, evidence = reference.fuel_items, reference.evidence
     details = {
         "source": "engine_model",
-        "lookup_table": "ref_engine_emission",
+        "lookup_api": "/vehicle-model/engine-emission/query",
         "engine_models": models,
     }
     # Inference augments a local copy; callers may reuse their reference fixture.
@@ -298,7 +298,7 @@ def _evaluate_reference(
             checks=(
                 _check(
                     "INSUFFICIENT",
-                    "发动机排放对应表未收录完整型号且无法按已配置系列规则推导："
+                    "发动机排放业务接口未收录完整型号且无法按已配置系列规则推导："
                     + "、".join(missing)
                     + "，请人工复核",
                     values=page_values + _values_for_observations(engine_items),
@@ -314,7 +314,7 @@ def _evaluate_reference(
             checks=(
                 _check(
                     "CONFLICT",
-                    "不同发动机型号查表或规则推导得到的排放标准不一致，请人工核对登记证书",
+                    "不同发动机型号查询或规则推导得到的排放标准不一致，请人工核对登记证书",
                     values=page_values + _values_for_observations(engine_items),
                     evidence=evidence,
                     reason_codes=["VALUE_MISMATCH"],
@@ -324,9 +324,9 @@ def _evaluate_reference(
         )
     expected = next(iter(resolved))
     result_label = {
-        "lookup": "发动机型号查表",
+        "lookup": "发动机型号查询",
         "pattern": "发动机型号规则推导",
-        "mixed": "发动机型号查表与规则推导",
+        "mixed": "发动机型号查询与规则推导",
     }[method]
     values = page_values + _values_for_observations(engine_items)
     if page_standard != expected:
@@ -379,7 +379,7 @@ def run_emission_standard(
         return prepared
     try:
         if lookup is None:
-            raise EngineEmissionLookupUnavailable("发动机排放对应表查询未配置，请检查服务装配")
+            raise EngineEmissionLookupUnavailable("发动机排放业务接口查询未配置，请检查服务装配")
         standards = lookup(prepared.models)
     except EngineEmissionLookupUnavailable as error:
         return prepared.unavailable(error)
@@ -397,7 +397,7 @@ async def run_emission_standard_async(
         return prepared
     try:
         if lookup is None:
-            raise EngineEmissionLookupUnavailable("发动机排放对应表查询未配置，请检查服务装配")
+            raise EngineEmissionLookupUnavailable("发动机排放业务接口查询未配置，请检查服务装配")
         standards = await lookup(prepared.models)
     except EngineEmissionLookupUnavailable as error:
         return prepared.unavailable(error)
