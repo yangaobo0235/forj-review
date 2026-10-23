@@ -6,7 +6,6 @@ import pytest
 
 from forj_review_service.config.settings import QwenConfig
 from forj_review_service.contracts.recognition import (
-    QwenClassification,
     QwenExtraction,
 )
 from forj_review_service.contracts.review import ImageInput
@@ -20,7 +19,7 @@ from tests.support.pages import SCRAP_BUSINESS as TEST_BUSINESS
 class FakeQwenClient:
     def __init__(
         self,
-        classification: QwenClassification | None = None,
+        classification: QwenExtraction | None = None,
         extraction: QwenExtraction | None = None,
         fail_indices: set[int] | None = None,
     ) -> None:
@@ -30,25 +29,25 @@ class FakeQwenClient:
         self.classification_calls: list[int] = []
         self.extraction_calls: list[tuple[int, str]] = []
 
-    async def classify_document(
-        self, image: dict[str, object], *, business=None
-    ) -> QwenClassification:
-        self.classification_calls.append(int(image["index"]))
-        if self.classification is None:
-            raise RuntimeError("缺少分类测试结果")
-        return self.classification
-
-    async def extract_fields(
-        self, image: dict[str, object], policy: object, *, retry_reason=None
-    ) -> QwenExtraction:
+    async def extract_document(self, image, *, business=None, retry_reason=None, focus_boxes=None):
         image_index = int(image["index"])
-        document_type = str(policy.document_type)
-        self.extraction_calls.append((image_index, document_type))
+        if self.extraction is None:
+            if self.classification is None:
+                raise RuntimeError("缺少提取测试结果")
+            result = QwenExtraction(
+                document_type=self.classification.document_type,
+                type_confidence=self.classification.confidence,
+                identity_sides=self.classification.identity_sides,
+            )
+        else:
+            result = self.extraction.model_copy()
+            if self.classification:
+                result.type_confidence = self.classification.confidence
+                result.identity_sides = self.classification.identity_sides
+        self.extraction_calls.append((image_index, result.document_type))
         if image_index in self.fail_indices:
             raise RuntimeError("Qwen 调用失败")
-        if self.extraction is None:
-            raise RuntimeError("缺少提取测试结果")
-        return self.extraction
+        return result
 
 
 def extracted_values(service, images):
@@ -71,8 +70,13 @@ def image(
         "src": "https://images.example.test/synthetic.jpg",
         "category_hint": category_hint,
     }
-    if business_scope is not None:
-        values["business_scope"] = business_scope
+    if business_scope is None:
+        business_scope = {
+            "invoice": "new_vehicle",
+            "scrap_certificate": "old_vehicle",
+            "registration_certificate": "old_vehicle",
+        }.get(category_hint, "unknown")
+    values["business_scope"] = business_scope
     if group_order is not None:
         values["group_order"] = group_order
     return ImageInput(**values)
@@ -186,9 +190,9 @@ async def test_invoice_number_derives_page_code_and_preserves_evidence_region() 
     assert observations["invoice.code"].evidence_region == [10, 20, 300, 80]
 
 
-def test_unknown_image_is_classified_then_extracted() -> None:
+def test_unknown_image_is_typed_and_extracted_in_one_call() -> None:
     fake = FakeQwenClient(
-        classification=QwenClassification(document_type="invoice", confidence=0.98),
+        classification=QwenExtraction(document_type="invoice", confidence=0.98),
         extraction=QwenExtraction(
             document_type="invoice",
             fields={"invoice.invoice_no": "123"},
@@ -202,14 +206,14 @@ def test_unknown_image_is_classified_then_extracted() -> None:
 
     assert recognized == {"invoice.invoice_no": ("123", 0), "invoice.code": ("123", 0)}
     assert limitations == []
-    assert fake.classification_calls == [0]
+    assert fake.classification_calls == []
     assert fake.extraction_calls == [(0, "invoice")]
 
 
 def test_unreliable_classification_does_not_extract_fields() -> None:
     classifications = (
-        QwenClassification(document_type="invoice", confidence=0.69),
-        QwenClassification(document_type="unsupported", confidence=0.99),
+        QwenExtraction(document_type="invoice", confidence=0.69),
+        QwenExtraction(document_type="unsupported", confidence=0.99),
     )
 
     for classification in classifications:
@@ -218,21 +222,23 @@ def test_unreliable_classification_does_not_extract_fields() -> None:
 
         assert recognized == {}
         assert limitations
-        assert fake.extraction_calls == []
+        assert 1 <= len(fake.extraction_calls) <= 2
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("timeout", [False, True])
-async def test_content_type_is_retained_when_field_extraction_fails_or_times_out(timeout):
+async def test_joint_failure_does_not_invent_a_content_type(timeout):
     class FailedExtraction(FakeQwenClient):
-        async def extract_fields(self, image, policy, *, retry_reason=None):
-            self.extraction_calls.append((image["index"], policy.document_type))
+        async def extract_document(
+            self, image, *, business=None, retry_reason=None, focus_boxes=None
+        ):
+            self.extraction_calls.append((image["index"], "vehicle_license"))
             if timeout:
                 await asyncio.sleep(1)
             raise RuntimeError("synthetic failure")
 
     client = FailedExtraction(
-        classification=QwenClassification(document_type="vehicle_license", confidence=0.98)
+        classification=QwenExtraction(document_type="vehicle_license", confidence=0.98)
     )
     batch = await RecognitionService(client, image_timeout=0.02).extract_async(
         [
@@ -244,16 +250,15 @@ async def test_content_type_is_retained_when_field_extraction_fails_or_times_out
     )
     assert batch.failed_count + batch.timed_out_count == 1
     assert not batch.recognized_documents
-    assert batch.document_classifications[0].document_type == "vehicle_license"
-    assert batch.document_classifications[0].business_scope == "old_vehicle"
-    assert client.classification_calls == [3]
+    assert batch.document_classifications == []
+    assert client.classification_calls == []
     assert client.extraction_calls == [(3, "vehicle_license")]
 
 
 @pytest.mark.asyncio
 async def test_content_classification_is_reused_by_field_retry():
     client = FakeQwenClient(
-        classification=QwenClassification(document_type="invoice", confidence=0.98),
+        classification=QwenExtraction(document_type="invoice", confidence=0.98),
         extraction=QwenExtraction(
             document_type="invoice", fields={"invoice.invoice_no": "synthetic"}, confidence=0.3
         ),
@@ -261,23 +266,22 @@ async def test_content_classification_is_reused_by_field_retry():
     batch = await RecognitionService(client).extract_async(
         [image(business_scope="new_vehicle")], business=TEST_BUSINESS
     )
-    assert client.classification_calls == [0]
+    assert client.classification_calls == []
     assert len(client.extraction_calls) == 2
     assert len(batch.document_classifications) == 1
 
 
 @pytest.mark.asyncio
-async def test_classification_side_does_not_depend_on_identity_field_extraction():
+async def test_content_side_is_retained_when_no_identity_name_is_read():
     client = FakeQwenClient(
-        classification=QwenClassification(
+        classification=QwenExtraction(
             document_type="identity_card", confidence=0.98, identity_sides=["BACK"]
         ),
-        fail_indices={0},
     )
     batch = await RecognitionService(client).extract_async(
         [image(business_scope="identity")], business=TEST_BUSINESS
     )
-    assert batch.failed_count == 1
+    assert batch.completed_count == 1
     assert batch.document_classifications[0].identity_sides == ["BACK"]
 
 
@@ -293,14 +297,12 @@ async def test_low_confidence_field_extraction_cannot_confirm_an_unlabelled_iden
     batch = await RecognitionService(client).extract_async(
         [image(category_hint="id_card", business_scope="identity")], business=TEST_BUSINESS
     )
-    assert batch.document_classifications[0].identity_sides == []
+    assert batch.document_classifications == []
 
 
 @pytest.mark.asyncio
 async def test_low_classification_confidence_is_never_a_presence_fact():
-    client = FakeQwenClient(
-        classification=QwenClassification(document_type="invoice", confidence=0.5)
-    )
+    client = FakeQwenClient(classification=QwenExtraction(document_type="invoice", confidence=0.5))
     batch = await RecognitionService(client).extract_async(
         [image(business_scope="new_vehicle")], business=TEST_BUSINESS
     )
@@ -310,7 +312,7 @@ async def test_low_classification_confidence_is_never_a_presence_fact():
 @pytest.mark.asyncio
 async def test_classification_failure_and_timeout_have_no_presence_fact():
     class Timeout(FakeQwenClient):
-        async def classify_document(self, image, *, business=None):
+        async def extract_document(self, image, **kwargs):
             await asyncio.sleep(1)
 
     for client in (FakeQwenClient(), Timeout()):
@@ -322,7 +324,7 @@ async def test_classification_failure_and_timeout_have_no_presence_fact():
 
 
 @pytest.mark.asyncio
-async def test_page_label_and_identity_side_are_kept_when_picture_cannot_be_read():
+async def test_page_label_cannot_confirm_identity_side_when_picture_cannot_be_read():
     unreadable = image(category_hint="id_card", business_scope="identity")
     unreadable.identity_sides_hint = ["FRONT"]
     unreadable.collection_error = "synthetic read error"
@@ -330,7 +332,22 @@ async def test_page_label_and_identity_side_are_kept_when_picture_cannot_be_read
         [unreadable], business=TEST_BUSINESS
     )
     assert batch.failed_count == 1
-    assert batch.document_classifications[0].identity_sides == ["FRONT"]
+    assert batch.document_classifications == []
+    from forj_review_service.businesses.material_presence import evaluate_presence
+    from forj_review_service.contracts.review import ReviewRequest
+
+    request = ReviewRequest(
+        page_url="https://example.test/scrap-replace-qingdao",
+        business_type="scrap_replacement",
+        region="qingdao",
+        images=[unreadable],
+    )
+    presence = evaluate_presence(request, TEST_BUSINESS.pack.material_policy, batch)
+    items = [item for group in presence.groups for option in group.alternatives for item in option]
+    assert any(
+        item.key.endswith("identity_card:FRONT") and item.status == "UNCERTAIN" for item in items
+    )
+    assert unreadable.identity_sides_hint == ["FRONT"]
 
 
 def test_mismatched_extraction_type_discards_fields() -> None:
@@ -364,7 +381,7 @@ def test_non_allowlisted_fields_are_discarded() -> None:
 
 def test_classified_unknown_image_keeps_resolved_policy_allowlist() -> None:
     fake = FakeQwenClient(
-        classification=QwenClassification(document_type="invoice", confidence=0.98),
+        classification=QwenExtraction(document_type="invoice", confidence=0.98),
         extraction=QwenExtraction(
             document_type="invoice",
             fields={"invoice.invoice_no": "123", "old_vehicle.engine_model": "OUT-OF-SCOPE"},
@@ -439,8 +456,8 @@ def test_image_completion_log_marks_an_uncertainty_free_image(caplog: object) ->
 
 def test_qwen_failure_is_sanitized_and_logged(caplog: object) -> None:
     class SensitiveFailureClient(FakeQwenClient):
-        async def extract_fields(
-            self, image: dict[str, object], policy: object, *, retry_reason=None
+        async def extract_document(
+            self, image: dict[str, object], *, business=None, retry_reason=None, focus_boxes=None
         ) -> QwenExtraction:
             raise RuntimeError("HTTP 400 raw model response VIN=SHOULD-NOT-LEAK")
 
@@ -486,8 +503,8 @@ async def test_six_images_start_concurrently() -> None:
             self.all_started = asyncio.Event()
             self.release = asyncio.Event()
 
-        async def extract_fields(
-            self, image: dict[str, object], policy: object, *, retry_reason=None
+        async def extract_document(
+            self, image: dict[str, object], *, business=None, retry_reason=None, focus_boxes=None
         ) -> QwenExtraction:
             self.active += 1
             self.max_active = max(self.max_active, self.active)
@@ -513,9 +530,9 @@ async def test_six_images_start_concurrently() -> None:
 
 
 @pytest.mark.asyncio
-async def test_unknown_image_is_classified_then_uses_targeted_extraction() -> None:
+async def test_unknown_image_uses_the_joint_recognition_contract() -> None:
     client = FakeQwenClient(
-        classification=QwenClassification(document_type="invoice", confidence=0.98),
+        classification=QwenExtraction(document_type="invoice", confidence=0.98),
         extraction=QwenExtraction(
             document_type="invoice",
             fields={
@@ -529,7 +546,7 @@ async def test_unknown_image_is_classified_then_uses_targeted_extraction() -> No
         [image(category_hint="unknown", business_scope="new_vehicle")], business=TEST_BUSINESS
     )
 
-    assert client.classification_calls == [0]
+    assert client.classification_calls == []
     assert client.extraction_calls == [(0, "invoice")]
     assert {(item.field, item.value) for item in result.observations} == {
         ("invoice.invoice_no", "123"),
@@ -540,8 +557,8 @@ async def test_unknown_image_is_classified_then_uses_targeted_extraction() -> No
 @pytest.mark.asyncio
 async def test_business_scope_rejects_incompatible_model_document_type() -> None:
     class CombinedClient(FakeQwenClient):
-        async def extract_fields(
-            self, image: dict[str, object], policy: object, *, retry_reason=None
+        async def extract_document(
+            self, image: dict[str, object], *, business=None, retry_reason=None, focus_boxes=None
         ) -> QwenExtraction:
             return QwenExtraction(
                 document_type="invoice",
@@ -553,18 +570,19 @@ async def test_business_scope_rejects_incompatible_model_document_type() -> None
             )
 
     result = await RecognitionService(CombinedClient()).extract_async(
-        [image(category_hint="scrap_certificate")], business=TEST_BUSINESS
+        [image(category_hint="scrap_certificate", business_scope="old_vehicle")],
+        business=TEST_BUSINESS,
     )
 
     assert result.observations == []
-    assert any("资料类型不一致" in item for item in result.limitations)
+    assert any("不属于它的资料区域" in item for item in result.limitations)
 
 
 @pytest.mark.asyncio
 async def test_identical_vehicle_documents_are_routed_by_page_business_scope() -> None:
     class VehicleLicenseClient(FakeQwenClient):
-        async def extract_fields(
-            self, image: dict[str, object], policy: object, *, retry_reason=None
+        async def extract_document(
+            self, image: dict[str, object], *, business=None, retry_reason=None, focus_boxes=None
         ) -> QwenExtraction:
             return QwenExtraction(
                 document_type="vehicle_license",
@@ -591,7 +609,7 @@ async def test_identical_vehicle_documents_are_routed_by_page_business_scope() -
 
     result = await RecognitionService(
         VehicleLicenseClient(
-            classification=QwenClassification(document_type="vehicle_license", confidence=0.98),
+            classification=QwenExtraction(document_type="vehicle_license", confidence=0.98),
         )
     ).extract_async([old_image, new_image], business=TEST_BUSINESS)
 
@@ -604,8 +622,8 @@ async def test_identical_vehicle_documents_are_routed_by_page_business_scope() -
 @pytest.mark.asyncio
 async def test_registration_certificate_fields_follow_page_business_scope() -> None:
     class RegistrationCertificateClient(FakeQwenClient):
-        async def extract_fields(
-            self, image: dict[str, object], policy: object, *, retry_reason=None
+        async def extract_document(
+            self, image: dict[str, object], *, business=None, retry_reason=None, focus_boxes=None
         ) -> QwenExtraction:
             return QwenExtraction(
                 document_type="registration_certificate",
@@ -619,7 +637,7 @@ async def test_registration_certificate_fields_follow_page_business_scope() -> N
 
     result = await RecognitionService(
         RegistrationCertificateClient(
-            classification=QwenClassification(
+            classification=QwenExtraction(
                 document_type="registration_certificate", confidence=0.98
             ),
         )
@@ -651,8 +669,8 @@ async def test_registration_certificate_fields_follow_page_business_scope() -> N
 @pytest.mark.parametrize("page_value", [[1, 2], "第1页、第2页", "第 1 页 / 第 2 页"])
 async def test_registration_page_numbers_are_normalized_for_scrap_documents(page_value) -> None:
     class RegistrationPagesClient(FakeQwenClient):
-        async def extract_fields(
-            self, image: dict[str, object], policy: object, *, retry_reason=None
+        async def extract_document(
+            self, image: dict[str, object], *, business=None, retry_reason=None, focus_boxes=None
         ) -> QwenExtraction:
             return QwenExtraction(
                 document_type="registration_certificate",
@@ -673,8 +691,8 @@ async def test_registration_page_numbers_are_normalized_for_scrap_documents(page
 @pytest.mark.asyncio
 async def test_deadline_returns_completed_observations_and_marks_pending_timeout() -> None:
     class DelayClient(FakeQwenClient):
-        async def extract_fields(
-            self, image: dict[str, object], policy: object, *, retry_reason=None
+        async def extract_document(
+            self, image: dict[str, object], *, business=None, retry_reason=None, focus_boxes=None
         ) -> QwenExtraction:
             if int(image["index"]) == 1:
                 await asyncio.sleep(1)
@@ -716,9 +734,9 @@ def _hinted_image() -> ImageInput:
 
 
 @pytest.mark.asyncio
-async def test_hint_outside_allowed_materials_requires_classification() -> None:
+async def test_content_type_overrides_hint_within_allowed_materials() -> None:
     client = FakeQwenClient(
-        classification=QwenClassification(document_type="vehicle_license", confidence=0.9),
+        classification=QwenExtraction(document_type="vehicle_license", confidence=0.9),
         extraction=QwenExtraction(
             document_type="vehicle_license", fields={"vehicle.vin": "SYNTHETIC"}, confidence=0.9
         ),
@@ -728,7 +746,7 @@ async def test_hint_outside_allowed_materials_requires_classification() -> None:
         allowed_document_types=frozenset({"vehicle_license"}),
         business=TEST_BUSINESS,
     )
-    assert client.classification_calls == [0]
+    assert client.classification_calls == []
     assert client.extraction_calls == [(0, "vehicle_license")]
     assert result.completed_count == 1
     assert result.failed_count == 0
@@ -758,7 +776,9 @@ async def test_cancelled_batch_waits_for_all_image_cleanup():
     started, cleaned = asyncio.Event(), asyncio.Event()
 
     class PendingClient:
-        async def extract_fields(self, image, policy, *, retry_reason=None):
+        async def extract_document(
+            self, image, *, business=None, retry_reason=None, focus_boxes=None
+        ):
             started.set()
             try:
                 await asyncio.Event().wait()
@@ -781,7 +801,9 @@ async def test_unexpected_image_error_is_propagated_and_cancels_siblings():
     started, cleaned = asyncio.Event(), asyncio.Event()
 
     class BrokenClient:
-        async def extract_fields(self, image, policy, *, retry_reason=None):
+        async def extract_document(
+            self, image, *, business=None, retry_reason=None, focus_boxes=None
+        ):
             if image["index"] == 0:
                 started.set()
                 try:

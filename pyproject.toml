@@ -31,6 +31,7 @@ dev = [
 [project.scripts]
 forj-review-service = "forj_review_service.interfaces.cli:main"
 forj-review-config-service = "forj_review_config_service.interfaces.cli:main"
+forj-review-config-develop = "forj_review_config_service.interfaces.develop:main"
 forj-review-database = "forj_review_service.interfaces.database_tools:main"
 
 [build-system]

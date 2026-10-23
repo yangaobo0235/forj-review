@@ -59,4 +59,19 @@ uv run pytest -q
 前端测试分别放在两个应用的 `tests` 中；浏览器真实采集和回填用例位于扩展的 `tests/browser`。从根目录运行 `npm run test:extension`、`npm run test:configuration`、`npm run test:extension:browser`。
 
 
-版本 4 增加 `database/test_configuration_evidence.py`（完成证据、旧修订覆盖拦截、禁止追加正式子项），`unit/runtime/test_configuration_reload.py`（完整编译后切换、失败保留旧服务）。`unit/runtime/test_jobs.py` 直接验证在途审核作业固定旧服务；日常维护集成测试分别实际执行无模型工作台发布与 CLI 发布，并核对重复提交。
+当前重点回归按场景维护：
+
+| 场景 | 用例入口 |
+| --- | --- |
+| 验证证据、修订覆盖拦截、在途任务固定配置与加载失败保护 | `database/test_configuration_evidence.py`、`unit/runtime/test_configuration_reload.py`、`unit/runtime/test_jobs.py` |
+| 聊天目标更正/撤回、调查预算与定向读取、路线调查、长历史和工具结果分页 | `configuration/unit/test_task_lifecycle.py`、`test_investigation_progress.py`、`test_tool_result_lookup.py`、`configuration/integration/test_task_workflow.py` |
+| 本地开发副本、冻结验收、补丁基线、取消/预算与交接守卫 | `configuration/unit/test_local_development.py`、`configuration/integration/test_workbench_recovery.py` |
+| 图片目录、来源绑定、历史现场、补采修订与按需分析 | `configuration/integration/test_capture_evidence.py`、`test_material_comparison_configuration.py` |
+| 需求属性、局部更正、无需发布和实际采用 | `configuration/unit/test_requirement_verification.py`、`configuration/integration/test_task_workflow.py` |
+| 数据库 v4→v5、v5→v6、v6→v7 的历史保持、来源回填与待对账发布保护 | `database/test_schema_v5_migration.py`、`test_schema_v6_migration.py`、`test_schema_v7_migration.py` |
+| 三类审核页面的五行滚动、材料与原图合卡、首行回填、人工草稿、失效保护、识别中和超时展示 | 扩展 `tests/browser/review-layout.spec.ts` |
+| 品牌型号人工回填保留冲突、车型只写 ID 且规格由业务系统带入 | 扩展 `tests/browser/brand-model.spec.ts`、`vehicle-model.spec.ts` |
+
+扩展只验证当前统一任务工作台；缺少任务的响应必须显示契约错误。已删除旧结果卡片、前端自行重算证据差异及静态页面适配器对应的测试，材料标签、后端差异展示、官网链接与回填保护仍由当前场景覆盖。格式断言不应依赖换行或无意义空白。
+
+真实模型调用和业务浏览器联调单独记录；脚本替身通过不能计作模型识别成功率或现场审核通过。

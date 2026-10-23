@@ -3,7 +3,11 @@
 import pytest
 
 from forj_review_service.contracts.evidence import FieldObservation
-from forj_review_service.contracts.recognition import RecognitionBatchResult, RecognizedDocument
+from forj_review_service.contracts.recognition import (
+    DocumentClassification,
+    RecognitionBatchResult,
+    RecognizedDocument,
+)
 from forj_review_service.contracts.review import ReviewFieldSnapshot, ReviewRequest
 from forj_review_service.runtime.review_service import ReviewService
 from tests.support.business_values import LICENSE_FIELDS
@@ -12,9 +16,13 @@ from tests.support.pages import business_registry
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("page_brand", ["解放牌MODEL100A", "错误牌WRONG100"])
+@pytest.mark.parametrize("auxiliary_vin", [None, "LFV00000000000002"])
+@pytest.mark.parametrize("material_model", ["MODEL100A80", "OTHER200"])
 async def test_source_workflow_keeps_only_nine_review_items_and_never_chooses_sales_version(
     monkeypatch,
     page_brand,
+    auxiliary_vin,
+    material_model,
 ):
     values = {
         "vehicle.plate_no": "鲁A12345",
@@ -66,16 +74,32 @@ async def test_source_workflow_keeps_only_nine_review_items_and_never_chooses_sa
                     business_scope="vehicle",
                 )
                 for field, value in (
-                    ("vehicle.announcement_model", "MODEL100A80"),
+                    ("vehicle.announcement_model", material_model),
                     ("vehicle.engine_model", "ENGINE42-E6"),
                 )
             ],
         ]
     )
+    if auxiliary_vin:
+        observations.append(
+            FieldObservation(
+                field="vehicle.vin",
+                value=auxiliary_vin,
+                source_type="image",
+                source_id="plate",
+                image_id="plate",
+                document_type="vehicle_nameplate",
+                business_scope="vehicle",
+            )
+        )
     batch = RecognitionBatchResult(
         total_count=2,
         completed_count=2,
         observations=observations,
+        document_classifications=[
+            DocumentClassification(target_id=identity, document_type=kind, business_scope="vehicle")
+            for identity, kind in [("license", "vehicle_license"), ("plate", "vehicle_nameplate")]
+        ],
         recognized_documents=[
             RecognizedDocument(
                 target_id=id, image_index=i, document_type=kind, business_scope="vehicle"
@@ -124,20 +148,29 @@ async def test_source_workflow_keeps_only_nine_review_items_and_never_chooses_sa
         "vehicle.model",
     }
     assert all(fields[f"vehicle.{name}"].result_status == "MATCH" for name, *_ in LICENSE_FIELDS)
-    assert fields["vehicle.brand_model"].details["permitted_fill_values"] == ["解放牌MODEL100A80"]
+    assert fields["vehicle.brand_model"].details["permitted_fill_values"] == [
+        f"解放牌{material_model}"
+    ]
     completion = fields["vehicle.brand_model"].details["brand_model_completion"]
-    assert completion["completed_value"] == "解放牌MODEL100A80"
+    assert completion["completed_value"] == f"解放牌{material_model}"
     assert completion["status"] == "READY"
     assert completion["license_model"] == "MODEL100A"
+    assert completion["issues"] == (
+        ["行驶证型号与辅助材料整车型号不一致，组合值供人工判断"]
+        if material_model == "OTHER200"
+        else []
+    )
+    assert "VIN" not in fields["vehicle.brand_model"].reason
+    assert fields["vehicle.brand_model"].result_status == "CONFLICT"
     assert fields["vehicle.model"].result_status == "INSUFFICIENT"
     assert fields["vehicle.model"].requires_reviewer_action
     model_check = next(
         item for item in result.cross_checks if item.check_id == "VEHICLE-SOURCE-MODEL"
     )
     assert model_check.details["model_search"] == {
-        "announcement_model": "MODEL100A80",
+        "announcement_model": material_model,
         "engine_model": "ENGINE42-E6",
-        "issues": [],
+        "issues": completion["issues"],
     }
     assert {item.image_id for item in fields["vehicle.model"].evidence} == {"license", "plate"}
     assert result.material_completeness.presence.status == "COMPLETE"

@@ -41,8 +41,11 @@ test("returns the latest running snapshot when the client deadline is reached", 
 test("a stalled snapshot cannot bypass the overall deadline", async () => {
   const snapshot = { status: "RUNNING", progress: { completed_count: 1, total_count: 2 } };
   let calls = 0;
-  const result = await pollReviewJob(() => ++calls === 1 ? Promise.resolve(snapshot) : new Promise(() => {}),
-    () => {}, { timeoutMs: 25, intervalMs: 0 });
+  const result = await pollReviewJob(
+    () => (++calls === 1 ? Promise.resolve(snapshot) : new Promise(() => {})),
+    () => {},
+    { timeoutMs: 25, intervalMs: 0 },
+  );
   assert.equal(result, snapshot);
 });
 
@@ -50,8 +53,14 @@ test("cancelled polling ignores a late response", async () => {
   const controller = new AbortController();
   let resolve;
   const seen = [];
-  const polling = pollReviewJob(() => new Promise(done => { resolve = done; }), snapshot => seen.push(snapshot),
-    { signal: controller.signal, timeoutMs: 1000 });
+  const polling = pollReviewJob(
+    () =>
+      new Promise((done) => {
+        resolve = done;
+      }),
+    (snapshot) => seen.push(snapshot),
+    { signal: controller.signal, timeoutMs: 1000 },
+  );
   controller.abort();
   await assert.rejects(polling, { name: "AbortError" });
   resolve({ status: "COMPLETED" });

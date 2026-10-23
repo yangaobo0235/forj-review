@@ -15,11 +15,6 @@ export function resolveReviewApiBaseUrl(
 }
 
 export const reviewApiBaseUrl = resolveReviewApiBaseUrl(
-  typeof __REVIEW_BUILD_MODE__ === "string"
-    ? __REVIEW_BUILD_MODE__
-    : undefined,
-  typeof __REVIEW_API_BASE_URL__ === "string"
-    ? __REVIEW_API_BASE_URL__
-    : undefined,
+  typeof __REVIEW_BUILD_MODE__ === "string" ? __REVIEW_BUILD_MODE__ : undefined,
+  typeof __REVIEW_API_BASE_URL__ === "string" ? __REVIEW_API_BASE_URL__ : undefined,
 );
-

@@ -1,1 +1,6 @@
-export type { CollectManifest, ManifestField, ManifestPageGroup, ManifestMaterial } from "@forj/configuration-contracts";
+export type {
+  CollectManifest,
+  ManifestField,
+  ManifestPageGroup,
+  ManifestMaterial,
+} from "@forj/configuration-contracts";

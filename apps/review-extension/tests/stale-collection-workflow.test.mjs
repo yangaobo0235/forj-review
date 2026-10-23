@@ -4,12 +4,16 @@ import { fileURLToPath } from "node:url";
 import { test, afterEach, vi } from "vitest";
 import { effectScope, ref } from "vue";
 
-
 const scopes = [];
-const catalog = JSON.parse(readFileSync(new URL("./fixtures/page-catalog.json", import.meta.url), "utf8"));
-afterEach(() => { for (const scope of scopes.splice(0)) scope.stop(); });
+const catalog = JSON.parse(
+  readFileSync(new URL("./fixtures/page-catalog.json", import.meta.url), "utf8"),
+);
+afterEach(() => {
+  for (const scope of scopes.splice(0)) scope.stop();
+});
 function createWorkflow(useReviewWorkflow, selection = "AUTO") {
-  const scope = effectScope(); scopes.push(scope);
+  const scope = effectScope();
+  scopes.push(scope);
   return scope.run(() => useReviewWorkflow(selection));
 }
 
@@ -24,7 +28,9 @@ function freshModules() {
 async function loadModule(file, extraGlobals = {}, moduleOverrides = {}) {
   for (const [name, value] of Object.entries(extraGlobals)) vi.stubGlobal(name, value);
   for (const [specifier, exports] of Object.entries(moduleOverrides)) {
-    const target = fileURLToPath(new URL(`../src/features/review/model/${specifier}.ts`, import.meta.url));
+    const target = fileURLToPath(
+      new URL(`../src/features/review/model/${specifier}.ts`, import.meta.url),
+    );
     vi.doMock(target, () => exports);
     mockedModules.add(target);
   }
@@ -35,15 +41,31 @@ async function runReviewWithState(snapshot, collectionIssues = []) {
   freshModules();
   const requests = [];
   const { useReviewWorkflow } = await loadModule(
-    fileURLToPath(new URL("../src/features/review/model/use-review-workflow.ts", import.meta.url)), {
-      chrome: { tabs: {
-        query: async () => [{ id: 42 }],
-        sendMessage: async () => ({ businessType: "scrap_replacement", images: [], collectionIssues }),
-      } },
+    fileURLToPath(new URL("../src/features/review/model/use-review-workflow.ts", import.meta.url)),
+    {
+      chrome: {
+        tabs: {
+          query: async () => [{ id: 42 }],
+          sendMessage: async () => ({
+            businessType: "scrap_replacement",
+            images: [],
+            collectionIssues,
+          }),
+        },
+      },
       fetch: async (url, init) => {
         requests.push({ url: String(url), method: init?.method });
-        return { ok: true, json: async () => String(url).endsWith("/jobs/urls")
-          ? { job_id: "test-job" } : String(url).endsWith("/jobs/test-job") ? snapshot : String(url).endsWith("/page-catalog") ? catalog : {} };
+        return {
+          ok: true,
+          json: async () =>
+            String(url).endsWith("/jobs/urls")
+              ? { job_id: "test-job" }
+              : String(url).endsWith("/jobs/test-job")
+                ? snapshot
+                : String(url).endsWith("/page-catalog")
+                  ? catalog
+                  : {},
+        };
       },
     },
   );
@@ -55,43 +77,86 @@ async function runReviewWithState(snapshot, collectionIssues = []) {
 async function workflowHarness(createResponse) {
   freshModules();
   const requests = [];
-  const { useReviewWorkflow } = await loadModule(fileURLToPath(new URL("../src/features/review/model/use-review-workflow.ts", import.meta.url)), {
-    chrome: { tabs: { query: async () => [{ id: 42 }], sendMessage: async () => ({
-      businessType: "scrap_replacement", pageFields: {}, images: [], collectionId: "collection-1",
-    }) } },
-    fetch: async (url, init) => {
-      requests.push({ url: String(url), method: init?.method });
-      return { ok: true, status: 200, json: async () => String(url).endsWith("/jobs/urls")
-        ? await createResponse : String(url).endsWith("/jobs/job-1") && init?.method !== "DELETE"
-          ? { status: "COMPLETED", progress: { total_count: 0, completed_count: 0 } } : String(url).endsWith("/page-catalog") ? catalog : {} };
+  const { useReviewWorkflow } = await loadModule(
+    fileURLToPath(new URL("../src/features/review/model/use-review-workflow.ts", import.meta.url)),
+    {
+      chrome: {
+        tabs: {
+          query: async () => [{ id: 42 }],
+          sendMessage: async () => ({
+            businessType: "scrap_replacement",
+            pageFields: {},
+            images: [],
+            collectionId: "collection-1",
+          }),
+        },
+      },
+      fetch: async (url, init) => {
+        requests.push({ url: String(url), method: init?.method });
+        return {
+          ok: true,
+          status: 200,
+          json: async () =>
+            String(url).endsWith("/jobs/urls")
+              ? await createResponse
+              : String(url).endsWith("/jobs/job-1") && init?.method !== "DELETE"
+                ? { status: "COMPLETED", progress: { total_count: 0, completed_count: 0 } }
+                : String(url).endsWith("/page-catalog")
+                  ? catalog
+                  : {},
+        };
+      },
     },
-  });
+  );
   return { workflow: createWorkflow(useReviewWorkflow), requests };
 }
 
 test("rapid repeated starts create exactly one review job", async () => {
   const { workflow, requests } = await workflowHarness(Promise.resolve({ job_id: "job-1" }));
   await Promise.all([workflow.startReview(), workflow.startReview()]);
-  assert.equal(requests.filter(request => request.method === "POST").length, 1);
+  assert.equal(requests.filter((request) => request.method === "POST").length, 1);
 });
 
 test("offline service preserves recognized source and refresh recovers without changing business choice", async () => {
   freshModules();
-  let online = false, posts = 0;
-  const manifest = JSON.parse(readFileSync(new URL("./fixtures/collect-manifest-vehicle-source.json", import.meta.url), "utf8"));
-  const {useReviewWorkflow} = await loadModule(fileURLToPath(new URL("../src/features/review/model/use-review-workflow.ts", import.meta.url)), {
-    chrome: {tabs: {query: async () => [{id: 42}], sendMessage: async () => ({businessType: "vehicle_source",
-      region: "default", pageId: "vehicle_source:default", images: [], pageFields: {}, collectionId: "source"})}},
-    fetch: async (url, init) => {
-      if (!online) throw new Error("offline");
-      if (init?.method === "POST") posts++;
-      const value = String(url).endsWith("/page-catalog") ? catalog
-        : String(url).includes("/collect-manifest") ? manifest
-        : String(url).endsWith("/jobs/urls") ? {job_id: "job"}
-        : {status: "COMPLETED", progress: {total_count: 0, completed_count: 0}};
-      return {ok: true, json: async () => value};
+  let online = false,
+    posts = 0;
+  const manifest = JSON.parse(
+    readFileSync(
+      new URL("./fixtures/collect-manifest-vehicle-source.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  const { useReviewWorkflow } = await loadModule(
+    fileURLToPath(new URL("../src/features/review/model/use-review-workflow.ts", import.meta.url)),
+    {
+      chrome: {
+        tabs: {
+          query: async () => [{ id: 42 }],
+          sendMessage: async () => ({
+            businessType: "vehicle_source",
+            region: "default",
+            pageId: "vehicle_source:default",
+            images: [],
+            pageFields: {},
+            collectionId: "source",
+          }),
+        },
+      },
+      fetch: async (url, init) => {
+        if (!online) throw new Error("offline");
+        if (init?.method === "POST") posts++;
+        const value = String(url).endsWith("/page-catalog")
+          ? catalog
+          : String(url).includes("/collect-manifest")
+            ? manifest
+            : String(url).endsWith("/jobs/urls")
+              ? { job_id: "job" }
+              : { status: "COMPLETED", progress: { total_count: 0, completed_count: 0 } };
+        return { ok: true, json: async () => value };
+      },
     },
-  });
+  );
   const workflow = createWorkflow(useReviewWorkflow);
   await workflow.refreshPage();
   assert.equal(workflow.pageData.businessType, "vehicle_source");
@@ -111,17 +176,27 @@ test("offline service preserves recognized source and refresh recovers without c
 test("Vue selection watcher ignores an old preflight after the business is changed", async () => {
   freshModules();
   let resolveOld;
-  const old = new Promise(done => { resolveOld = done; });
-  const selected = ref("AUTO");
-  const {useReviewWorkflow} = await loadModule(fileURLToPath(new URL("../src/features/review/model/use-review-workflow.ts", import.meta.url)), {}, {
-    "../api/collect-page": {collectPageData: selection => selection === "AUTO" ? old : Promise.resolve({collectionId: "new", images: []})},
+  const old = new Promise((done) => {
+    resolveOld = done;
   });
+  const selected = ref("AUTO");
+  const { useReviewWorkflow } = await loadModule(
+    fileURLToPath(new URL("../src/features/review/model/use-review-workflow.ts", import.meta.url)),
+    {},
+    {
+      "../api/collect-page": {
+        collectPageData: (selection) =>
+          selection === "AUTO" ? old : Promise.resolve({ collectionId: "new", images: [] }),
+      },
+    },
+  );
   const workflow = createWorkflow(useReviewWorkflow, selected);
-  workflow.reset(); selected.value = "vehicle_source_default";
-  await new Promise(done => setTimeout(done, 0));
+  workflow.reset();
+  selected.value = "vehicle_source_default";
+  await new Promise((done) => setTimeout(done, 0));
   assert.equal(workflow.pageData.collectionId, "new");
-  resolveOld({collectionId: "old", images: []});
-  await new Promise(done => setTimeout(done, 0));
+  resolveOld({ collectionId: "old", images: [] });
+  await new Promise((done) => setTimeout(done, 0));
   assert.equal(workflow.pageData.collectionId, "new");
 });
 
@@ -129,24 +204,44 @@ for (const grouped of [false, true]) {
   test(`late ${grouped ? "group" : "single"} fill receipt cannot change a newly collected page in Vue`, async () => {
     freshModules();
     let resolveFill;
-    const pendingFill = new Promise(done => { resolveFill = done; });
-    let current = {collectionId: "first", businessType: "vehicle_source", pageFields: {"vehicle.vin": "A"}, images: []};
-    const {useReviewWorkflow} = await loadModule(fileURLToPath(new URL("../src/features/review/model/use-review-workflow.ts", import.meta.url)), {}, {
-      "../api/collect-page": {collectPageData: async () => current},
-      "../../../platform/extension/page-action-client": {
-        applyPageFieldValue: () => pendingFill, applyPageFieldGroupValue: () => pendingFill,
-      },
-      "../api/review-client": {createUrlReviewJob: async () => ({job_id: "job"}),
-        fetchReviewJob: async () => ({status: "COMPLETED", progress: {total_count: 0}}),
-        cancelReviewJob: async () => {}, completionNotice: () => ""},
+    const pendingFill = new Promise((done) => {
+      resolveFill = done;
     });
+    let current = {
+      collectionId: "first",
+      businessType: "vehicle_source",
+      pageFields: { "vehicle.vin": "A" },
+      images: [],
+    };
+    const { useReviewWorkflow } = await loadModule(
+      fileURLToPath(
+        new URL("../src/features/review/model/use-review-workflow.ts", import.meta.url),
+      ),
+      {},
+      {
+        "../api/collect-page": { collectPageData: async () => current },
+        "../../../platform/extension/page-action-client": {
+          applyPageFieldValue: () => pendingFill,
+          applyPageFieldGroupValue: () => pendingFill,
+        },
+        "../api/review-client": {
+          createUrlReviewJob: async () => ({ job_id: "job" }),
+          fetchReviewJob: async () => ({ status: "COMPLETED", progress: { total_count: 0 } }),
+          cancelReviewJob: async () => {},
+          completionNotice: () => "",
+        },
+      },
+    );
     const workflow = createWorkflow(useReviewWorkflow);
-    await new Promise(done => setTimeout(done, 0));
-    const fill = grouped ? workflow.applyPageFieldGroupValue(["vehicle.vin"], "B") : workflow.applyPageFieldValue("vehicle.vin", "B");
+    await new Promise((done) => setTimeout(done, 0));
+    const fill = grouped
+      ? workflow.applyPageFieldGroupValue(["vehicle.vin"], "B")
+      : workflow.applyPageFieldValue("vehicle.vin", "B");
     workflow.reset();
-    current = {...current, collectionId: "second", pageFields: {"vehicle.vin": "C"}};
+    current = { ...current, collectionId: "second", pageFields: { "vehicle.vin": "C" } };
     await workflow.startReview();
-    resolveFill({ok: true, message: "回读成功"}); await fill;
+    resolveFill({ ok: true, message: "回读成功" });
+    await fill;
     assert.equal(workflow.pageData.collectionId, "second");
     assert.equal(workflow.pageData.pageFields["vehicle.vin"], "C");
   });
@@ -154,11 +249,13 @@ for (const grouped of [false, true]) {
 
 test("reset discards a late created job and cancels it without restoring old state", async () => {
   let resolve;
-  const pending = new Promise(done => { resolve = done; });
+  const pending = new Promise((done) => {
+    resolve = done;
+  });
   const { workflow, requests } = await workflowHarness(pending);
   const review = workflow.startReview();
-  await new Promise(done => setTimeout(done, 0));
-  assert.ok(requests.some(request => request.method === "POST"));
+  await new Promise((done) => setTimeout(done, 0));
+  assert.ok(requests.some((request) => request.method === "POST"));
   workflow.reset();
   resolve({ job_id: "job-1" });
   await review;
@@ -167,13 +264,17 @@ test("reset discards a late created job and cancels it without restoring old sta
   assert.equal(workflow.job, null);
   assert.equal(workflow.pageData, null);
   assert.equal(workflow.error, "");
-  assert.ok(requests.some(request => request.method === "DELETE"));
+  assert.ok(requests.some((request) => request.method === "DELETE"));
 });
 
 test("partial completion notice survives an existing page collection warning", async () => {
-  const { notice, error } = await runReviewWithState({
-    status: "PARTIAL", progress: { total_count: 1, completed_count: 0, failed_count: 1, timed_out_count: 0 },
-  }, ["候选资料超过 16 张，请确认是否漏审"]);
+  const { notice, error } = await runReviewWithState(
+    {
+      status: "PARTIAL",
+      progress: { total_count: 1, completed_count: 0, failed_count: 1, timed_out_count: 0 },
+    },
+    ["候选资料超过 16 张，请确认是否漏审"],
+  );
   assert.equal(error, "");
   assert.match(notice, /候选资料超过 16 张/);
   assert.match(notice, /部分材料未完成识别（失败 1 张）/);
@@ -181,10 +282,17 @@ test("partial completion notice survives an existing page collection warning", a
 });
 
 test("failed reviews give recovery guidance instead of showing backend exception names", async () => {
-  const { error, requests } = await runReviewWithState({ status: "FAILED", message: "审核任务失败：AttributeError" });
+  const { error, requests } = await runReviewWithState({
+    status: "FAILED",
+    message: "审核任务失败：AttributeError",
+  });
   assert.match(error, /请重新审核.*人工核对.*联系管理员/);
   assert.doesNotMatch(error, /AttributeError/);
-  assert.ok(requests.some(request => request.url.endsWith("/jobs/test-job") && request.method === "DELETE"));
+  assert.ok(
+    requests.some(
+      (request) => request.url.endsWith("/jobs/test-job") && request.method === "DELETE",
+    ),
+  );
 });
 
 test("URL review never reads, compresses, or uploads image bodies", async () => {
@@ -192,25 +300,36 @@ test("URL review never reads, compresses, or uploads image bodies", async () => 
   const messages = [];
   const requests = [];
   const page = {
-    pageUrl: "https://example.test/review", collectionId: "url-collection",
-    businessType: "scrap_replacement", region: "qingdao", profileVersion: "1.0",
-    pageFields: {}, images: [{ index: 0, imageId: "url-0", src: "https://images.example.test/0.jpg" }],
+    pageUrl: "https://example.test/review",
+    collectionId: "url-collection",
+    businessType: "scrap_replacement",
+    region: "qingdao",
+    profileVersion: "1.0",
+    pageFields: {},
+    images: [{ index: 0, imageId: "url-0", src: "https://images.example.test/0.jpg" }],
   };
   const { useReviewWorkflow } = await loadModule(
-    fileURLToPath(new URL("../src/features/review/model/use-review-workflow.ts", import.meta.url)), {
-      chrome: { tabs: {
-        query: async () => [{ id: 42 }],
-        sendMessage: async (_tabId, message) => {
-          messages.push(message.type);
-          assert.equal(message.type, "COLLECT_PAGE_MANIFEST");
-          return page;
+    fileURLToPath(new URL("../src/features/review/model/use-review-workflow.ts", import.meta.url)),
+    {
+      chrome: {
+        tabs: {
+          query: async () => [{ id: 42 }],
+          sendMessage: async (_tabId, message) => {
+            messages.push(message.type);
+            assert.equal(message.type, "COLLECT_PAGE_MANIFEST");
+            return page;
+          },
         },
-      } },
+      },
       fetch: async (url, init) => {
         requests.push({ url: String(url), init });
-        const result = String(url).endsWith("/jobs/urls") ? { job_id: "url-job" }
+        const result = String(url).endsWith("/jobs/urls")
+          ? { job_id: "url-job" }
           : String(url).endsWith("/jobs/url-job")
-            ? { status: "COMPLETED", progress: { completed_count: 1, total_count: 1 } } : String(url).endsWith("/page-catalog") ? catalog : {};
+            ? { status: "COMPLETED", progress: { completed_count: 1, total_count: 1 } }
+            : String(url).endsWith("/page-catalog")
+              ? catalog
+              : {};
         return { ok: true, json: async () => result };
       },
     },
@@ -218,9 +337,12 @@ test("URL review never reads, compresses, or uploads image bodies", async () => 
   const captured = createWorkflow(useReviewWorkflow);
   await captured.startReview();
   assert.ok(messages.length >= 1);
-  assert.ok(messages.every(message => message === "COLLECT_PAGE_MANIFEST"));
-  const jobRequests = requests.filter(request => request.url.includes("/jobs/"));
-  assert.deepEqual(jobRequests.map(request => request.url.split("/jobs/")[1]), ["urls", "url-job"]);
+  assert.ok(messages.every((message) => message === "COLLECT_PAGE_MANIFEST"));
+  const jobRequests = requests.filter((request) => request.url.includes("/jobs/"));
+  assert.deepEqual(
+    jobRequests.map((request) => request.url.split("/jobs/")[1]),
+    ["urls", "url-job"],
+  );
   assert.equal(JSON.parse(jobRequests[0].init.body).images[0].src, page.images[0].src);
 });
 
@@ -301,9 +423,7 @@ test("侧边栏自己应用采集清单，字段和材料的中文名来自后�
         reviewable: true,
       },
     ],
-    materials: [
-      { document_type: "invoice", label: "机动车销售发票", hints: ["发票"], slots: [] },
-    ],
+    materials: [{ document_type: "invoice", label: "机动车销售发票", hints: ["发票"], slots: [] }],
   };
   const stalePage = {
     pageUrl: "https://admin.forjtruck.com/scrap-replace-qingdao?showPageModel=1",
@@ -324,7 +444,11 @@ test("侧边栏自己应用采集清单，字段和材料的中文名来自后�
     ok: true,
     status: 200,
     json: async () =>
-      String(url).includes("/api/review/collect-manifest") ? manifest : String(url).endsWith("/page-catalog") ? catalog : {},
+      String(url).includes("/api/review/collect-manifest")
+        ? manifest
+        : String(url).endsWith("/page-catalog")
+          ? catalog
+          : {},
   });
 
   const { useReviewWorkflow } = await loadModule(

@@ -23,19 +23,29 @@ class SafeFormatter(logging.Formatter):
         item = copy.copy(record)
         text = item.getMessage()
         text = re.sub(r"https?://[^\s\"'<>]+", "[url-redacted]", text)
-        text = re.sub(r"(?i)(bearer\s+|(?:api[_-]?key|token|password|authorization)=)[^\s,;]+", r"\1[redacted]", text)
+        text = re.sub(
+            r"(?i)(bearer\s+|(?:api[_-]?key|token|password|authorization)=)[^\s,;]+",
+            r"\1[redacted]",
+            text,
+        )
         text = re.sub(r"\bsk-[A-Za-z0-9_-]+", "[key-redacted]", text)
-        text = re.sub(r"\b(?:\d{17}[\dXx]|1[3-9]\d{9}|[A-HJ-NPR-Z0-9]{17})\b", "[value-redacted]", text)
+        text = re.sub(
+            r"\b(?:\d{17}[\dXx]|1[3-9]\d{9}|[A-HJ-NPR-Z0-9]{17})\b", "[value-redacted]", text
+        )
         item.msg = text.replace("\r", "\\r").replace("\n", "\\n")[:8000]
         item.args = ()
         item.exc_text = None
         item.stack_info = None
-        item.context_fields = " ".join(f"{key}={value}" for key, value in current_log_context().items())
+        item.context_fields = " ".join(
+            f"{key}={value}" for key, value in current_log_context().items()
+        )
         return super().format(item).replace("\r", "\\r").replace("\n", "\\n")
 
     def formatException(self, exc_info) -> str:
         frames = traceback.extract_tb(exc_info[2])
-        locations = " > ".join(f"{Path(frame.filename).name}:{frame.lineno}:{frame.name}" for frame in frames[-12:])
+        locations = " > ".join(
+            f"{Path(frame.filename).name}:{frame.lineno}:{frame.name}" for frame in frames[-12:]
+        )
         return f"exception_type={exc_info[0].__name__} stack={locations or '-'}"
 
 
@@ -56,13 +66,20 @@ class BoundedDailyFileHandler(TimedRotatingFileHandler):
         # Logging's default handler prints raw record arguments on disk/rotation
         # errors. Keep failure visible without leaking those arguments.
         error = sys.exc_info()[0]
-        print(f"review log file write failed error_type={error.__name__ if error else 'unknown'}; check disk space and permissions", file=sys.stderr)
+        print(
+            f"review log file write failed error_type={error.__name__ if error else 'unknown'}; check disk space and permissions",
+            file=sys.stderr,
+        )
 
     def shouldRollover(self, record: logging.LogRecord) -> bool:
         if super().shouldRollover(record):
             return True
-        return bool(self.stream and self.stream.tell() > 0 and
-                    self.stream.tell() + len((self.format(record) + "\n").encode("utf-8")) >= self.max_bytes)
+        return bool(
+            self.stream
+            and self.stream.tell() > 0
+            and self.stream.tell() + len((self.format(record) + "\n").encode("utf-8"))
+            >= self.max_bytes
+        )
 
     def doRollover(self) -> None:
         if self.stream:
@@ -80,10 +97,17 @@ class BoundedDailyFileHandler(TimedRotatingFileHandler):
 
     def getFilesToDelete(self) -> list[str]:
         path = Path(self.baseFilename)
-        archives = sorted(item for item in path.parent.glob(path.name + ".*")
-                          if re.fullmatch(re.escape(path.name) + r"\.\d{4}-\d{2}-\d{2}(?:\.\d{2}-\d{2}-\d{2}\.\d{6})?", item.name)
-                          and item.is_file() and not item.is_symlink())
-        return [str(item) for item in archives[:-self.backupCount]] if self.backupCount else []
+        archives = sorted(
+            item
+            for item in path.parent.glob(path.name + ".*")
+            if re.fullmatch(
+                re.escape(path.name) + r"\.\d{4}-\d{2}-\d{2}(?:\.\d{2}-\d{2}-\d{2}\.\d{6})?",
+                item.name,
+            )
+            and item.is_file()
+            and not item.is_symlink()
+        )
+        return [str(item) for item in archives[: -self.backupCount]] if self.backupCount else []
 
 
 def _positive_env(name: str, default: int, maximum: int) -> int:
@@ -103,21 +127,31 @@ def configure_log_file(handler_logger: logging.Logger) -> None:
             raise RuntimeError("REVIEW_LOG_DIR is required")
         return
     target = os.path.abspath(os.path.join(log_dir, "review-service.log"))
-    if any(getattr(existing, "baseFilename", None) == target for existing in handler_logger.handlers):
+    if any(
+        getattr(existing, "baseFilename", None) == target for existing in handler_logger.handlers
+    ):
         return
     max_mb = _positive_env("REVIEW_LOG_MAX_MB", 10, 100)
     backups = _positive_env("REVIEW_LOG_BACKUP_COUNT", 30, 365)
     try:
         os.makedirs(log_dir, exist_ok=True)
-        handler = BoundedDailyFileHandler(target, max_bytes=max_mb * 1024 * 1024, backup_count=backups)
+        handler = BoundedDailyFileHandler(
+            target, max_bytes=max_mb * 1024 * 1024, backup_count=backups
+        )
     except OSError as exc:
-        handler_logger.warning("Review log file disabled: error_type=%s required=%s", type(exc).__name__, required)
+        handler_logger.warning(
+            "Review log file disabled: error_type=%s required=%s", type(exc).__name__, required
+        )
         if required:
             raise RuntimeError("Required review log file is not writable") from None
         return
-    handler.setFormatter(SafeFormatter("%(asctime)s %(levelname)s %(name)s %(message)s %(context_fields)s"))
+    handler.setFormatter(
+        SafeFormatter("%(asctime)s %(levelname)s %(name)s %(message)s %(context_fields)s")
+    )
     handler_logger.addHandler(handler)
-    handler_logger.info("Review log file enabled: rotation=daily_or_size max_mb=%d backup_count=%d", max_mb, backups)
+    handler_logger.info(
+        "Review log file enabled: rotation=daily_or_size max_mb=%d backup_count=%d", max_mb, backups
+    )
 
 
 @contextmanager
@@ -130,10 +164,15 @@ def configured_logging():
     app_logger = logging.getLogger("forj_review_service")
     server_logger = logging.getLogger("uvicorn.error")
     access_logger = logging.getLogger("uvicorn.access")
-    saved = [(target, list(target.handlers), target.level, target.propagate) for target in (app_logger, server_logger)]
+    saved = [
+        (target, list(target.handlers), target.level, target.propagate)
+        for target in (app_logger, server_logger)
+    ]
     access_disabled = access_logger.disabled
     console = logging.StreamHandler()
-    console.setFormatter(SafeFormatter("%(asctime)s %(levelname)s %(name)s %(message)s %(context_fields)s"))
+    console.setFormatter(
+        SafeFormatter("%(asctime)s %(levelname)s %(name)s %(message)s %(context_fields)s")
+    )
     owned: list[logging.Handler] = [console]
     try:
         for target in (app_logger, server_logger):

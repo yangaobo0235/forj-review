@@ -256,6 +256,7 @@ class ReviewWorkflow:
             state.get("batch_callback"),
             state["profile"],
             state.get("material_completeness"),
+            absolute_deadline=state.get("absolute_deadline"),
         )
         return {"batch": batch}
 
@@ -356,7 +357,6 @@ class ReviewWorkflow:
 
         if "comparisons" not in state:
             raise RuntimeError("工作流状态缺少同字段比对结果")
-        batch = state.get("batch")
         return {
             "review_tasks": build_review_tasks(
                 request=state["request"],
@@ -364,11 +364,6 @@ class ReviewWorkflow:
                 comparisons=list(state["comparisons"]),
                 external_checks=list(state.get("external_results", [])),
                 business_checks=list(state.get("cross_checks", [])),
-                completeness=state.get("material_completeness"),
-                limitations=[
-                    *(batch.limitations if batch else []),
-                    *state.get("degradation_reasons", []),
-                ],
             )
         }
 
@@ -440,6 +435,7 @@ class ReviewWorkflow:
         profile: BusinessProfile | None = None,
         batch_callback: Callable[[RecognitionBatchResult], Any] | None = None,
         initial_batch: RecognitionBatchResult | None = None,
+        absolute_deadline: float | None = None,
     ) -> tuple[ReviewResponse, RecognitionBatchResult]:
         """执行完整审核图并返回经过类型校验的最终响应。"""
 
@@ -453,6 +449,7 @@ class ReviewWorkflow:
             "request": request,
             "profile": resolved_profile,
             "batch_callback": batch_callback,
+            "absolute_deadline": absolute_deadline,
             "trace_id": request.trace_id or uuid4().hex,
         }
         if initial_batch is not None:

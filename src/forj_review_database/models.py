@@ -6,8 +6,17 @@ they never create, alter or write the upstream business tables.
 
 from datetime import datetime
 from typing import Any
+from uuid import uuid4
 
-from sqlalchemy import BigInteger, DateTime, FetchedValue, Identity, Integer, Text, func
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    FetchedValue,
+    Identity,
+    Integer,
+    Text,
+    func,
+)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -129,41 +138,118 @@ class Head(Base):
 class Capture(Base):
     __tablename__ = "cfg_capture"
     id: Mapped[str] = mapped_column(primary_key=True)
-    extension_id: Mapped[str]
+    page_id: Mapped[int | None] = mapped_column(BigInteger)
+    source_extension_id: Mapped[str]
     snapshot_id: Mapped[str]
     page_instance_id: Mapped[str]
     page_url: Mapped[str]
     title: Mapped[str]
+    captured_at: Mapped[datetime]
+    observed_page_version: Mapped[str]
+    detected_page_id: Mapped[str]
+    record_identity: Mapped[dict[str, Any]]
     structure_digest: Mapped[str]
+    content_digest: Mapped[str]
     snapshot_schema_version: Mapped[str]
-    snapshot: Mapped[dict[str, Any]]
-    created_by: Mapped[str]
-    created_at: Mapped[datetime] = timestamp()
+    fields: Mapped[list[Any]]
+    samples: Mapped[list[Any]]
+    diagnostics: Mapped[list[Any]]
+    headings: Mapped[list[Any]]
     expires_at: Mapped[datetime]
 
 
-class ConfigurationSession(Base):
-    __tablename__ = "cfg_session"
+class TaskCapture(Base):
+    __tablename__ = "cfg_task_capture"
+    task_id: Mapped[str] = mapped_column(primary_key=True)
+    capture_id: Mapped[str] = mapped_column(primary_key=True)
+    added_at: Mapped[datetime] = timestamp()
+    source: Mapped[str] = mapped_column(server_default="USER")
+    bindings_schema_version: Mapped[str] = mapped_column(server_default="1.0")
+    bindings: Mapped[dict[str, Any]] = mapped_column(server_default="{}")
+
+
+class ConfigurationTask(Base):
+    __tablename__ = "cfg_task"
     id: Mapped[str] = mapped_column(primary_key=True)
     page_id: Mapped[int] = mapped_column(BigInteger)
-    capture_id: Mapped[str | None]
+    current_capture_id: Mapped[str | None]
     base_page_version_id: Mapped[int] = mapped_column(BigInteger)
     base_release_id: Mapped[int] = mapped_column(BigInteger)
-    baseline_digest: Mapped[str]
-    state: Mapped[str]
-    turn_status: Mapped[str]
-    revision: Mapped[int] = mapped_column(BigInteger)
+    base_page_digest: Mapped[str]
+    kernel_fingerprint: Mapped[str]
+    row_version: Mapped[int] = mapped_column(BigInteger)
+    draft_revision: Mapped[int] = mapped_column(BigInteger)
+    evidence_revision: Mapped[int] = mapped_column(BigInteger)
+    intent_revision: Mapped[int] = mapped_column(BigInteger)
+    status: Mapped[str]
+    wait_reason: Mapped[str | None]
     draft: Mapped[dict[str, Any]]
     draft_digest: Mapped[str]
-    workflow_schema_version: Mapped[str]
-    workflow: Mapped[dict[str, Any]]
+    context: Mapped[dict[str, Any]]
+    current_run_id: Mapped[str | None]
     current_validation_run_id: Mapped[str | None]
     published_release_id: Mapped[int | None] = mapped_column(BigInteger)
-    created_by: Mapped[str]
+    parent_task_id: Mapped[str | None]
     created_at: Mapped[datetime] = timestamp()
     updated_at: Mapped[datetime] = timestamp()
     closed_at: Mapped[datetime | None]
     expires_at: Mapped[datetime | None]
+
+
+class TaskRequirement(Base):
+    __tablename__ = "cfg_task_requirement"
+    id: Mapped[str] = mapped_column(primary_key=True)
+    task_id: Mapped[str]
+    source_event_id: Mapped[str | None]
+    last_changed_event_id: Mapped[str | None]
+    requirement_revision: Mapped[int] = mapped_column(BigInteger)
+    text: Mapped[str]
+    target_refs: Mapped[list[Any]]
+    status: Mapped[str]
+    replaces: Mapped[list[Any]]
+    depends_on: Mapped[list[Any]]
+    assessment: Mapped[dict[str, Any]]
+    acceptance: Mapped[list[Any]]
+    created_at: Mapped[datetime] = timestamp()
+    updated_at: Mapped[datetime] = timestamp()
+
+
+class TaskRun(Base):
+    __tablename__ = "cfg_task_run"
+    id: Mapped[str] = mapped_column(primary_key=True)
+    task_id: Mapped[str]
+    run_no: Mapped[int] = mapped_column(BigInteger)
+    trigger_event_id: Mapped[str | None]
+    input_intent_revision: Mapped[int] = mapped_column(BigInteger)
+    input_draft_revision: Mapped[int] = mapped_column(BigInteger)
+    input_evidence_revision: Mapped[int] = mapped_column(BigInteger)
+    status: Mapped[str]
+    model_id: Mapped[str]
+    budget: Mapped[dict[str, Any]]
+    usage: Mapped[dict[str, Any]]
+    started_at: Mapped[datetime] = timestamp()
+    ended_at: Mapped[datetime | None]
+    error_code: Mapped[str | None]
+
+
+class TaskInteraction(Base):
+    __tablename__ = "cfg_task_interaction"
+    id: Mapped[str] = mapped_column(primary_key=True)
+    task_id: Mapped[str]
+    run_id: Mapped[str | None]
+    kind: Mapped[str]
+    status: Mapped[str]
+    intent_revision: Mapped[int] = mapped_column(BigInteger)
+    draft_revision: Mapped[int] = mapped_column(BigInteger)
+    evidence_revision: Mapped[int] = mapped_column(BigInteger)
+    candidate_digest: Mapped[str | None]
+    validation_run_id: Mapped[str | None]
+    payload_schema_version: Mapped[str]
+    payload: Mapped[dict[str, Any]]
+    answer_event_id: Mapped[str | None]
+    expires_at: Mapped[datetime | None]
+    created_at: Mapped[datetime] = timestamp()
+    completed_at: Mapped[datetime | None]
 
 
 class ValidationRun(Base):
@@ -180,6 +266,11 @@ class ValidationRun(Base):
     scene_digest: Mapped[str | None]
     kernel_version: Mapped[str]
     kernel_fingerprint: Mapped[str]
+    intent_digest: Mapped[str | None]
+    verification_context: Mapped[dict[str, Any]] = mapped_column(
+        server_default='\'{"schema_version":"legacy"}\''
+    )
+    publish_valid_until: Mapped[datetime | None]
     report_schema_version: Mapped[str]
     status: Mapped[str]
     report: Mapped[dict[str, Any]]
@@ -189,10 +280,12 @@ class ValidationRun(Base):
     expires_at: Mapped[datetime | None]
 
 
-class SessionEvent(Base):
-    __tablename__ = "cfg_session_event"
+class TaskEvent(Base):
+    __tablename__ = "cfg_task_event"
     seq: Mapped[int] = identity()
-    session_id: Mapped[str]
+    id: Mapped[str] = mapped_column(default=lambda: uuid4().hex)
+    task_id: Mapped[str]
+    run_id: Mapped[str | None]
     kind: Mapped[str]
     role: Mapped[str | None]
     content: Mapped[str | None]
@@ -206,10 +299,11 @@ class SessionEvent(Base):
 class Idempotency(Base):
     __tablename__ = "cfg_idempotency"
     operation_type: Mapped[str] = mapped_column(primary_key=True)
-    scope_key: Mapped[str] = mapped_column(primary_key=True)
+    scope_type: Mapped[str]
+    scope_id: Mapped[str] = mapped_column(primary_key=True)
     request_id: Mapped[str] = mapped_column(primary_key=True)
     request_digest: Mapped[str]
-    result: Mapped[dict[str, Any]]
+    result_ref: Mapped[dict[str, Any]]
     created_at: Mapped[datetime] = timestamp()
     expires_at: Mapped[datetime] = mapped_column(server_default=FetchedValue())
 

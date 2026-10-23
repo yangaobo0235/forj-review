@@ -45,7 +45,7 @@ def _field_finding(
         reason=comparison.message,
         reason_codes=comparison.reason_codes,
         values=values,
-        evidence=[item.model_dump() for item in comparison.evidence],
+        evidence=list(comparison.evidence),
     )
 
 

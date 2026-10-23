@@ -24,6 +24,7 @@ from forj_review_service.integrations.qr.web_verifier import (
 )
 from forj_review_service.runtime.review_service import ReviewService
 from tests.support.pages import business_registry
+from tests.support.qr import qr_image_decoder
 
 
 def test_qr_url_requires_exact_official_https_host():
@@ -468,13 +469,13 @@ async def test_qr_decodes_original_for_unknown_scope_with_scrap_hint():
 
 
 def decoded_batch(service, index, url):
+    service.qr_decoder = qr_image_decoder({"https://images.example.test/synthetic.jpg": url})
     return RecognitionBatchResult(
         recognized_documents=[
             RecognizedDocument(
                 target_id=str(index),
                 image_index=index,
                 document_type="scrap_certificate",
-                qr_codes=[url],
             )
         ]
     )

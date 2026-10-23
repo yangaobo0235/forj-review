@@ -9,12 +9,15 @@ from forj_review_service.integrations.recognition.client import (
     QwenResponseSchemaError,
     QwenResponseStructureError,
     QwenResponseSyntaxError,
+    QwenResponseTruncatedError,
 )
 
 
 def classify_qwen_error(error: RuntimeError) -> str:
     """把调用或解析异常转换为不暴露模型及业务数据的稳定诊断代码。"""
     cause = error.__cause__
+    if isinstance(error, QwenResponseTruncatedError):
+        return "model_output_truncated"
     # 先识别自定义解析异常，避免被其 ValueError 基类归入宽泛的结构错误。
     if isinstance(cause, QwenResponseSyntaxError):
         return "invalid_json_syntax"

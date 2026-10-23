@@ -28,6 +28,7 @@ class ReviewState(TypedDict, total=False):
 
     request: Required[ReviewRequest]
     profile: Required[BusinessProfile]
+    absolute_deadline: float | None
     batch_callback: Callable[[RecognitionBatchResult], Any] | None
     batch: RecognitionBatchResult
     qr_checks: list[QrCheck]
@@ -50,4 +51,3 @@ class ReviewState(TypedDict, total=False):
     coverage_status: str
     degradation_reasons: list[str]
     trace_id: str
-

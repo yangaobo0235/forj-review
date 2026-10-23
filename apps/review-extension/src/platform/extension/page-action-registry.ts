@@ -44,4 +44,3 @@ export class PageActionRegistry {
     return messages;
   }
 }
-

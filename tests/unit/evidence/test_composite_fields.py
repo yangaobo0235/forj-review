@@ -84,8 +84,6 @@ def test_composite_task_uses_reviewer_facing_page_labels_and_keeps_differences()
             comparisons=[material],
             external_checks=[],
             business_checks=[],
-            completeness=None,
-            limitations=[],
         )
         if item.step_id == "FIELD-NEW-VEHICLE-VIN"
     )

@@ -60,16 +60,20 @@ def build_extracted_evidence(
     原始不确定字段保留在文档中，由证据收集入口统一传播到规范字段。
     """
     image_name = image.image_id or image.index
+    uncertain_fields = set(extraction.uncertain_fields)
+    for key in extraction.fields:
+        confidence = extraction.field_confidences.get(key, extraction.confidence)
+        if confidence is not None and confidence < 0.7:
+            uncertain_fields.add(key)
     document = RecognizedDocument(
         target_id=str(image_name),
         image_index=image.index,
         document_type=policy.document_type,
         business_scope=image.business_scope,
         covered_pages=_covered_pages(extraction.fields.get("registration.covered_pages")),
-        uncertain_fields=list(extraction.uncertain_fields),
-        uncertain_values={
-            field: extraction.fields.get(field) for field in extraction.uncertain_fields
-        },
+        uncertain_fields=sorted(uncertain_fields),
+        raw_fields=list(extraction.raw_fields),
+        uncertain_values={field: extraction.fields.get(field) for field in uncertain_fields},
         qr_codes=list(dict.fromkeys(code.strip() for code in extraction.qr_codes if code.strip())),
     )
 
@@ -81,6 +85,33 @@ def build_extracted_evidence(
         pack=business.pack,
     )
     routed_regions: dict[str, list[float]] = {}
+    routed_confidences, _ = route_fields(
+        image.business_scope,
+        policy.document_type,
+        extraction.field_confidences,
+        group_order=image.group_order,
+        pack=business.pack,
+    )
+    readings = list(routed_fields.items())
+    conflicting_keys = set()
+    for key, values in extraction.field_alternatives.items():
+        for value in values:
+            extra, _ = route_fields(
+                image.business_scope,
+                policy.document_type,
+                {key: value},
+                group_order=image.group_order,
+                pack=business.pack,
+            )
+            readings.extend(item for item in extra.items() if item not in readings)
+            conflicting_keys.update(extra)
+    routed_uncertainty, _ = route_fields(
+        image.business_scope,
+        policy.document_type,
+        dict.fromkeys(uncertain_fields, True),
+        group_order=image.group_order,
+        pack=business.pack,
+    )
     for region in extraction.evidence_regions:
         region_fields, _ = route_fields(
             image.business_scope,
@@ -104,10 +135,13 @@ def build_extracted_evidence(
             group_order=image.group_order,
             value=value,
             derived_from=_derived_from(policy, field_name, extraction.fields),
-            evidence_region=routed_regions.get(field_name),
-            confidence=extraction.confidence,
+            evidence_region=None
+            if field_name in conflicting_keys
+            else routed_regions.get(field_name),
+            uncertain=field_name in routed_uncertainty,
+            confidence=routed_confidences.get(field_name, extraction.confidence),
         )
-        for field_name, value in routed_fields.items()
+        for field_name, value in readings
         if value
     ]
     return document, observations, routing_limitation

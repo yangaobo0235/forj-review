@@ -28,15 +28,17 @@ test("focuses an image only in the collected tab with the collected page identit
   const result = await focusReviewImage("unknown-01", target, chromeApi);
 
   assert.equal(result.ok, true);
-  assert.deepEqual(messages, [{
-    tabId: 42,
-    message: {
-      type: "FOCUS_REVIEW_IMAGE",
-      imageId: "unknown-01",
-      expectedPageUrl: target.pageUrl,
-      expectedPageInstanceId: target.pageInstanceId,
-      expectedPageFingerprint: target.pageFingerprint,
-      expectedCollectionId: target.collectionId,
+  assert.deepEqual(messages, [
+    {
+      tabId: 42,
+      message: {
+        type: "FOCUS_REVIEW_IMAGE",
+        imageId: "unknown-01",
+        expectedPageUrl: target.pageUrl,
+        expectedPageInstanceId: target.pageInstanceId,
+        expectedPageFingerprint: target.pageFingerprint,
+        expectedCollectionId: target.collectionId,
+      },
     },
-  }]);
+  ]);
 });

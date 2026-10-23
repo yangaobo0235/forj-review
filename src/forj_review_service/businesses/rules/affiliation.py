@@ -237,12 +237,12 @@ def _auxiliary_check(
     )
 
 
-def normalize_page_owner_type(
+def normalize_subject_type(
     value: object | None, *, business: BusinessContext = DEFAULT_BUSINESS
 ) -> str | None:
     """Only recognize the page's explicit personal/company option labels."""
 
-    normalized = normalize_value("application.owner_type", value, business=business)
+    normalized = normalize_value("old_vehicle.affiliation", value, business=business)
     if normalized == "个人":
         return "PERSONAL"
     if normalized in {"公司", "企业"}:
@@ -275,7 +275,6 @@ def build_affiliation_subject_check(
     old_owner: object | None,
     new_owner: object | None,
     observations: list[FieldObservation],
-    page_owner_type: object | None = None,
     *,
     business: BusinessContext = DEFAULT_BUSINESS,
 ) -> AffiliationCheckResult:
@@ -284,9 +283,7 @@ def build_affiliation_subject_check(
     old_name = _name(old_owner, business=business)
     new_name = _name(new_owner, business=business)
     old_type = classify_owner_type(old_owner, licenses, business=business)
-    inferred_new_type = classify_owner_type(new_owner, licenses, business=business)
-    declared_new_type = normalize_page_owner_type(page_owner_type, business=business)
-    new_type = declared_new_type or inferred_new_type
+    new_type = classify_owner_type(new_owner, licenses, business=business)
     values = [
         CheckResultValue(source="旧车所有人", value=old_owner),
         CheckResultValue(source="新车所有人", value=new_owner),
@@ -496,13 +493,7 @@ def build_affiliation_subject_check(
         for name in company_names
     )
 
-    type_mismatch = bool(
-        declared_new_type and inferred_new_type and declared_new_type != inferred_new_type
-    )
-    if type_mismatch:
-        requirements = []
-        reason = "页面车辆所有人类型与新车材料主体无法可靠对应，请人工确认"
-    elif missing_requirements:
+    if missing_requirements:
         reason = "；".join(dict.fromkeys(missing_requirements))
     elif old_type == new_type == "COMPANY" and old_name and old_name == new_name:
         status = "MATCH"
@@ -578,7 +569,6 @@ def run_affiliation_subject(context: ReviewExecutionContext) -> RuleExecutionRes
         page_fields.get("old_vehicle.owner") or raw_settled_value(comparisons, "old_vehicle.owner"),
         page_fields.get("new_vehicle.owner") or raw_settled_value(comparisons, "new_vehicle.owner"),
         list(context.observations),
-        page_fields.get("application.owner_type"),
         business=business,
     )
     auxiliary_checks = build_affiliation_auxiliary_checks(

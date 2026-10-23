@@ -101,7 +101,10 @@ def collect_manifest(
     result = build_collect_manifest(pack)
     if precise:
         result.update(
-            page_id=profile.page_id, region=str(profile.region), profile_version=profile.version
+            page_id=profile.page_id,
+            region=str(profile.region),
+            profile_version=profile.version,
+            effective_digest=profile_fingerprint(profile),
         )
     return result
 

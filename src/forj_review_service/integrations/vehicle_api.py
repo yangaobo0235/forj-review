@@ -39,7 +39,12 @@ def load_vehicle_api_settings() -> VehicleApiSettings:
 
 
 class VehicleApi:
-    def __init__(self, settings: VehicleApiSettings | None = None, *, transport: httpx.AsyncBaseTransport | None = None):
+    def __init__(
+        self,
+        settings: VehicleApiSettings | None = None,
+        *,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ):
         self.settings = settings if settings is not None else load_vehicle_api_settings()
         self.transport = transport
 
@@ -49,9 +54,15 @@ class VehicleApi:
         settings = self.settings
         try:
             url = urlsplit(settings.base_url)
-            valid = (url.scheme in {"http", "https"} and url.netloc and not url.username
-                     and not url.password and not url.query and not url.fragment
-                     and 0 < settings.timeout <= 120)
+            valid = (
+                url.scheme in {"http", "https"}
+                and url.netloc
+                and not url.username
+                and not url.password
+                and not url.query
+                and not url.fragment
+                and 0 < settings.timeout <= 120
+            )
         except ValueError:
             valid = False
         if not valid:
@@ -60,8 +71,11 @@ class VehicleApi:
         try:
             # Jobs use separate event loops; each request owns its HTTP resources.
             async with httpx.AsyncClient(
-                timeout=settings.timeout, headers=headers, transport=self.transport,
-                follow_redirects=False, trust_env=False,
+                timeout=settings.timeout,
+                headers=headers,
+                transport=self.transport,
+                follow_redirects=False,
+                trust_env=False,
             ) as client:
                 response = await client.post(settings.base_url + path, json=payload)
                 response.raise_for_status()

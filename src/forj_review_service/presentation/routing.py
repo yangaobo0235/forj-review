@@ -2,10 +2,9 @@
 
 from collections.abc import Sequence
 
-from forj_review_service.businesses.context import DEFAULT_BUSINESS, BusinessContext
+from forj_review_service.businesses.context import BusinessContext
 from forj_review_service.businesses.profiles import BusinessProfile
 from forj_review_service.contracts.checks import CheckResult, CheckResultValue
-from forj_review_service.contracts.recognition import MaterialCompletenessReport
 from forj_review_service.contracts.review import (
     FieldComparison,
     ReviewDisplayTarget,
@@ -84,11 +83,9 @@ def build_review_tasks(
     comparisons: Sequence[FieldComparison],
     external_checks: Sequence[CheckResult],
     business_checks: Sequence[CheckResult],
-    completeness: MaterialCompletenessReport | None,
-    limitations: Sequence[str],
 ) -> list[ReviewTask]:
     """一次返回完整、有序、带展示目标的审核步骤列表。"""
-    business = BusinessContext.from_profile(profile) if profile is not None else DEFAULT_BUSINESS
+    business = BusinessContext.from_profile(profile)
     page_interaction = profile.page_interaction
     # 组合字段是页面原始值与材料值之间的公开协议。工作流会提前生成
     # 这些检查，但路由函数也必须自洽，以保证重放、测试和其他调用方不会
@@ -116,7 +113,7 @@ def build_review_tasks(
     # 缺失字段转为 ASSISTANT + INSUFFICIENT。
     # 外部规则和派生规则使用 ASSISTANT。
     # 材料完整性属于输入诊断，不生成展示任务；报告和原始检查仍由
-    # 工作流及最终建议保留。completeness / limitations 参数兼容旧调用方。
+    # 工作流及最终建议保留。
     if page_interaction:
         # 只有通用字段回填动作允许显示回填按钮；发票验真、挂靠等专用动作
         # 不能顺带开放其他字段的写入权限。

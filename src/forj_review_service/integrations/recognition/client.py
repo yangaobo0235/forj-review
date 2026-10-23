@@ -20,13 +20,16 @@ from pydantic import ValidationError
 from forj_review_service.businesses.context import DEFAULT_BUSINESS, BusinessContext
 from forj_review_service.businesses.materials import (
     DocumentPolicy,
-    build_classification_prompt,
-    build_unknown_extraction_prompt,
+)
+from forj_review_service.businesses.recognition_prompts import (
+    PROMPT_VERSION,
+    build_recognition_prompt,
 )
 from forj_review_service.config.settings import QwenConfig
 from forj_review_service.contracts.recognition import (
-    QwenClassification,
+    MaterialFact,
     QwenExtraction,
+    valid_normalized_box,
 )
 
 # Bootstrap routes the whole application namespace to the same console/file sinks.
@@ -48,6 +51,10 @@ class QwenResponseSchemaError(ValueError):
 
 class QwenResponseStructureError(ValueError):
     """模型响应没有且仅有一个 JSON 对象。"""
+
+
+class QwenResponseTruncatedError(RuntimeError):
+    """The provider explicitly ended generation at its output limit."""
 
 
 FIELD_LABEL_ECHOES: dict[str, frozenset[str]] = {
@@ -85,20 +92,35 @@ def _drop_field_name_echoes(normalized: dict[str, Any]) -> None:
     fields = normalized.get("fields")
     if not isinstance(fields, dict):
         return
-    normalized["fields"] = {
-        field: value
-        for field, value in fields.items()
-        if not (
+
+    def is_reading(field: str, value: Any) -> bool:
+        return not (
             isinstance(value, str)
             and (
                 value.strip() == field
                 or value.strip() in FIELD_LABEL_ECHOES.get(field, frozenset())
             )
         )
+
+    normalized["fields"] = {
+        field: value for field, value in fields.items() if is_reading(field, value)
     }
+    alternatives = normalized.get("field_alternatives")
+    if isinstance(alternatives, dict):
+        filtered = {}
+        for field, values in alternatives.items():
+            if not isinstance(values, list):
+                filtered[field] = values  # Preserve schema errors for the validator.
+                continue
+            readings = [value for value in values if is_reading(field, value)]
+            if readings:
+                normalized["fields"].setdefault(field, readings[0])
+                if len(readings) > 1:
+                    filtered[field] = readings
+        normalized["field_alternatives"] = filtered
 
 
-def _restrict_extraction_to_policy(
+def restrict_extraction_to_policy(
     extraction: QwenExtraction,
     policy: DocumentPolicy,
     business_scope: str,
@@ -115,6 +137,14 @@ def _restrict_extraction_to_policy(
             "fields": fields,
             "uncertain_fields": uncertain_fields,
             "evidence_regions": evidence_regions,
+            "field_alternatives": {
+                key: values
+                for key, values in extraction.field_alternatives.items()
+                if key in allowed
+            },
+            "field_confidences": {
+                key: value for key, value in extraction.field_confidences.items() if key in allowed
+            },
         }
     )
 
@@ -147,7 +177,9 @@ def parse_qwen_extraction(content: str) -> QwenExtraction:
             raise QwenResponseSyntaxError("JSON 对象解码失败")
         raise QwenResponseStructureError("响应中的 JSON 对象不唯一或不存在")
     value = candidates[0]
-    normalized = dict(value)
+    if not isinstance(value, dict):
+        raise QwenResponseStructureError("响应中的 JSON 不是对象")
+    normalized = normalize_material_facts(dict(value))
     fields = normalized.get("fields")
     if fields is None:
         normalized["fields"] = {}
@@ -187,6 +219,75 @@ def _decode_json_object(content: str) -> dict[str, Any]:
     return value
 
 
+def normalize_material_facts(value: dict[str, Any]) -> dict[str, Any]:
+    """Project the compact model protocol; legacy recorded results remain readable."""
+    if "facts" not in value:
+        return value
+    required = (
+        "document_type",
+        "type_confidence",
+        "confidence",
+        "identity_sides",
+        "uncertain_fields",
+    )
+    if any(key not in value or value[key] is None for key in required):
+        raise QwenResponseSchemaError("事实响应缺少类型或质量信息", detail="facts:missing_metadata")
+    if any(value.get(key) for key in ("fields", "raw_fields", "evidence_regions")):
+        raise QwenResponseSchemaError("响应同时包含两套事实结构", detail="facts:ambiguous")
+    facts = value["facts"]
+    if not isinstance(facts, list) or len(facts) > 300:
+        raise QwenResponseSchemaError("facts 必须是有界对象数组", detail="facts:list_type")
+    fields, alternatives, rows, regions, warnings = {}, {}, [], [], []
+    uncertain = value.get("uncertain_fields", [])
+    # Leave invalid types for the normal response validator, rather than coercing them.
+    if not isinstance(uncertain, list) or not all(isinstance(key, str) for key in uncertain):
+        raise QwenResponseSchemaError(
+            "uncertain_fields 必须是字符串数组", detail="uncertain_fields:list_type"
+        )
+    uncertain = list(uncertain)
+    for index, raw in enumerate(facts):
+        try:
+            fact = MaterialFact.model_validate(raw)
+        except ValidationError as exc:
+            raise QwenResponseSchemaError("事实结构无效", detail=f"facts.{index}:invalid") from exc
+        box = fact.box if valid_normalized_box(fact.box) else []
+        if fact.box is not None and fact.box != [] and not box:
+            warnings.append(f"facts.{index}.box")
+        rows.append(
+            {
+                "label": fact.label,
+                "section": fact.section,
+                "value": fact.value
+                if isinstance(fact.value, str)
+                else json.dumps(fact.value, ensure_ascii=False),
+                "uncertain": fact.uncertain,
+                "box": box,
+            }
+        )
+        if not fact.field:
+            continue
+        if fact.uncertain:
+            uncertain.append(fact.field)
+        if fact.value is not None:
+            if fact.field not in fields:
+                fields[fact.field] = fact.value
+            elif fact.value != fields[fact.field]:
+                values = alternatives.setdefault(fact.field, [fields[fact.field]])
+                if fact.value not in values:
+                    values.append(fact.value)
+        if box:
+            regions.append({"field": fact.field, "box": box})
+    return {
+        **{key: value[key] for key in required},
+        "fields": fields,
+        "raw_fields": rows,
+        "evidence_regions": regions,
+        "uncertain_fields": list(dict.fromkeys(uncertain)),
+        "field_alternatives": alternatives,
+        "location_warnings": warnings,
+    }
+
+
 class QwenClient:
     """发送受控视觉模型请求，并把响应转换为经过校验的领域模型。"""
 
@@ -199,9 +300,9 @@ class QwenClient:
         # 一个审核任务会并发发起多次模型请求。按请求创建 AsyncClient 会反复
         # 建立 DashScope 的 TCP/TLS 连接；按事件循环复用连接池，保持 URL 直连
         # 图片的行为不变，只减少传输层的重复握手。
-        self._clients: weakref.WeakKeyDictionary[
-            asyncio.AbstractEventLoop, httpx.AsyncClient
-        ] = weakref.WeakKeyDictionary()
+        self._clients: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, httpx.AsyncClient] = (
+            weakref.WeakKeyDictionary()
+        )
         self._clients_lock = threading.Lock()
 
     def _client_for_current_loop(self) -> httpx.AsyncClient:
@@ -225,78 +326,49 @@ class QwenClient:
         if client is not None:
             await client.aclose()
 
-    async def classify_document(
-        self, image: dict[str, Any], *, business: BusinessContext = DEFAULT_BUSINESS
-    ) -> QwenClassification:
-        """仅判断未知图片的材料类型，不提取业务字段。"""
-        content = await self._complete(
-            image,
-            build_classification_prompt(business=business),
-            stage="classification",
-        )
-        try:
-            return QwenClassification.model_validate_json(content)
-        except ValueError as exc:
-            raise RuntimeError(f"Qwen 分类响应格式无效：{exc}") from exc
-
-    async def extract_fields(
+    async def extract_document(
         self,
         image: dict[str, Any],
-        policy: DocumentPolicy,
         *,
         retry_reason: str | None = None,
+        focus_boxes: list[list[float]] | None = None,
+        business: BusinessContext = DEFAULT_BUSINESS,
     ) -> QwenExtraction:
-        """按已知材料策略提取白名单字段。"""
-        image_index = int(image.get("index", 0))
-        business_scope = str(image.get("business_scope", "unknown"))
+        """Confirm actual material type and read facts in one model request."""
+        scope = str(image.get("business_scope", "unknown"))
         content = await self._complete(
             image,
-            policy.build_extraction_prompt(
-                image_index,
-                business_scope,
+            build_recognition_prompt(
+                int(image.get("index", 0)),
+                scope,
+                business=business,
                 retry_reason=retry_reason,
+                focus_boxes=focus_boxes,
             ),
-            stage="extraction",
+            stage="recognition",
         )
         try:
             extraction = parse_qwen_extraction(content)
-            return _restrict_extraction_to_policy(
-                extraction,
-                policy,
-                business_scope,
+            policy = business.document_policies.get(extraction.document_type)
+            if policy is None:
+                return extraction.model_copy(
+                    update={
+                        "fields": {},
+                        "uncertain_fields": [],
+                        "evidence_regions": [],
+                        "raw_fields": [],
+                        "identity_sides": [],
+                        "field_alternatives": {},
+                    }
+                )
+            return restrict_extraction_to_policy(extraction, policy, scope)
+        except (ValueError, TypeError) as exc:
+            cause = (
+                QwenResponseSyntaxError("JSON 解码失败")
+                if isinstance(exc, json.JSONDecodeError)
+                else exc
             )
-        except (ValueError, TypeError) as exc:
-            if isinstance(exc, json.JSONDecodeError):
-                cause: BaseException = QwenResponseSyntaxError("JSON 解码失败")
-            else:
-                cause = exc
             raise RuntimeError(f"Qwen 字段响应格式无效：{exc}") from cause
-
-    async def extract_unknown(
-        self,
-        image: dict[str, Any],
-        *,
-        retry_reason: str | None = None,
-        business: BusinessContext = DEFAULT_BUSINESS,
-    ) -> QwenExtraction:
-        """在一次模型调用中完成未知材料分类和受限字段提取。"""
-        image_index = int(image.get("index", 0))
-        business_scope = str(image.get("business_scope", "unknown"))
-        content = await self._complete(
-            image,
-            build_unknown_extraction_prompt(
-                image_index, business_scope, retry_reason=retry_reason, business=business
-            ),
-            stage="unknown_extraction",
-        )
-        try:
-            return parse_qwen_extraction(content)
-        except (ValueError, TypeError) as exc:
-            if isinstance(exc, json.JSONDecodeError):
-                cause: BaseException = QwenResponseSyntaxError("JSON 解码失败")
-            else:
-                cause = exc
-            raise RuntimeError(f"Qwen 未分类资料响应格式无效：{exc}") from cause
 
     async def _complete(
         self,
@@ -324,12 +396,7 @@ class QwenClient:
                     "content": [
                         {
                             "type": "text",
-                            "text": prompt
-                            + (
-                                f"\n当前页面上传槽位：组内第{image['group_order']}张。只提取适用于当前槽位的字段。"
-                                if image.get("group_order") is not None
-                                else ""
-                            ),
+                            "text": prompt,
                         },
                         {"type": "image_url", "image_url": {"url": image_url}},
                     ],
@@ -364,6 +431,11 @@ class QwenClient:
                 )
             response.raise_for_status()
             body = response.json()
+            if body["choices"][0].get("finish_reason") == "length":
+                self._log_call(
+                    stage, image_id, started, rate_limited, body.get("usage"), "truncated"
+                )
+                raise QwenResponseTruncatedError("模型响应被截断，识别结果不完整")
             content = body["choices"][0]["message"]["content"]
             if isinstance(content, list):
                 content = "".join(part.get("text", "") for part in content)
@@ -417,7 +489,7 @@ class QwenClient:
         logger.info(
             "review qwen call completed stage=%s image_id=%s model=%s"
             " duration_ms=%d prompt_tokens=%d image_tokens=%d"
-            " completion_tokens=%d rate_limited=%s result=%s",
+            " completion_tokens=%d rate_limited=%s result=%s prompt_version=%s",
             stage,
             image_id,
             self.config.model,
@@ -427,4 +499,5 @@ class QwenClient:
             _int_or_zero(counts.get("completion_tokens")),
             str(rate_limited).lower(),
             result,
+            PROMPT_VERSION,
         )

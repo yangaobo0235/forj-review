@@ -32,7 +32,9 @@ def test_field_edit_reuses_other_page_versions_and_release_rollback_preserves_hi
             "active": True,
         }
         _, staged = before.stage(draft)
-        published = publish_validated_test_state(db, staged, operation_id="fieldedit", operation_type="PUBLISH")
+        published = publish_validated_test_state(
+            db, staged, operation_id="fieldedit", operation_type="PUBLISH"
+        )
     with database.connect() as db:
         after = read_state(db)
         new_ids = dict(
@@ -93,7 +95,9 @@ def test_cross_page_release_and_stale_publication_are_rejected(database):
         pages = db.execute("SELECT page_id,id FROM cfg_page_version ORDER BY page_id").fetchall()
         first = pages[0]
         current = read_state(db)
-        omitted = db.execute("SELECT page_code FROM cfg_page WHERE id=%s", (first[0],)).fetchone()[0]
+        omitted = db.execute("SELECT page_code FROM cfg_page WHERE id=%s", (first[0],)).fetchone()[
+            0
+        ]
         partial = replace(current, active={p: v for p, v in current.active.items() if p != omitted})
         rid = publish_state(db, partial, operation_id="crosspage")
         other = next(p for p in pages if p[0] != first[0])

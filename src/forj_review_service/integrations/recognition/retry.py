@@ -17,7 +17,9 @@ def retry_reason_for_error(error: RuntimeError) -> str | None:
 
 def retry_reason_for_extraction(extraction: QwenExtraction, policy: object | None) -> str | None:
     if policy is None:
-        return "document_type_mismatch"
+        return None
+    if extraction.type_confidence is not None and extraction.type_confidence < 0.70:
+        return "low_confidence"
     if extraction.document_type != getattr(policy, "document_type", None):
         return "document_type_mismatch"
     # `uncertain_fields` 已按材料白名单过滤，纯展示字段不会出现在这里，
@@ -26,6 +28,6 @@ def retry_reason_for_extraction(extraction: QwenExtraction, policy: object | Non
         return RETRYABLE_UNCERTAIN_PREFIX + ",".join(sorted(extraction.uncertain_fields))
     if extraction.confidence is not None and extraction.confidence < 0.70:
         return "low_confidence"
-    if not extraction.fields:
-        return "empty_supported_fields"
+    # No mapped fields can mean a valid document in another scope or an irrelevant page.
+    # Repeating the full image does not repair an absent field.
     return None

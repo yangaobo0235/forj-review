@@ -8,6 +8,7 @@ from forj_review_service.contracts.review import FieldObservation, ImageInput, R
 from forj_review_service.integrations.qr.web_verifier import QrWebVerifier
 from forj_review_service.runtime.review_service import ReviewService
 from tests.support.pages import business_registry
+from tests.support.qr import qr_image_decoder
 
 
 @pytest.mark.asyncio
@@ -51,7 +52,6 @@ async def test_qr_passes_independently_while_official_values_still_reach_field_c
                 target_id="0",
                 image_index=0,
                 document_type="scrap_certificate",
-                qr_codes=["https://qclt.mofcom.gov.cn/deal/scrap/validdata/synthetic"],
             )
         ],
         observations=[
@@ -76,7 +76,13 @@ async def test_qr_passes_independently_while_official_values_still_reach_field_c
             )
         ],
     )
-    service = ReviewService(load_model=False, registry=business_registry())
+    service = ReviewService(
+        load_model=False,
+        registry=business_registry(),
+        qr_decoder=qr_image_decoder(
+            {request.images[0].src: "https://qclt.mofcom.gov.cn/deal/scrap/validdata/synthetic"}
+        ),
+    )
     service.qr_web = QrWebVerifier(
         allowed_hosts=["qclt.mofcom.gov.cn"],
         transport=httpx.MockTransport(

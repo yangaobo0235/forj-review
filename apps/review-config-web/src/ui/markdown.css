@@ -1,13 +1,62 @@
-.message-content > .message-markdown { white-space: normal; }
-.message-markdown p { margin: 0 0 12px; }
-.message-markdown p:last-child { margin-bottom: 0; }
-.message-markdown h1,.message-markdown h2,.message-markdown h3 { color: #202124; font-size: 17px; margin: 24px 0 12px; line-height: 1.7; }
-.message-markdown ul,.message-markdown ol { padding-left: 23px; margin: 12px 0; }
-.message-markdown li { margin: 5px 0; }
-.message-markdown table { display: block; max-width: 100%; overflow: auto; border-collapse: collapse; font-size: 13px; margin: 16px 0; }
-.message-markdown th,.message-markdown td { border: 1px solid #e6ecf2; padding: 8px 12px; text-align: left; }
-.message-markdown th { background: #f5f9fc; }
-.message-markdown code { font-family: Consolas,monospace; font-size: .88em; background: #f3f6fa; border-radius: 4px; padding: 2px 4px; }
-.message-markdown pre code { padding: 0; background: none; }
-.message-markdown blockquote { border-left: 3px solid #c8e3f4; margin: 12px 0; padding-left: 14px; color: #737c87; }
-.message-markdown img { max-width: 100%; }
+.message-content > .message-markdown {
+  white-space: normal;
+}
+.message-markdown p {
+  margin: 0 0 12px;
+}
+.message-markdown p:last-child {
+  margin-bottom: 0;
+}
+.message-markdown h1,
+.message-markdown h2,
+.message-markdown h3 {
+  color: var(--text);
+  font-size: 17px;
+  margin: 24px 0 12px;
+  line-height: 1.7;
+}
+.message-markdown ul,
+.message-markdown ol {
+  padding-left: 23px;
+  margin: 12px 0;
+}
+.message-markdown li {
+  margin: 5px 0;
+}
+.message-markdown table {
+  display: block;
+  max-width: 100%;
+  overflow: auto;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 16px 0;
+}
+.message-markdown th,
+.message-markdown td {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+}
+.message-markdown th {
+  background: var(--tint);
+}
+.message-markdown code {
+  font-family: Consolas, monospace;
+  font-size: 0.88em;
+  background: var(--canvas);
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+.message-markdown pre code {
+  padding: 0;
+  background: none;
+}
+.message-markdown blockquote {
+  border-left: 3px solid var(--border);
+  margin: 12px 0;
+  padding-left: 14px;
+  color: var(--muted);
+}
+.message-markdown img {
+  max-width: 100%;
+}

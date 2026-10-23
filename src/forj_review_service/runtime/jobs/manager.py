@@ -32,6 +32,7 @@ from forj_review_service.contracts.review import (
     ReviewRequest,
     ReviewResponse,
 )
+from forj_review_service.integrations.recognition.extraction import REVIEW_DEADLINE_SECONDS
 from forj_review_service.observability.context import log_context
 from forj_review_service.runtime.jobs.progress import batch_progress, scope_progress
 from forj_review_service.runtime.scheduling.fair_scheduler import FairAsyncScheduler
@@ -57,6 +58,7 @@ class _StoredJob:
     terminal_logged: bool = False
     group_scopes: tuple[str, ...] = ()
     material_policy: MaterialPolicy | None = None
+    deadline: float | None = None
 
 
 def _peak_rss_mb() -> int:
@@ -85,9 +87,11 @@ class ReviewJobManager:
         ttl_seconds: float = JOB_TTL_SECONDS,
         scheduler: FairAsyncScheduler | None = None,
         finalize_scheduler: FairAsyncScheduler | None = None,
+        review_deadline: float = REVIEW_DEADLINE_SECONDS,
     ) -> None:
         self.review_service = review_service
         self.ttl_seconds = ttl_seconds
+        self.review_deadline = review_deadline
         self._jobs: dict[str, _StoredJob] = {}
         self._lock = threading.Lock()
         self.scheduler = scheduler or FairAsyncScheduler(
@@ -150,6 +154,7 @@ class ReviewJobManager:
             batch=RecognitionBatchResult(total_count=len(request.images)),
             pending_count=len(valid_images),
             timeline={"created_at": now},
+            deadline=now + self.review_deadline,
             group_scopes=tuple(
                 dict.fromkeys(
                     (
@@ -235,7 +240,7 @@ class ReviewJobManager:
                 stored.timeline.setdefault("recognize_started_at", time.monotonic())
         with log_context(job_id=job_id, trace_id=request.trace_id, image_id=self._image_id(image)):
             return await (stored.service if stored else self.review_service).extract_image_async(
-                request, image
+                request, image, absolute_deadline=stored.deadline if stored else None
             )
 
     def _image_finished(
@@ -308,6 +313,7 @@ class ReviewJobManager:
             response, final_batch = await stored.service.assist_with_batch_async(
                 request,
                 initial_batch=batch,
+                absolute_deadline=stored.deadline,
             )
             with self._lock:
                 current = self._jobs.get(job_id)

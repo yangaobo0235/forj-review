@@ -22,7 +22,7 @@ async def test_qr_external_step_preserves_the_request_image_identity(monkeypatch
     )
     service = ReviewService(registry=BusinessRegistry((profile,)))
 
-    async def extract(*args):
+    async def extract(*args, **kwargs):
         return RecognitionBatchResult()
 
     async def verify(*args):

@@ -12,11 +12,11 @@ from forj_review_service.evidence.comparison.check_results import unique_checks
 from forj_review_service.presentation.advice import build_final_advice
 
 
-def _legacy_risk_and_summary(
+def _manual_review_risk_and_summary(
     response: ReviewResponse,
     batch: RecognitionBatchResult,
 ) -> tuple[str, str]:
-    """非目标 Profile 保持分支前（0edf622）的风险级别与摘要语义。
+    """未配置审核规则的页面按已有字段和二维码证据提示风险。
 
     HIGH 只保留给同字段比较冲突和二维码官网冲突；业务规则检查结果
     只影响 recommendation 与 agent_advice，不再抬升 risk_level。
@@ -74,7 +74,7 @@ def assemble_review_response(
         )
         summary = advice.summary
     else:
-        risk_level, summary = _legacy_risk_and_summary(response, batch)
+        risk_level, summary = _manual_review_risk_and_summary(response, batch)
     return response.model_copy(
         update={
             "recommendation": Recommendation(decision),

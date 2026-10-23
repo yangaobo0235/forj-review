@@ -23,7 +23,7 @@ from forj_review_service.contracts.review import RegionId
 EvidenceMode = Literal[
     "SYSTEM", "SINGLE_SOURCE", "AVAILABLE_EVIDENCE", "PARALLEL", "PAGE_AUXILIARY", "DERIVED"
 ]
-TaskProjectorId = Literal["", "owner_type", "old_vehicle_affiliation", "new_vehicle_affiliation"]
+TaskProjectorId = Literal["", "old_vehicle_affiliation", "new_vehicle_affiliation"]
 
 
 @dataclass(frozen=True)
@@ -398,11 +398,6 @@ class BusinessExtensionPack:
         )
 
 
-def slot_document_types(pack: BusinessExtensionPack) -> dict[tuple[str, int], str]:
-    """(业务分区, 组内序号) → 材料类型；用于类型识别不确定时兜底。"""
-    return {slot: material.document_type for material in pack.materials for slot in material.slots}
-
-
 def material_types_for_scope(pack: BusinessExtensionPack, scope: str) -> frozenset[str]:
     """业务声明的「属于某个分区的材料类型」集合。
 
@@ -575,6 +570,7 @@ def build_collect_manifest(pack: BusinessExtensionPack) -> dict[str, object]:
     return {
         "actions": [a.model_dump(mode="json") for a in pack.action_bindings],
         "business_type": pack.business_type,
+        "review_declared_fields_only": pack.review_declared_fields_only,
         # 该业务认定的材料分区。前端据此判断图片是否属于审核材料、以及
         # 哪些分区的图片优先入选。
         "scopes": list(pack.scopes),
@@ -632,7 +628,7 @@ def build_collect_manifest(pack: BusinessExtensionPack) -> dict[str, object]:
                 "document_type": item.document_type,
                 "label": item.display_name,
                 "hints": list(item.hints),
-                # 槽位按 material 分组下发，前端据此在类型不确定时兜底。
+                # 历史版本兼容属性，不用于判断实际材料类型。
                 "slots": [list(slot) for slot in item.slots],
             }
             for item in pack.materials

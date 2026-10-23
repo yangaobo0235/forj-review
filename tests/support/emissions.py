@@ -1,5 +1,7 @@
 """Emission-rule inputs shared by rule unit tests and reference database tests."""
 
+import asyncio
+
 from forj_review_service.businesses.rules.emission_standard import (
     EMISSION_STANDARD_CHECK_ID,
     run_emission_standard,
@@ -25,18 +27,23 @@ def observation(field: str, value: object, *, index: int = 1, uncertain: bool = 
 
 
 def run(page: object, materials: list[FieldObservation], *, lookup):
-    result = run_emission_standard(
-        ReviewExecutionContext(
-            request=ReviewRequest(
-                page_url="https://example.test/scrap-replace-qingdao/review/1",
-                region="qingdao",
-                page_fields={"old_vehicle.emission_standard": page},
+    async def reference(models):
+        return lookup(models)
+
+    result = asyncio.run(
+        run_emission_standard(
+            ReviewExecutionContext(
+                request=ReviewRequest(
+                    page_url="https://example.test/scrap-replace-qingdao/review/1",
+                    region="qingdao",
+                    page_fields={"old_vehicle.emission_standard": page},
+                ),
+                profile=SCRAP_REPLACEMENT_QINGDAO,
+                batch=RecognitionBatchResult(),
+                observations=tuple(materials),
             ),
-            profile=SCRAP_REPLACEMENT_QINGDAO,
-            batch=RecognitionBatchResult(),
-            observations=tuple(materials),
-        ),
-        lookup=lookup,
+            lookup=reference,
+        )
     )
     assert len(result.checks) == 1
     assert result.checks[0].check_id == EMISSION_STANDARD_CHECK_ID

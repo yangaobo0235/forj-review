@@ -1,13 +1,29 @@
 import type { DomElement, DomRoot, FieldDefinition, FieldCandidate } from "../dom.ts";
-import { antDatePicker, formControlKind, isSelectControl, logicalFormControls, readFormControlValue } from "../form-controls.ts";
-import { manifestSectionFromText } from "../catalog/collect-manifest.ts";
-import { fieldDefinitions, definitionsByLabel, definitionForLabel, isKnownLabel, isSectionRequired, normalizeText } from "../catalog/field-definitions.ts";
+import {
+  antDatePicker,
+  formControlKind,
+  isSelectControl,
+  logicalFormControls,
+  readFormControlValue,
+} from "../form-controls.ts";
+import {
+  manifestReviewsDeclaredFieldsOnly,
+  manifestSectionFromText,
+} from "../catalog/collect-manifest.ts";
+import {
+  fieldDefinitions,
+  definitionsByLabel,
+  definitionForLabel,
+  isKnownLabel,
+  isSectionRequired,
+  normalizeText,
+} from "../catalog/field-definitions.ts";
 import type { ReviewFieldSnapshot } from "../../../shared/contracts/review.ts";
 
 const isDomElement = (value: unknown): value is DomElement => {
-if (!value || typeof value !== "object") return false;
-const candidate = value as { nodeType?: number; tagName?: string };
-return candidate.nodeType === 1 || typeof candidate.tagName === "string";
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as { nodeType?: number; tagName?: string };
+  return candidate.nodeType === 1 || typeof candidate.tagName === "string";
 };
 
 /**
@@ -15,7 +31,6 @@ return candidate.nodeType === 1 || typeof candidate.tagName === "string";
  * 职责边界：同等可靠候选冲突时保留歧义，不猜测值；只有唯一候选才保留 DOM 目标。
  * 修改日期：2026-09-11
  */
-
 
 const SOURCE_SCORES: Record<string, number> = {
   control: 400,
@@ -26,14 +41,23 @@ const SOURCE_SCORES: Record<string, number> = {
 };
 // Ant Design's a-select exposes an input role=combobox; some deployed
 // shells put the role on the trigger itself.
-const CONTROL_SELECTOR = "input, textarea, select, [role='combobox'], input[aria-controls], input[aria-owns], [contenteditable]:not([contenteditable='false'])";
-const FORM_ITEM_SELECTOR = ".ant-form-item, .el-form-item, .form-item, [data-form-item], [data-index][class*='form'], [class*='FormItem'], [class*='formItem']";
+const CONTROL_SELECTOR =
+  "input, textarea, select, [role='combobox'], input[aria-controls], input[aria-owns], [contenteditable]:not([contenteditable='false'])";
+const FORM_ITEM_SELECTOR =
+  ".ant-form-item, .el-form-item, .form-item, [data-form-item], [data-index][class*='form'], [class*='FormItem'], [class*='formItem']";
 const IGNORED_CONTROL_LABELS = new Set(["报废车挂靠", "新车挂靠"]);
 const SYSTEM_CONTROL_LABELS = new Set(["审核状态", "审核进度", "审核结果"]);
 
 const PLACEHOLDER_VALUES = new Set([
-  "审核进度", "待审核", "审核中", "处理中", "未审核", "请选择", "请输入",
-  "未填写", "未采集",
+  "审核进度",
+  "待审核",
+  "审核中",
+  "处理中",
+  "未审核",
+  "请选择",
+  "请输入",
+  "未填写",
+  "未采集",
 ]);
 const isUsableValue = (value: unknown) => {
   const normalized = normalizeText(value);
@@ -48,7 +72,8 @@ const isVerificationCandidate = (candidate: FieldCandidate) => {
   const value = normalizeText(candidate?.value);
   return /验真/.test(label) || (/(发票号码|发票代码)/.test(label) && /^(?:一键)?验真$/.test(value));
 };
-const visibleText = (element: DomElement | null | undefined) => String(element?.innerText ?? element?.textContent ?? "").trim();
+const visibleText = (element: DomElement | null | undefined) =>
+  String(element?.innerText ?? element?.textContent ?? "").trim();
 
 const directText = (element: DomElement | null | undefined) => {
   const fixtureText = element?.getAttribute?.("data-direct-text");
@@ -72,21 +97,20 @@ const sectionFromText = (text: string) => {
   return "unknown";
 };
 
-const isSearchFilterControl = (control: DomElement | null | undefined) => Boolean(
-  control?.closest?.<DomElement>(".smallForm, .formInline, [class*='formInline']"),
-);
+const isSearchFilterControl = (control: DomElement | null | undefined) =>
+  Boolean(control?.closest?.<DomElement>(".smallForm, .formInline, [class*='formInline']"));
 
 const isSystemControlLabel = (label: string) => {
   const normalized = normalizeText(label);
-  return [...SYSTEM_CONTROL_LABELS].some((systemLabel) =>
-    normalized === systemLabel || normalized.startsWith(systemLabel),
+  return [...SYSTEM_CONTROL_LABELS].some(
+    (systemLabel) => normalized === systemLabel || normalized.startsWith(systemLabel),
   );
 };
 
 const isIgnoredControlLabel = (label: string) => {
   const normalized = normalizeText(label);
-  return [...IGNORED_CONTROL_LABELS].some((ignored) =>
-    normalized === ignored || normalized.startsWith(ignored),
+  return [...IGNORED_CONTROL_LABELS].some(
+    (ignored) => normalized === ignored || normalized.startsWith(ignored),
   );
 };
 
@@ -94,7 +118,6 @@ const normalizeCollectedFieldValue = (field: string | null | undefined, value: u
   const raw = String(value ?? "").trim();
   return field === "invoice.amount" && /^[￥¥\s]*$/.test(raw) ? "" : raw;
 };
-
 
 const queryAll = (root: DomRoot | null | undefined, selector: string) => {
   try {
@@ -131,9 +154,10 @@ const findSection = (element: DomElement | null | undefined) => {
     const siblings = directElementChildren(current.parentElement);
     for (let index = siblings.indexOf(current) - 1; index >= 0; index -= 1) {
       const sibling = siblings[index];
-      const title = /^(H[1-6]|LEGEND)$/.test(sibling.tagName)
-        || sibling.classList?.contains("formItemTitle") ? sibling
-        : sibling.querySelector?.<DomElement>(".formItemTitle, h1, h2, h3, h4, h5, h6, legend");
+      const title =
+        /^(H[1-6]|LEGEND)$/.test(sibling.tagName) || sibling.classList?.contains("formItemTitle")
+          ? sibling
+          : sibling.querySelector?.<DomElement>(".formItemTitle, h1, h2, h3, h4, h5, h6, legend");
       if (title) return sectionFromText(visibleText(title));
     }
 
@@ -161,10 +185,7 @@ const controlLabel = (root: DomRoot | null | undefined, control: DomElement) => 
   const itemLabel = formItem?.querySelector?.<DomElement>(
     ".ant-form-item-label label, .el-form-item__label, label",
   );
-  labels.push(
-    visibleText(itemLabel),
-    visibleText(wrappingLabel),
-  );
+  labels.push(visibleText(itemLabel), visibleText(wrappingLabel));
   // 两张发票可能复用 input id。所属表单项的标签优先，不能拿另一分区的
   // 第一个 label 覆盖当前控件。没有本地标签时只接受唯一的 for 关联。
   if (control.id && root?.querySelectorAll) {
@@ -172,10 +193,7 @@ const controlLabel = (root: DomRoot | null | undefined, control: DomElement) => 
     const associated = queryAll(root, `label[for="${escapedId}"]`);
     if (associated.length === 1) labels.push(visibleText(associated[0]));
   }
-  labels.push(
-    control.getAttribute?.("aria-label") || "",
-    control.getAttribute?.("name") || "",
-  );
+  labels.push(control.getAttribute?.("aria-label") || "", control.getAttribute?.("name") || "");
   // Use one authoritative association. Concatenating for/item/aria labels
   // downgrades a control to a fuzzy match and lets its wrapper text win.
   return (labels.find((label) => String(label).trim())?.trim() || "")
@@ -183,7 +201,10 @@ const controlLabel = (root: DomRoot | null | undefined, control: DomElement) => 
     .trim();
 };
 
-const controlCandidates = (root: DomRoot | null | undefined, controls: DomElement[] = queryAll(root, CONTROL_SELECTOR)) =>
+const controlCandidates = (
+  root: DomRoot | null | undefined,
+  controls: DomElement[] = queryAll(root, CONTROL_SELECTOR),
+) =>
   controls
     .filter(isDataControl)
     .flatMap((control) => {
@@ -198,18 +219,21 @@ const controlCandidates = (root: DomRoot | null | undefined, controls: DomElemen
         element: control,
         proximity: visibleText(control.parentElement).length,
       };
-      const nearbyText = visibleText(control.parentElement) + visibleText(control.parentElement?.parentElement);
+      const nearbyText =
+        visibleText(control.parentElement) + visibleText(control.parentElement?.parentElement);
       const controlType = String(control.getAttribute?.("type") || "").toLowerCase();
-      const isDateControl = controlType === "date" || /^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(String(value));
-      const fallback = isDateControl && /开票日期|发票日期/.test(`${label}${nearbyText}`)
-        ? [{ ...candidate, label: "开票日期", source: "control-fallback" }]
-        : [];
+      const isDateControl =
+        controlType === "date" || /^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(String(value));
+      const fallback =
+        isDateControl && /开票日期|发票日期/.test(`${label}${nearbyText}`)
+          ? [{ ...candidate, label: "开票日期", source: "control-fallback" }]
+          : [];
       return [candidate, ...fallback];
     })
-    .filter((candidate) => candidate.label && (
-      isUsableValue(candidate.value) ||
-      isKnownLabel(candidate.label)
-    ))
+    .filter(
+      (candidate) =>
+        candidate.label && (isUsableValue(candidate.value) || isKnownLabel(candidate.label)),
+    )
     .filter((candidate) => !isIgnoredControlLabel(candidate.label))
     .filter((candidate) => !isVerificationCandidate(candidate));
 
@@ -223,35 +247,57 @@ const isVisibleControl = (control: DomElement | null | undefined) => {
     const getComputedStyle = node.ownerDocument?.defaultView?.getComputedStyle;
     if (typeof getComputedStyle === "function") {
       const style = getComputedStyle.call(node.ownerDocument.defaultView, node);
-      if (style?.display === "none" || style?.visibility === "hidden" || style?.visibility === "collapse") return false;
+      if (
+        style?.display === "none" ||
+        style?.visibility === "hidden" ||
+        style?.visibility === "collapse"
+      )
+        return false;
     }
   }
   return true;
 };
 
 const isEditableControl = (control: DomElement | null | undefined) => {
-  if (!isVisibleControl(control) || control?.disabled === true || control?.getAttribute?.("aria-disabled") === "true") return false;
+  if (
+    !isVisibleControl(control) ||
+    control?.disabled === true ||
+    control?.getAttribute?.("aria-disabled") === "true"
+  )
+    return false;
   // readonly picker inputs are still editable through their calendar. Disabled
   // wrappers remain non-editable, including controls disabled by a fieldset.
   for (let node = control; node; node = node.parentElement) {
-    if (node.disabled === true || node.getAttribute?.("aria-disabled") === "true"
-      || node.classList?.contains("ant-picker-disabled") || node.classList?.contains("ant-select-disabled")) return false;
+    if (
+      node.disabled === true ||
+      node.getAttribute?.("aria-disabled") === "true" ||
+      node.classList?.contains("ant-picker-disabled") ||
+      node.classList?.contains("ant-select-disabled")
+    )
+      return false;
   }
-  const customEditable = isSelectControl(control) || Boolean(antDatePicker(control)) || control?.getAttribute?.("contenteditable") === "true";
-  return customEditable || (control?.readOnly !== true && control?.getAttribute?.("readonly") == null);
+  const customEditable =
+    isSelectControl(control) ||
+    Boolean(antDatePicker(control)) ||
+    control?.getAttribute?.("contenteditable") === "true";
+  return (
+    customEditable || (control?.readOnly !== true && control?.getAttribute?.("readonly") == null)
+  );
 };
 
 const controlType = formControlKind;
 
-const displayLabel = (label: string) => String(label || "")
-  .replace(/[＊*]/g, "")
-  .replace(/[：:]\s*$/, "")
-  .replace(/\s+/g, " ")
-  .trim();
+const displayLabel = (label: string) =>
+  String(label || "")
+    .replace(/[＊*]/g, "")
+    .replace(/[：:]\s*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
 
 const readInventoryValue = readFormControlValue;
 
-const directElementChildren = (element: DomElement | null | undefined) => Array.from(element?.children || []).filter(isDomElement);
+const directElementChildren = (element: DomElement | null | undefined) =>
+  Array.from(element?.children || []).filter(isDomElement);
 
 const structuredCandidatesForContainer = (container: DomElement) => {
   // A form value comes from the live control, never its decorated wrapper
@@ -281,25 +327,29 @@ const structuredCandidatesForContainer = (container: DomElement) => {
     ":scope > dd, .ant-descriptions-item-content, .el-descriptions__content, .ant-form-item-control, .el-form-item__content, .field-value, .value",
   );
   if (labelNode && valueNode) {
-    return [{
-      label: visibleText(labelNode),
-      value: visibleText(valueNode),
-      section: findSection(container),
-      source: "structured",
-      element: valueNode,
-      proximity: visibleText(container).length,
-    }];
+    return [
+      {
+        label: visibleText(labelNode),
+        value: visibleText(valueNode),
+        section: findSection(container),
+        source: "structured",
+        element: valueNode,
+        proximity: visibleText(container).length,
+      },
+    ];
   }
 
   if (children.length === 2 && isKnownLabel(visibleText(children[0]))) {
-    return [{
-      label: visibleText(children[0]),
-      value: visibleText(children[1]),
-      section: findSection(container),
-      source: "structured",
-      element: children[1],
-      proximity: visibleText(container).length,
-    }];
+    return [
+      {
+        label: visibleText(children[0]),
+        value: visibleText(children[1]),
+        section: findSection(container),
+        source: "structured",
+        element: children[1],
+        proximity: visibleText(container).length,
+      },
+    ];
   }
   return [];
 };
@@ -330,7 +380,9 @@ const adjacentCandidates = (root: DomRoot | null | undefined) => {
     }
     if (!isKnownLabel(ownText)) continue;
     if (queryAll(element.nextElementSibling, CONTROL_SELECTOR).some(isDataControl)) continue;
-    const value = visibleText(isDomElement(element.nextElementSibling) ? element.nextElementSibling : null);
+    const value = visibleText(
+      isDomElement(element.nextElementSibling) ? element.nextElementSibling : null,
+    );
     if (!isUsableValue(value) || value.length > 200) continue;
     candidates.push({
       label: ownText,
@@ -344,10 +396,15 @@ const adjacentCandidates = (root: DomRoot | null | undefined) => {
   return candidates;
 };
 
-const matchingScore = (definition: FieldDefinition, candidate: FieldCandidate, scopedControls: DomElement[] = []) => {
+const matchingScore = (
+  definition: FieldDefinition,
+  candidate: FieldCandidate,
+  scopedControls: DomElement[] = [],
+) => {
   const label = normalizeText(candidate.label);
   if (definition.locatorId && candidate.element?.id !== definition.locatorId) return null;
-  if (definition.locatorName && candidate.element?.getAttribute("name") !== definition.locatorName) return null;
+  if (definition.locatorName && candidate.element?.getAttribute("name") !== definition.locatorName)
+    return null;
   let exact = true;
   let aliasIndex = definition.aliases.findIndex((alias) => normalizeText(alias) === label);
   if (aliasIndex < 0) {
@@ -355,23 +412,31 @@ const matchingScore = (definition: FieldDefinition, candidate: FieldCandidate, s
     aliasIndex = definition.aliases.findIndex((alias) => label.includes(normalizeText(alias)));
   }
   if (aliasIndex < 0) return null;
-  if (!String(candidate.value || "").trim() && !String(candidate.source || "").startsWith("control")) return null;
   if (
-    candidate.section !== "unknown" &&
-    candidate.section !== definition.section
-  ) return null;
+    !String(candidate.value || "").trim() &&
+    !String(candidate.source || "").startsWith("control")
+  )
+    return null;
+  if (candidate.section !== "unknown" && candidate.section !== definition.section) return null;
   const matchedAlias = normalizeText(definition.aliases[aliasIndex]);
   const aliasFieldCount = definitionsByLabel().get(matchedAlias)?.length ?? 0;
-  if (
-    aliasFieldCount > 1 &&
-    candidate.section === "unknown"
-  ) return null;
+  if (aliasFieldCount > 1 && candidate.section === "unknown") return null;
 
-  if (definition.occurrence && candidate.element && !definition.locatorId && !definition.locatorName) {
+  if (
+    definition.occurrence &&
+    candidate.element &&
+    !definition.locatorId &&
+    !definition.locatorName
+  ) {
     // Only matching labels/sections need occurrence resolution. Scanning the
     // entire form for unrelated candidates makes repeated write guards costly.
-    const equivalent = scopedControls.filter(el => normalizeText(controlLabel(el.ownerDocument, el)) === label && findSection(el) === candidate.section);
-    if (equivalent.length && equivalent.indexOf(candidate.element) !== definition.occurrence - 1) return null;
+    const equivalent = scopedControls.filter(
+      (el) =>
+        normalizeText(controlLabel(el.ownerDocument, el)) === label &&
+        findSection(el) === candidate.section,
+    );
+    if (equivalent.length && equivalent.indexOf(candidate.element) !== definition.occurrence - 1)
+      return null;
   }
 
   return (
@@ -395,7 +460,8 @@ const resolveInventoryField = (candidate: FieldCandidate, scopedControls: DomEle
     }))
     .filter((item) => item.score != null)
     .sort((left, right) => (right.score ?? 0) - (left.score ?? 0));
-  if (!ranked.length || ranked.filter((item) => item.score === ranked[0].score).length !== 1) return null;
+  if (!ranked.length || ranked.filter((item) => item.score === ranked[0].score).length !== 1)
+    return null;
   return ranked[0];
 };
 
@@ -405,7 +471,12 @@ const reviewFieldInventory = (root: DomRoot | null | undefined, controls: DomEle
   for (const control of controls) {
     const label = controlLabel(root, control);
     if (!label) continue;
-    if (isSearchFilterControl(control) || isSystemControlLabel(label) || isIgnoredControlLabel(label)) continue;
+    if (
+      isSearchFilterControl(control) ||
+      isSystemControlLabel(label) ||
+      isIgnoredControlLabel(label)
+    )
+      continue;
     const container = control.closest?.<DomElement>(FORM_ITEM_SELECTOR) || control;
     if (seenLogicalControls.has(container)) continue;
     seenLogicalControls.add(container);
@@ -413,9 +484,11 @@ const reviewFieldInventory = (root: DomRoot | null | undefined, controls: DomEle
       label,
       value: readInventoryValue(control),
       section: findSection(control),
-      source: "control", element: control,
+      source: "control",
+      element: control,
     };
     const resolved = resolveInventoryField(candidate, controls);
+    if (!resolved && manifestReviewsDeclaredFieldsOnly() && !isKnownLabel(label)) continue;
     if (resolved?.definition.reviewable === false) continue;
     // 隐藏控件不是当前详情字段；只读的已知字段（日期等）仍需进入审核目录，
     // 但会以 editable=false 传给后端，避免提供页面回写按钮。
@@ -481,9 +554,15 @@ interface CandidateCollectionOptions {
   onlyFields?: ReadonlySet<string>;
 }
 
-const collectCandidates = (candidates: FieldCandidate[], {
-  scannedControls = 0, reviewFields = [], scopedControls = [], onlyFields,
-}: CandidateCollectionOptions = {}) => {
+const collectCandidates = (
+  candidates: FieldCandidate[],
+  {
+    scannedControls = 0,
+    reviewFields = [],
+    scopedControls = [],
+    onlyFields,
+  }: CandidateCollectionOptions = {},
+) => {
   const pageFields: Record<string, string> = {};
   const fieldTargets = [];
   const unmatchedLabels = [];
@@ -525,13 +604,19 @@ const collectCandidates = (candidates: FieldCandidate[], {
     }
   }
 
-  if (fieldDefinitions()["invoice.invoice_date"] && (!onlyFields || onlyFields.has("invoice.invoice_date")) && !pageFields["invoice.invoice_date"]) {
-    const dateCandidates = candidates.filter((candidate) =>
-      /开票日期|发票日期/.test(normalizeText(candidate.label)) &&
-      /^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(String(candidate.value || "")),
+  if (
+    fieldDefinitions()["invoice.invoice_date"] &&
+    (!onlyFields || onlyFields.has("invoice.invoice_date")) &&
+    !pageFields["invoice.invoice_date"]
+  ) {
+    const dateCandidates = candidates.filter(
+      (candidate) =>
+        /开票日期|发票日期/.test(normalizeText(candidate.label)) &&
+        /^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(String(candidate.value || "")),
     );
-    const fallback = dateCandidates.find((candidate) => candidate.section === "new_vehicle")
-      || dateCandidates.find((candidate) => candidate.section === "unknown");
+    const fallback =
+      dateCandidates.find((candidate) => candidate.section === "new_vehicle") ||
+      dateCandidates.find((candidate) => candidate.section === "unknown");
     if (fallback) {
       pageFields["invoice.invoice_date"] = fallback.value;
       if (dateCandidates.length === 1 && fallback.element) {
@@ -556,18 +641,24 @@ const collectCandidates = (candidates: FieldCandidate[], {
 
 const collect = (root: DomRoot | null | undefined, onlyFields?: ReadonlySet<string>) => {
   const scopedRoot = reviewRoot(root);
-  const rawControls = logicalFormControls(queryAll(scopedRoot, CONTROL_SELECTOR).filter(isDataControl))
-    .filter((control) => isDataControl(control) && isVisibleControl(control) && !isSearchFilterControl(control));
+  const rawControls = logicalFormControls(
+    queryAll(scopedRoot, CONTROL_SELECTOR).filter(isDataControl),
+  ).filter(
+    (control) =>
+      isDataControl(control) && isVisibleControl(control) && !isSearchFilterControl(control),
+  );
   const controls = controlCandidates(scopedRoot, rawControls);
   const reviewFields = onlyFields ? [] : reviewFieldInventory(scopedRoot, rawControls);
   const inSearchFilter = (candidate: FieldCandidate) => isSearchFilterControl(candidate.element);
   return collectCandidates(
-    [
-      ...controls,
-      ...structuredCandidates(scopedRoot),
-      ...adjacentCandidates(scopedRoot),
-    ].filter((candidate) => !inSearchFilter(candidate) && !isSystemControlLabel(candidate.label) && !isIgnoredControlLabel(candidate.label) && !isVerificationCandidate(candidate)),
-    {scannedControls: rawControls.length, reviewFields, scopedControls: rawControls, onlyFields},
+    [...controls, ...structuredCandidates(scopedRoot), ...adjacentCandidates(scopedRoot)].filter(
+      (candidate) =>
+        !inSearchFilter(candidate) &&
+        !isSystemControlLabel(candidate.label) &&
+        !isIgnoredControlLabel(candidate.label) &&
+        !isVerificationCandidate(candidate),
+    ),
+    { scannedControls: rawControls.length, reviewFields, scopedControls: rawControls, onlyFields },
   );
 };
 
@@ -576,13 +667,14 @@ const collect = (root: DomRoot | null | undefined, onlyFields?: ReadonlySet<stri
  * intentionally excluded from ordinary review collection, but an action still
  * needs the same label/section uniqueness guarantees as a normal field write.
  */
-const collectActionTargets = (
-  root: DomRoot | null | undefined,
-  fields: readonly string[],
-) => {
+const collectActionTargets = (root: DomRoot | null | undefined, fields: readonly string[]) => {
   const scopedRoot = reviewRoot(root);
-  const controls = logicalFormControls(queryAll(scopedRoot, CONTROL_SELECTOR).filter(isDataControl))
-    .filter((control) => isDataControl(control) && isVisibleControl(control) && !isSearchFilterControl(control));
+  const controls = logicalFormControls(
+    queryAll(scopedRoot, CONTROL_SELECTOR).filter(isDataControl),
+  ).filter(
+    (control) =>
+      isDataControl(control) && isVisibleControl(control) && !isSearchFilterControl(control),
+  );
   const candidates = controls.map((element) => ({
     element,
     label: controlLabel(scopedRoot, element),
@@ -590,11 +682,23 @@ const collectActionTargets = (
     value: readControlValue(element),
   }));
   return fields.map((field) => {
-    const expected = field === "old_vehicle.affiliation" ? "报废车挂靠" : field === "new_vehicle.affiliation" ? "新车挂靠" : "";
+    const expected =
+      field === "old_vehicle.affiliation"
+        ? "报废车挂靠"
+        : field === "new_vehicle.affiliation"
+          ? "新车挂靠"
+          : "";
     const section = field.startsWith("old_vehicle.") ? "old_vehicle" : "new_vehicle";
-    const matches = candidates.filter((candidate) => normalizeText(candidate.label) === normalizeText(expected)
-      && (candidate.section === section || candidate.section === "unknown"));
-    return { field, element: matches.length === 1 ? matches[0].element : null, ambiguous: matches.length > 1 };
+    const matches = candidates.filter(
+      (candidate) =>
+        normalizeText(candidate.label) === normalizeText(expected) &&
+        (candidate.section === section || candidate.section === "unknown"),
+    );
+    return {
+      field,
+      element: matches.length === 1 ? matches[0].element : null,
+      ambiguous: matches.length > 1,
+    };
   });
 };
 
@@ -602,12 +706,24 @@ export const ReviewPageFieldCollector = {
   // Discovery uses raw candidates without canonical field definitions or a backend manifest.
   discover: (root: DomRoot) => {
     const scoped = reviewRoot(root);
-    const controls = logicalFormControls(queryAll(scoped, CONTROL_SELECTOR).filter(isDataControl))
-      .filter(control => isDataControl(control) && isVisibleControl(control) && !isSearchFilterControl(control));
-    return [...controlCandidates(scoped, controls), ...structuredCandidates(scoped), ...adjacentCandidates(scoped)]
-      .filter(candidate => candidate.label && !isSystemControlLabel(candidate.label)
-        && !isIgnoredControlLabel(candidate.label) && !isVerificationCandidate(candidate)
-        && !isSearchFilterControl(candidate.element));
+    const controls = logicalFormControls(
+      queryAll(scoped, CONTROL_SELECTOR).filter(isDataControl),
+    ).filter(
+      (control) =>
+        isDataControl(control) && isVisibleControl(control) && !isSearchFilterControl(control),
+    );
+    return [
+      ...controlCandidates(scoped, controls),
+      ...structuredCandidates(scoped),
+      ...adjacentCandidates(scoped),
+    ].filter(
+      (candidate) =>
+        candidate.label &&
+        !isSystemControlLabel(candidate.label) &&
+        !isIgnoredControlLabel(candidate.label) &&
+        !isVerificationCandidate(candidate) &&
+        !isSearchFilterControl(candidate.element),
+    );
   },
   collect,
   collectActionTargets,

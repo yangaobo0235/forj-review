@@ -2,12 +2,12 @@ import type { ReviewTask } from "../../../shared/contracts/review";
 
 /** Business visibility is projected by the backend. Retired material tasks
  * from older servers or restored responses are excluded before any UI counts. */
-export function isFieldFirstTaskVisible(
-  step: ReviewTask,
-): boolean {
-  return step.visible !== false
-    && step.category !== "MATERIAL"
-    && !isMaterialDiagnostic(step.step_id.replace(/^BUSINESS-/, ""));
+export function isFieldFirstTaskVisible(step: ReviewTask): boolean {
+  return (
+    step.visible !== false &&
+    step.category !== "MATERIAL" &&
+    !isMaterialDiagnostic(step.step_id.replace(/^BUSINESS-/, ""))
+  );
 }
 
 /** IDs of the retired completeness summary and its diagnostic findings. */

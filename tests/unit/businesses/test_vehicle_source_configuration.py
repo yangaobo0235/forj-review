@@ -10,7 +10,7 @@ from forj_review_service.businesses.page_config.schema import PageDefinition
 from forj_review_service.businesses.rules.vehicle_source_model import run_vehicle_source_model
 from forj_review_service.capabilities.specs import ReviewExecutionContext
 from forj_review_service.contracts.evidence import FieldObservation
-from forj_review_service.contracts.recognition import RecognitionBatchResult
+from forj_review_service.contracts.recognition import DocumentClassification, RecognitionBatchResult
 from forj_review_service.contracts.review import FieldStatus, ReviewFieldSnapshot, ReviewRequest
 from forj_review_service.evidence.comparison.aggregate import aggregate_by_authority
 from forj_review_service.presentation.routing import build_review_tasks
@@ -116,20 +116,54 @@ def test_user_example_exposes_derivation_and_only_complete_brand_model_can_fill(
     assert brand.details["permitted_fill_values"] == ["欧曼牌BJ4259SNFKB-XJ"]
 
 
-def test_vin_conflict_exposes_provisional_combination_without_authorizing_fill():
+@pytest.mark.parametrize("document_type", ["registration_certificate", "vehicle_nameplate"])
+@pytest.mark.parametrize(
+    "page,status", [("欧曼牌BJ4259SNFKB-X", "CONFLICT"), ("欧曼牌BJ4259SNFKB-XJ", "MATCH")]
+)
+def test_vin_conflict_does_not_affect_brand_comparison_or_fill(document_type, page, status):
     brand, _ = checks(
         observation("vehicle.vin", "LFV00000000000001"),
-        observation("vehicle.vin", "LFV00000000000002", "vehicle_nameplate"),
+        observation("vehicle.vin", "LFV00000000000002", document_type),
+        observation("vehicle.announcement_model", "BJ4259SNFKB-XJ", document_type),
         license_model="欧曼牌BJ4259SNFKB-X",
-        model="BJ4259SNFKB-XJ",
+        model=None,
+        page=page,
     )
     completion = brand.details["brand_model_completion"]
     assert completion["completed_value"] == "欧曼牌BJ4259SNFKB-XJ"
-    assert completion["status"] == "BLOCKED"
-    assert "VIN不一致" in "；".join(completion["issues"])
-    assert brand.status == "INSUFFICIENT"
-    assert brand.details["permitted_fill_values"] == []
-    assert not any(value.derived_from for value in brand.values)
+    assert completion["status"] == "READY"
+    assert completion["issues"] == []
+    assert brand.status == status
+    assert "VIN" not in brand.reason
+    assert brand.details["permitted_fill_values"] == ["欧曼牌BJ4259SNFKB-XJ"]
+    assert any(value.derived_from for value in brand.values)
+
+
+@pytest.mark.parametrize(
+    "page",
+    [
+        "错误牌MODEL100",
+        "解放牌LZ4250H6NB5T1A1ES",
+        "中国重汽 汕德卡牵引车(ZZ4256W324HF1B)(国六)",
+    ],
+)
+def test_different_registration_model_produces_conclusion_for_human_fill(page):
+    brand, _ = checks(
+        observation("vehicle.vin", "LFV00000000000001"),
+        observation("vehicle.vin", "LFV00000000000002", "registration_certificate"),
+        observation("vehicle.announcement_model", "LZ4250H6NB5T1A1ES", "registration_certificate"),
+        license_model="解放牌CA4250P66K25T1A1E",
+        model=None,
+        page=page,
+    )
+    assert brand.status == "CONFLICT"
+    assert brand.details["permitted_fill_values"] == ["解放牌LZ4250H6NB5T1A1ES"]
+    assert brand.details["brand_model_completion"]["completed_value"] == "解放牌LZ4250H6NB5T1A1ES"
+    assert brand.details["brand_model_completion"]["status"] == "READY"
+    assert brand.details["brand_model_completion"]["issues"] == [
+        "行驶证型号与辅助材料整车型号不一致，组合值供人工判断"
+    ]
+    assert "VIN" not in brand.reason
 
 
 @pytest.mark.parametrize(
@@ -152,11 +186,12 @@ def test_auxiliary_conflicts_and_uncertainty_never_vote_or_complete(extra):
     assert brand.details["brand_model_completion"]["status"] == "UNAVAILABLE"
 
 
-def test_incompatible_model_is_not_treated_as_suffix_completion():
+def test_different_models_are_combined_without_claiming_suffix_compatibility():
     brand, model = checks(model="CA4255P25K2T1E6B80")
-    assert brand.status == "INSUFFICIENT"
-    assert not model.details["model_search"]["announcement_model"]
-    assert brand.details["brand_model_completion"]["completed_value"] == ""
+    assert brand.status == "CONFLICT"
+    assert model.details["model_search"]["announcement_model"] == "CA4255P25K2T1E6B80"
+    assert brand.details["brand_model_completion"]["completed_value"] == "解放牌CA4255P25K2T1E6B80"
+    assert brand.details["permitted_fill_values"] == ["解放牌CA4255P25K2T1E6B80"]
 
 
 def test_engine_uncertainty_only_blocks_engine_search_default():
@@ -208,7 +243,7 @@ def test_blank_auxiliary_announcement_never_falls_back_to_the_license():
     assert model.details["model_search"]["announcement_model"] == ""
 
 
-def test_configuration_cannot_enable_model_evidence_rule_without_vin_identity_check():
+def test_model_rule_configuration_does_not_require_an_unrelated_vin_field():
     data = {
         "page_id": "source:example",
         "business_type": "source_example",
@@ -244,27 +279,19 @@ def test_configuration_cannot_enable_model_evidence_rule_without_vin_identity_ch
             "binding_declarations": [{"capability_id": "vehicle_source_model"}],
         },
     }
-    with pytest.raises(ValueError, match=r"vehicle_source_model.*vehicle.vin"):
-        compile_page(PageDefinition.model_validate(data))
-    data["fields"].append(
-        {
-            "key": "vehicle.vin",
-            "label": "VIN",
-            "aliases": ["VIN"],
-            "evidence": [{"material": "vehicle_nameplate", "field": "vehicle.vin"}],
-        }
-    )
     assert compile_page(PageDefinition.model_validate(data)).rules_configured
 
 
-def test_wrong_vehicle_auxiliary_material_never_provides_search_defaults():
+def test_vin_readings_do_not_override_the_model_fields_search_defaults():
     brand, model = checks(
         observation("vehicle.vin", "LFV00000000000001"),
         observation("vehicle.vin", "LFV00000000000002", "vehicle_nameplate"),
     )
-    assert brand.status == "INSUFFICIENT"
-    assert model.details["model_search"]["announcement_model"] == ""
-    assert model.details["model_search"]["engine_model"] == ""
+    assert brand.status == "CONFLICT"
+    assert brand.details["permitted_fill_values"] == ["解放牌CA4255P25K2T1E6A80"]
+    assert model.details["model_search"]["announcement_model"] == "CA4255P25K2T1E6A80"
+    assert model.details["model_search"]["engine_model"] == "CA6DM2-42E6"
+    assert model.details["model_search"]["issues"] == []
 
 
 def test_search_can_use_license_model_when_auxiliary_has_only_engine():
@@ -283,10 +310,10 @@ def test_search_can_use_license_model_when_auxiliary_has_only_engine():
         observation("vehicle.brand_model", "解放牌CA4255P25K2T1E6A", uncertain=True),
     ],
 )
-def test_license_model_conflict_or_uncertainty_blocks_default_just_like_brand_completion(extra):
+def test_license_model_uncertainty_does_not_override_reliable_auxiliary_search_model(extra):
     brand, model = checks(extra)
     assert brand.details["permitted_fill_values"] == []
-    assert model.details["model_search"]["announcement_model"] == ""
+    assert model.details["model_search"]["announcement_model"] == "CA4255P25K2T1E6A80"
     assert model.details["model_search"]["engine_model"] == "CA6DM2-42E6"
     assert model.details["model_search"]["issues"]
 
@@ -397,7 +424,19 @@ def test_upload_presence_is_independent_of_failed_ocr_and_page_numbers(auxiliary
     request = ReviewRequest(
         page_url="https://example.test", business_type="vehicle_source", images=images
     )
-    report = evaluate_extracted(request, PROFILE, RecognitionBatchResult(failed_count=len(images)))
+    report = evaluate_extracted(
+        request,
+        PROFILE,
+        RecognitionBatchResult(
+            failed_count=len(images),
+            document_classifications=[
+                DocumentClassification(
+                    target_id=str(i), document_type=kind, business_scope="vehicle"
+                )
+                for i, kind in enumerate(["vehicle_license", *auxiliary])
+            ],
+        ),
+    )
     assert report.presence.status == ("COMPLETE" if auxiliary else "INCOMPLETE")
     assert not report.presence.groups[1].alternatives[0][0].required_pages
 
@@ -437,8 +476,6 @@ def test_model_task_survives_missing_dom_and_brand_permission_survives_projectio
         comparisons=[],
         business_checks=list(checks()),
         external_checks=[],
-        completeness=None,
-        limitations=[],
     )
     by_field = {t.page_target_field: t for t in tasks}
     assert "vehicle.model" in by_field
@@ -482,11 +519,21 @@ def test_new_model_actions_use_six_specs_without_rewriting_explicit_published_ma
     from tests.support.pages import page_definition
 
     stored = page_definition(PROFILE)
-    # A checked-in v1 browser manifest preserves the old explicit ten mappings.
+    # Immutable versions may explicitly contain mappings from before model-only fill.
     manifest = Path(__file__).resolve().parents[3] / (
         "apps/review-extension/tests/fixtures/collect-manifest-vehicle-source.json"
     )
     stored["actions"] = json.loads(manifest.read_text(encoding="utf-8"))["actions"]
+    legacy = next(a for a in stored["actions"] if a["handler_id"] == "vehicle_model_fill")
+    legacy["mappings"].append(
+        {
+            **legacy["mappings"][0],
+            "mapping_id": "legacy-series",
+            "source_property": "seriesId",
+            "target_field": "spec.series",
+            "order": 2,
+        }
+    )
     historical = deepcopy(stored["actions"])
     loaded = PageDefinition.model_validate(stored)
     assert [action.model_dump(mode="json") for action in loaded.actions] == historical
@@ -498,7 +545,6 @@ def test_new_model_actions_use_six_specs_without_rewriting_explicit_published_ma
     generated = PageDefinition.model_validate(stored)
     action = next(item for item in generated.actions if item.handler_id == "vehicle_model_fill")
     assert [mapping.target_field for mapping in action.mappings] == [
-        "vehicle.model", "spec.drive_form", "spec.fuel_type", "spec.emission_standard",
-        "spec.max_hp", "spec.engine_brand", "spec.engine_model",
+        "vehicle.model",
     ]
     assert all(mapping.missing_policy == "BLOCK" for mapping in action.mappings)

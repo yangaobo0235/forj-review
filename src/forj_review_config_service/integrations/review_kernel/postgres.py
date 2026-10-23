@@ -15,6 +15,7 @@ class PostgresReviewKernel:
     evaluate_collection = staticmethod(SnapshotKernel.evaluate_collection)
     proof_is_current = staticmethod(SnapshotKernel.proof_is_current)
     field_dependencies = staticmethod(SnapshotKernel.field_dependencies)
+    comparison_configurable_fields = staticmethod(SnapshotKernel.comparison_configurable_fields)
     page_options = staticmethod(SnapshotKernel.page_options)
 
     def __init__(
@@ -40,9 +41,9 @@ class PostgresReviewKernel:
     async def _load(self) -> SnapshotKernel:
         return self._snapshot(await self.pages.get())
 
-    async def baseline(self):
+    async def baseline(self, page_id=None):
         kernel = await self._load()
-        return await asyncio.to_thread(kernel.baseline)
+        return await asyncio.to_thread(kernel.baseline, page_id)
 
     async def context(self, page_id=None):
         kernel = await self._load()
@@ -68,6 +69,10 @@ class PostgresReviewKernel:
         kernel = await self._load()
         return await asyncio.to_thread(kernel.register_cases, case_set_id, suite)
 
+    async def read_cases(self, case_set_id):
+        kernel = await self._load()
+        return await asyncio.to_thread(kernel.read_cases, case_set_id)
+
     async def validate(self, record):
         kernel = await self._load()
         return await asyncio.to_thread(kernel.validate, record)
@@ -85,7 +90,10 @@ class PostgresReviewKernel:
         previous = await self.pages.receipt(operation_id)
         if previous:
             if (previous["page_id"], previous["version"], previous["candidate_digest"]) != (
-                record.draft["page_id"], record.draft["version"], record.report["candidate_digest"]):
+                record.draft["page_id"],
+                record.draft["version"],
+                record.report["candidate_digest"],
+            ):
                 from forj_review_config_service.contracts.models import ConfigurationError
 
                 raise ConfigurationError("IDEMPOTENCY_CONFLICT", "保存操作 ID 已用于其他候选")

@@ -12,6 +12,8 @@
     "build:configuration": "npm --prefix apps/review-config-web run build",
     "test:configuration": "npm --prefix apps/review-config-web test",
     "lint:configuration": "npm --prefix apps/review-config-web run lint",
-    "test:extension:browser": "npm --prefix apps/review-extension run test:browser"
+    "test:extension:browser": "npm --prefix apps/review-extension run test:browser",
+    "format": "npm --prefix apps/review-extension run format && npm --prefix apps/review-config-web run format",
+    "format:check": "npm --prefix apps/review-extension run format:check && npm --prefix apps/review-config-web run format:check"
   }
 }

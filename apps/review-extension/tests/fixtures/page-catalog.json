@@ -6,9 +6,7 @@
       "region": "qingdao",
       "title": "报废置换审核",
       "page_id": "scrap_replacement:qingdao",
-      "paths": [
-        "/scrap-replace-qingdao"
-      ],
+      "paths": ["/scrap-replace-qingdao"],
       "anchors": []
     },
     {
@@ -16,9 +14,7 @@
       "region": "changchun",
       "title": "报废置换审核",
       "page_id": "scrap_replacement:changchun",
-      "paths": [
-        "/scrap-replace-changchun"
-      ],
+      "paths": ["/scrap-replace-changchun"],
       "anchors": []
     },
     {
@@ -27,14 +23,8 @@
       "title": "车源审核",
       "page_id": "vehicle_source:default",
       "review_tab": "车源审核",
-      "paths": [
-        "/consistency-qingdao",
-        "/consistency-changchun"
-      ],
-      "anchors": [
-        "行驶证信息",
-        "规格参数"
-      ]
+      "paths": ["/consistency-qingdao", "/consistency-changchun"],
+      "anchors": ["行驶证信息", "规格参数"]
     },
     {
       "business_type": "transfer",
@@ -42,28 +32,15 @@
       "title": "过户审核",
       "page_id": "transfer:default",
       "review_tab": "过户审核",
-      "paths": [
-        "/consistency-qingdao",
-        "/consistency-changchun"
-      ],
-      "anchors": [
-        "审核过户凭证",
-        "新车发票信息"
-      ]
+      "paths": ["/consistency-qingdao", "/consistency-changchun"],
+      "anchors": ["审核过户凭证", "新车发票信息"]
     },
     {
       "business_type": "consistency",
       "region": "default",
       "review_tab": "一致性审核",
-      "paths": [
-        "/consistency-qingdao",
-        "/consistency-changchun"
-      ],
-      "anchors": [
-        "新车信息",
-        "车辆所有人类型",
-        "新车挂靠"
-      ]
+      "paths": ["/consistency-qingdao", "/consistency-changchun"],
+      "anchors": ["新车信息", "新车挂靠"]
     }
   ]
 }

@@ -70,14 +70,14 @@ def test_url_job_api_creates_and_finishes_without_upload(client, monkeypatch, re
     class Service:
         registry = client.app.state.review_service.registry
 
-        async def extract_image_async(self, request, image):
+        async def extract_image_async(self, request, image, *, absolute_deadline=None):
             assert "data_url" not in image.model_dump()
             assert image.src == "https://images.example.test/0.jpg"
             return RecognitionBatchResult(
                 total_count=1, completed_count=1, completed_image_ids=["url-0"]
             )
 
-        async def assist_with_batch_async(self, request, initial_batch):
+        async def assist_with_batch_async(self, request, initial_batch, *, absolute_deadline=None):
             from forj_review_service.contracts.review import ReviewResponse
 
             return ReviewResponse(
@@ -181,7 +181,7 @@ def test_url_job_api_can_cancel_a_running_job(client, monkeypatch, request) -> N
     class Service:
         registry = client.app.state.review_service.registry
 
-        async def assist_with_batch_async(self, request, initial_batch):
+        async def assist_with_batch_async(self, request, initial_batch, *, absolute_deadline=None):
             started.set()
             try:
                 await asyncio.Event().wait()

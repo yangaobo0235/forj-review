@@ -18,6 +18,13 @@ COPY src ./src
 RUN uv sync --frozen --no-dev
 
 
+FROM builder AS local-validation
+
+# Build dependencies once; candidate checks subsequently run without network access.
+RUN uv sync --frozen --dev
+ENV PATH="/app/.venv/bin:${PATH}"
+
+
 FROM python:3.11-slim-bookworm AS runtime
 
 ENV PATH="/app/.venv/bin:${PATH}" \

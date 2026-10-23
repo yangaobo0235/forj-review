@@ -3,12 +3,51 @@
 模型负责校验外部模型响应和 识别流程内部交换数据，不承载确定性审核规则。
 """
 
+import math
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, computed_field, model_validator
 
 from forj_review_service.contracts.checks import CheckResult
 from forj_review_service.contracts.evidence import FieldObservation
+
+
+def valid_normalized_box(box: Any) -> bool:
+    """Whether a location can safely identify a region of the original image."""
+    return (
+        isinstance(box, list)
+        and len(box) == 4
+        and all(
+            isinstance(n, (int, float))
+            and not isinstance(n, bool)
+            and math.isfinite(n)
+            and 0 <= n <= 1000
+            for n in box
+        )
+        and box[0] < box[2]
+        and box[1] < box[3]
+    )
+
+
+class MaterialFact(BaseModel):
+    """Single model reading, projected into raw facts and configured standard fields."""
+
+    field: str | None = Field(default=None, min_length=1, max_length=200)
+    label: str = Field(min_length=1, max_length=200)
+    section: str = Field(default="", max_length=200)
+    value: Any
+    uncertain: bool = False
+    box: Any = None
+
+
+class MaterialReading(BaseModel):
+    """One visible labelled value; it is not an approved comparison source."""
+
+    label: str = Field(min_length=1, max_length=200)
+    value: str = Field(max_length=4000)
+    section: str = Field(default="", max_length=200)
+    box: list[float] = Field(default_factory=list, max_length=4)
+    uncertain: bool = False
 
 
 class RecognizedDocument(BaseModel):
@@ -19,6 +58,9 @@ class RecognizedDocument(BaseModel):
     covered_pages: list[int] = Field(default_factory=list)
     uncertain_fields: list[str] = Field(default_factory=list)
     uncertain_values: dict[str, Any] = Field(default_factory=dict)
+    # At most two bounded readings can be retained after a semantic retry.
+    raw_fields: list[MaterialReading] = Field(default_factory=list, max_length=600)
+    # 兼容历史识别结果；官网核验只消费专用解码器结果。
     qr_codes: list[str] = Field(default_factory=list)
 
 
@@ -43,14 +85,17 @@ class MaterialFieldDetail(BaseModel):
 class MaterialCompletenessIssue(BaseModel):
     code: str
     field_details: list[MaterialFieldDetail] = Field(default_factory=list)
-    reason_code: Literal[
-        "material_missing",
-        "image_unreadable",
-        "recognition_failed",
-        "recognition_uncertain",
-        "evidence_not_extracted",
-        "page_field_missing",
-    ] | None = None
+    reason_code: (
+        Literal[
+            "material_missing",
+            "image_unreadable",
+            "recognition_failed",
+            "recognition_uncertain",
+            "evidence_not_extracted",
+            "page_field_missing",
+        ]
+        | None
+    ) = None
     reason_detail: str | None = None
     material_type: str | None = None
     business_scope: str | None = None
@@ -142,24 +187,40 @@ class EvidenceRegion(BaseModel):
     box: list[float] = Field(default_factory=list)
 
 
-class QwenClassification(BaseModel):
-    """未知材料的类型分类结果。"""
-
-    document_type: str
-    confidence: float = Field(ge=0, le=1)
-    reason: str = ""
-    identity_sides: list[Literal["FRONT", "BACK"]] = Field(default_factory=list)
-
-
 class QwenExtraction(BaseModel):
     """单张材料图片的结构化字段提取结果。"""
 
     document_type: str = "unknown"
     fields: dict[str, Any] = Field(default_factory=dict)
+    raw_fields: list[MaterialReading] = Field(default_factory=list, max_length=300)
     confidence: float | None = Field(default=None, ge=0, le=1)
+    type_confidence: float | None = Field(default=None, ge=0, le=1)
+    identity_sides: list[Literal["FRONT", "BACK"]] = Field(default_factory=list)
+    field_alternatives: dict[str, list[Any]] = Field(default_factory=dict)
+    field_confidences: dict[str, float | None] = Field(default_factory=dict)
+    location_warnings: list[str] = Field(default_factory=list)
     evidence_regions: list[EvidenceRegion] = Field(default_factory=list)
     uncertain_fields: list[str] = Field(default_factory=list)
+    # 兼容旧模型响应；当前提示词要求返回空数组。
     qr_codes: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def isolate_raw_location_errors(cls, value: Any) -> Any:
+        """Retain valid raw text and explicitly report unusable optional coordinates."""
+        if not isinstance(value, dict) or not isinstance(value.get("raw_fields"), list):
+            return value
+        rows = []
+        warnings = list(value.get("location_warnings", []))
+        for index, row in enumerate(value["raw_fields"]):
+            if isinstance(row, dict) and row.get("box"):
+                if not valid_normalized_box(row["box"]):
+                    row = {**row, "box": []}
+                    warnings.append(f"raw_fields.{index}.box")
+            elif isinstance(row, dict) and row.get("box") is None:
+                row = {**row, "box": []}
+            rows.append(row)
+        return {**value, "raw_fields": rows, "location_warnings": list(dict.fromkeys(warnings))}
 
     @model_validator(mode="before")
     @classmethod
@@ -172,7 +233,11 @@ class QwenExtraction(BaseModel):
             # 旧格式以字段名为键，值可以是一个坐标框或多个坐标框。
             normalized: list[dict[str, Any]] = []
             for field, boxes in regions.items():
-                if isinstance(boxes, list) and boxes and all(isinstance(item, (int, float)) for item in boxes):
+                if (
+                    isinstance(boxes, list)
+                    and boxes
+                    and all(isinstance(item, (int, float)) for item in boxes)
+                ):
                     boxes = [boxes]
                 if not isinstance(boxes, list):
                     continue
@@ -225,8 +290,6 @@ class RecognitionBatchResult(BaseModel):
     document_classifications: list[DocumentClassification] = Field(default_factory=list)
     material_completeness: MaterialCompletenessReport | None = None
     retry_summary: RetrySummary = Field(default_factory=RetrySummary)
-
-
 
 
 class AgentAdvice(BaseModel):

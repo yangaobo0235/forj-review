@@ -22,6 +22,7 @@ def observations(state: ReviewState) -> tuple[list[FieldObservation], list[QrChe
         state.get("qr_checks", ()),
     )
 
+
 def available_facts(state: ReviewState) -> set[str]:
     images = [image for image in state["request"].images if not image.collection_error]
     available = {image.business_scope for image in images}
@@ -33,18 +34,15 @@ def available_facts(state: ReviewState) -> set[str]:
         for image in images:
             if image.business_scope not in {"unknown", ""}:
                 continue
-            material = pack.material(image.document_type_hint) or pack.material(
-                image.category_hint
-            )
+            material = pack.material(image.document_type_hint) or pack.material(image.category_hint)
             if material and len(material.allowed_scopes) == 1:
                 available.add(material.allowed_scopes[0])
     collected, _ = observations(state)
     available.update(
-        item.field
-        for item in collected
-        if item.value not in (None, "") and not item.uncertain
+        item.field for item in collected if item.value not in (None, "") and not item.uncertain
     )
     return available
+
 
 def plan_input_capabilities(state: ReviewState) -> dict[str, Any]:
     plan = plan_capabilities(state["profile"], available_facts(state))
@@ -52,6 +50,7 @@ def plan_input_capabilities(state: ReviewState) -> dict[str, Any]:
         "capability_plan": tuple(item for item in plan if item.stage == "INPUT_COVERAGE"),
         "capability_results": [],
     }
+
 
 def plan_remaining_capabilities(state: ReviewState) -> dict[str, Any]:
     plan = plan_capabilities(state["profile"], available_facts(state))
@@ -64,6 +63,7 @@ def plan_remaining_capabilities(state: ReviewState) -> dict[str, Any]:
         ),
         "capability_results": list(state.get("capability_results", ())),
     }
+
 
 def execution_context(state: ReviewState) -> ReviewExecutionContext:
     collected, qr = observations(state)
@@ -78,7 +78,9 @@ def execution_context(state: ReviewState) -> ReviewExecutionContext:
             unique_checks([*state.get("external_results", ()), *state.get("cross_checks", ())])
         ),
         material_completeness=state.get("material_completeness"),
+        absolute_deadline=state.get("absolute_deadline"),
     )
+
 
 async def execute_stage(
     registry: CapabilityRegistry,
@@ -166,8 +168,5 @@ async def execute_stage(
                 if item.capability_id not in external_ids
             ),
         ],
-        "page_action_intents": [
-            intent for item in results for intent in item.page_action_intents
-        ],
+        "page_action_intents": [intent for item in results for intent in item.page_action_intents],
     }
-

@@ -30,6 +30,7 @@ from forj_review_service.contracts.recognition import (
     AgentAdvice,
     CheckResult,
     MaterialCompletenessReport,
+    RecognizedDocument,
     RetrySummary,
 )
 
@@ -173,22 +174,9 @@ class ImageInput(BaseModel):
         if not isinstance(value, dict) or "business_scope" in value or "businessScope" in value:
             return value
         category = value.get("category_hint", value.get("categoryHint", "unknown"))
-        # **这份名单和 `routing.scope_hint_types` 不是同一个集合，不要合并。**
-        # 那边回答的是「哪些材料属于旧车区」，用于决定二维码扫哪些原图 URL；
-        # 这里回答的是「只看这个分类名，该把图片划到哪个
-        # 分区」——是在 `business_scope` 缺失时猜一个分区。行驶证和登记证书两个
-        # 分区都有，拿它们猜分区本身就是不成立的，所以这里既不列 `vehicle_license`
-        # 也不该按材料声明推导：改了会让旧客户端提交的图片落到另一个分区，
-        # 而这是一条纯兼容路径。
-        old_types = {"scrap_certificate", "old_vehicle", "registration_certificate"}
-        new_types = {"new_vehicle", "invoice"}
-        scope = (
-            "old_vehicle"
-            if category in old_types
-            else "new_vehicle"
-            if category in new_types
-            else "unknown"
-        )
+        # Only an explicit legacy group name can supply scope. A material type
+        # such as an invoice or registration certificate cannot identify new/old vehicle.
+        scope = category if category in {"old_vehicle", "new_vehicle"} else "unknown"
         return {**value, "business_scope": scope}
 
 
@@ -298,11 +286,6 @@ class ReviewTask(BaseModel):
         if self.result_status != "MATCH" and not self.requires_reviewer_action:
             raise ValueError("non-MATCH review steps must require reviewer action")
         return self
-
-
-# Backward-compatible import for clients that still use the pre-v2 name.
-# The object is the same validated contract; new code should use ReviewTask.
-ReviewStep = ReviewTask
 
 
 class ReviewFieldSnapshot(BaseModel):
@@ -453,6 +436,7 @@ class ResultSection(BaseModel):
 
 
 class ReviewResponse(BaseModel):
+    recognized_documents: list[RecognizedDocument] = Field(default_factory=list)
     capability_plan: list[CapabilityPlanEntry] = Field(default_factory=list)
     capability_results: list[CapabilityResult] = Field(default_factory=list)
     evidence_facts: list[EvidenceFact] = Field(default_factory=list)

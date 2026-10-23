@@ -19,29 +19,31 @@ def rule_fields_for_merge(
     写死一张表时，每来一个带日期类规则的业务都要回引擎里补一行；漏了不会报错，
     只会让结论单独成卡或者干脆看不见——审核员在字段下面找不到它。
     """
-    return {
-        f"{_BUSINESS_STEP_PREFIX}{check_id}": field
-        for check_id, field in field_check_bindings
-    }
+    return {f"{_BUSINESS_STEP_PREFIX}{check_id}": field for check_id, field in field_check_bindings}
 
 
 def _merge(base: ReviewTask, members: Sequence[ReviewTask]) -> ReviewTask:
     all_tasks = [base, *members]
     severity = {"MATCH": 0, "INSUFFICIENT": 1, "CONFLICT": 2}
     status = max((item.result_status for item in all_tasks), key=severity.__getitem__)
-    return base.model_copy(update={
-        "result_status": status,
-        "requires_reviewer_action": status != "MATCH",
-        "reason_codes": list(dict.fromkeys(code for item in all_tasks for code in item.reason_codes)),
-        "reason": "；".join(dict.fromkeys(item.reason for item in all_tasks if item.reason)),
-        "values": [value for item in all_tasks for value in item.values],
-        "evidence": [value for item in all_tasks for value in item.evidence],
-        "check_ids": list(dict.fromkeys(cid for item in all_tasks for cid in item.check_ids)),
-    })
+    return base.model_copy(
+        update={
+            "result_status": status,
+            "requires_reviewer_action": status != "MATCH",
+            "reason_codes": list(
+                dict.fromkeys(code for item in all_tasks for code in item.reason_codes)
+            ),
+            "reason": "；".join(dict.fromkeys(item.reason for item in all_tasks if item.reason)),
+            "values": [value for item in all_tasks for value in item.values],
+            "evidence": [value for item in all_tasks for value in item.evidence],
+            "check_ids": list(dict.fromkeys(cid for item in all_tasks for cid in item.check_ids)),
+        }
+    )
 
 
 def prepare_display_tasks(
-    tasks: Sequence[ReviewTask], *,
+    tasks: Sequence[ReviewTask],
+    *,
     field_check_bindings: Sequence[tuple[str, str]] = (),
     task_groups: Sequence[TaskGroupDeclaration] = (),
     enabled_capabilities: Sequence[str] = (),
@@ -68,17 +70,24 @@ def prepare_display_tasks(
             consumed.add(task.step_id)
     replacements = {
         base.step_id: _merge(base, bound_rules[base.step_id])
-        for base in by_field.values() if base.step_id in bound_rules
+        for base in by_field.values()
+        if base.step_id in bound_rules
     }
-    result = [replacements.get(item.step_id, item) for item in tasks if item.step_id not in consumed]
+    result = [
+        replacements.get(item.step_id, item) for item in tasks if item.step_id not in consumed
+    ]
     for group in task_groups:
         parent = next((item for item in result if item.step_id == group.parent_step_id), None)
         if group.parent_step_id and parent is None:
             continue
         members = [
-            item for item in result if item is not parent and (
+            item
+            for item in result
+            if item is not parent
+            and (
                 item.step_id in group.member_step_ids
-                or bool(group.member_prefixes) and item.step_id.startswith(group.member_prefixes)
+                or bool(group.member_prefixes)
+                and item.step_id.startswith(group.member_prefixes)
             )
         ]
         if parent is None and not members and group.capability_id not in enabled_capabilities:
@@ -90,18 +99,26 @@ def prepare_display_tasks(
             base = ReviewTask(
                 step_id=group.step_id,
                 sequence=min((item.sequence for item in members), default=10000),
-                category="EXTERNAL", display_target="ASSISTANT", label=group.label,
-                result_status=status, requires_reviewer_action=status != "MATCH",
+                category="EXTERNAL",
+                display_target="ASSISTANT",
+                label=group.label,
+                result_status=status,
+                requires_reviewer_action=status != "MATCH",
                 reason="" if members else f"未取得{group.label}结果",
             )
         merged = _merge(base, members)
         if group.original_status_detail:
-            merged = merged.model_copy(update={
-                "details": {**merged.details, group.original_status_detail: base.result_status},
-            })
+            merged = merged.model_copy(
+                update={
+                    "details": {**merged.details, group.original_status_detail: base.result_status},
+                }
+            )
         consumed_ids = {item.step_id for item in members}
         if parent:
             consumed_ids.add(parent.step_id)
         result = [item for item in result if item.step_id not in consumed_ids]
         result.append(merged)
-    return [item.model_copy(update={"sequence": i}) for i, item in enumerate(sorted(result, key=lambda item: item.sequence), 1)]
+    return [
+        item.model_copy(update={"sequence": i})
+        for i, item in enumerate(sorted(result, key=lambda item: item.sequence), 1)
+    ]

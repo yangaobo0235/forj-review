@@ -153,8 +153,6 @@ def test_check_merges_into_the_vehicle_type_field_task() -> None:
         ],
         external_checks=[],
         business_checks=list(checks),
-        completeness=None,
-        limitations=[],
     )
 
     assert "BUSINESS-VEHICLE-TYPE-LIGHT-DUTY" not in {item.step_id for item in steps}
@@ -177,7 +175,7 @@ async def test_light_duty_reaches_the_workbench_through_the_graph(monkeypatch) -
     """
     service = ReviewService(registry=business_registry())
 
-    async def extract(*args):
+    async def extract(*args, absolute_deadline=None):
         return RecognitionBatchResult(
             observations=[
                 observation("重型厢式货车", "vehicle_license", 1),

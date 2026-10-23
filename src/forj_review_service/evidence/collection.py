@@ -47,7 +47,7 @@ def collect_observations(
     qr_checks: Sequence[QrCheck] = (),
 ) -> tuple[list[FieldObservation], list[QrCheck]]:
     """Keep source values intact and never mutate extraction or external results."""
-    business = BusinessContext.from_profile(profile) if profile is not None else DEFAULT_BUSINESS
+    business = BusinessContext.from_profile(profile)
     observations = [
         item
         for item in batch_observations(batch, business=business)

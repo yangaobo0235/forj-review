@@ -54,6 +54,9 @@ jobs:
       - name: Run Ruff
         run: uv run ruff check src tests scripts
 
+      - name: Check Python formatting
+        run: uv run ruff format --check src tests scripts
+
       # README 和 CONTRIBUTING 都要求提交前跑这一步，之前没有门禁。
       - name: Byte-compile
         run: uv run python -m compileall -q src
@@ -104,6 +107,9 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
+      - name: Check formatting
+        run: npm run format:check
+
       - name: Check extension architecture
         run: node ../../scripts/ci/check-extension-architecture.mjs
 
@@ -132,6 +138,9 @@ jobs:
 
       - name: Run ESLint
         run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
 
       - name: Build configuration Web
         run: npm run build

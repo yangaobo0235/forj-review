@@ -2,6 +2,7 @@
 
 from forj_review_service.businesses.context import DEFAULT_BUSINESS, BusinessContext
 from forj_review_service.businesses.routing import route_fields
+from forj_review_service.contracts.evidence import EvidenceFact
 from forj_review_service.contracts.recognition import RecognitionBatchResult
 from forj_review_service.contracts.review import FieldObservation, ReviewRequest
 from forj_review_service.evidence.comparison.aggregate import EVIDENCE_SOURCE_LABELS
@@ -57,11 +58,11 @@ def batch_observations(
     return result
 
 
-def observation_evidence(observations: list[FieldObservation]) -> list[dict]:
+def observation_evidence(observations: list[FieldObservation]) -> list[EvidenceFact]:
     return [
-        {
-            "source": EVIDENCE_SOURCE_LABELS.get(item.source_type, item.source_type),
-            **item.model_dump(),
-        }
+        EvidenceFact(
+            source=EVIDENCE_SOURCE_LABELS.get(item.source_type, item.source_type),
+            **item.model_dump(exclude={"source_type", "retried"}),
+        )
         for item in observations
     ]

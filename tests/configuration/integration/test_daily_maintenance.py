@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from forj_review_config_service.bootstrap.application import create_app
-from forj_review_config_service.contracts.models import ConfigurationError, SessionRecord
+from forj_review_config_service.contracts.models import ConfigurationError, TaskRecord
 from forj_review_config_service.integrations.review_kernel.snapshot import SnapshotKernel
 from tests.support.configuration import (
     FIXTURES,
@@ -30,11 +30,11 @@ def test_daily_maintenance_rejects_new_page_and_preserves_rollback(settings):
     record.draft = original
     record.report = kernel.validate(record)
     kernel.commit(record, "update123")
-    rollback = SessionRecord(
-        session_id="rollback",
+    rollback = TaskRecord(
+        task_id="rollback",
         snapshot=SNAPSHOT,
         activation_only=True,
-        baseline_digest=kernel.baseline(),
+        baseline_digest=kernel.baseline("example_permit"),
         draft=kernel.rollback_draft("example_permit", "1.0"),
     )
     rollback.report = kernel.validate(rollback)
@@ -117,7 +117,7 @@ def test_manual_field_trial_replay_cli_export_and_save_are_model_free(
 
     with TestClient(create_app(settings, model=NoModel())) as client:
         sid = create(client, {})
-        base = f"/api/review-config/sessions/{sid}"
+        base = f"/api/review-config/tasks/{sid}"
         assert (
             client.post(
                 base + "/draft",
@@ -148,7 +148,7 @@ def test_manual_field_trial_replay_cli_export_and_save_are_model_free(
         )
         assert (
             client.post(
-                base + "/trial", json={"client_request_id": "trial", "expected_revision": 2}
+                base + "/trial", json={"client_request_id": "trial", "expected_revision": 1}
             ).status_code
             == 200
         )
@@ -175,7 +175,7 @@ def test_manual_field_trial_replay_cli_export_and_save_are_model_free(
         assert (
             client.post(
                 base + f"/browser-tasks/{pending['id']}/result",
-                json={"client_request_id": "facts", "expected_revision": 2, **facts},
+                json={"client_request_id": "facts", "expected_revision": 1, **facts},
             ).status_code
             == 200
         )
@@ -195,14 +195,14 @@ def test_manual_field_trial_replay_cli_export_and_save_are_model_free(
                 base + "/replay",
                 json={
                     "client_request_id": "replay",
-                    "expected_revision": 2,
+                    "expected_revision": 1,
                     "case_set_id": "local/manual",
                 },
             ).status_code
             == 200
         )
         response = client.post(
-            base + "/validate", json={"client_request_id": "validate", "expected_revision": 2}
+            base + "/validate", json={"client_request_id": "validate", "expected_revision": 1}
         )
         assert response.status_code == 200 and response.json()["ok"], response.text
         report = response.json()
@@ -274,7 +274,7 @@ def test_manual_field_trial_replay_cli_export_and_save_are_model_free(
                 base + "/confirm",
                 json={
                     "client_request_id": "confirm",
-                    "expected_revision": 2,
+                    "expected_revision": 1,
                     "report_id": report["report_id"],
                     "candidate_digest": report["candidate_digest"],
                 },
@@ -288,7 +288,7 @@ def test_manual_field_trial_replay_cli_export_and_save_are_model_free(
                 base + "/draft",
                 json={
                     "client_request_id": "again",
-                    "expected_revision": 2,
+                    "expected_revision": 1,
                     "operations": [{"op": "remove_field", "value": {"key": "permit.vin"}}],
                 },
             ).status_code
@@ -299,12 +299,12 @@ def test_manual_field_trial_replay_cli_export_and_save_are_model_free(
 def test_session_creation_and_daily_operations_reject_developer_scope(settings):
     with TestClient(create_app(settings, model=NoModel())) as client:
         response = client.post(
-            "/api/review-config/sessions",
+            "/api/review-config/tasks",
             json={"client_request_id": "missing", "snapshot": SNAPSHOT},
         )
         assert response.status_code == 422 and response.json()["code"] == "EXISTING_PAGE_REQUIRED"
         sid = create(client, {})
-        base = f"/api/review-config/sessions/{sid}"
+        base = f"/api/review-config/tasks/{sid}"
         for operation in (
             {"op": "set_page_metadata", "value": {"page_id": "new"}},
             {"op": "set_page_options", "value": {"unsupported_algorithm": "new"}},

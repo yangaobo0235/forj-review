@@ -218,8 +218,6 @@ def test_owner_consistency_task_has_page_values_and_no_write_target() -> None:
         comparisons=[],
         external_checks=[],
         business_checks=[run()],
-        completeness=None,
-        limitations=[],
     )
 
     step = next(item for item in steps if item.step_id == f"BUSINESS-{OWNER_CONSISTENCY_CHECK_ID}")

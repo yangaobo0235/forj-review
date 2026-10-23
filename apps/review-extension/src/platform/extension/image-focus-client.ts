@@ -22,7 +22,15 @@ export async function focusReviewImage(
   target: ImageFocusTarget,
   chromeApi: ChromeTabsLike = globalThis.chrome,
 ): Promise<ImageFocusResult> {
-  if (!imageId || !Number.isInteger(target.sourceTabId) || !target.pageUrl || !target.pageInstanceId || !target.pageFingerprint || !target.collectionId || !chromeApi.tabs.sendMessage) {
+  if (
+    !imageId ||
+    !Number.isInteger(target.sourceTabId) ||
+    !target.pageUrl ||
+    !target.pageInstanceId ||
+    !target.pageFingerprint ||
+    !target.collectionId ||
+    !chromeApi.tabs.sendMessage
+  ) {
     return { ok: false, error: "原审核页面标识不完整，请重新采集" };
   }
   // 发送失败（标签页已关闭、内容脚本未注入）会让 Promise 直接拒绝。不接住的话

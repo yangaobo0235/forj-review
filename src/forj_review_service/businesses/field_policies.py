@@ -32,7 +32,6 @@ class FieldEvidencePolicy:
     mode: EvidenceMode
     allowed_document_types: tuple[str, ...] = ()
     allow_single_evidence: bool = True
-    uncertain_requires_review: bool = True
     page_evidence_required: bool = True
     normalizer: str = "default"
     authority: tuple[AuthorityRule, ...] = ()
@@ -47,7 +46,6 @@ def build_policies(pack: BusinessExtensionPack) -> dict[str, FieldEvidencePolicy
             mode=item.mode,
             allowed_document_types=item.sources,
             allow_single_evidence=item.allow_single_evidence,
-            uncertain_requires_review=item.uncertain_requires_review,
             page_evidence_required=item.page_evidence_required and item.mode != "DERIVED",
             normalizer=item.normalizer,
             authority=item.authority,

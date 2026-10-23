@@ -21,7 +21,7 @@ class UrlService:
         self.extracted_ids = []
         self.final_batches = []
 
-    async def extract_image_async(self, request, image):
+    async def extract_image_async(self, request, image, *, absolute_deadline=None):
         assert image.recognition_source == image.src
         image_id = str(image.image_id or image.index)
         self.extracted_ids.append(image_id)
@@ -29,7 +29,7 @@ class UrlService:
             total_count=1, completed_count=1, completed_image_ids=[image_id]
         )
 
-    async def assist_with_batch_async(self, request, initial_batch):
+    async def assist_with_batch_async(self, request, initial_batch, *, absolute_deadline=None):
         self.final_batches.append(initial_batch.model_copy(deep=True))
         return ReviewResponse(
             recommendation="REVIEW_REQUIRED", risk_level="MEDIUM", summary="全部完成"
@@ -51,6 +51,36 @@ def request(count=2):
             for i in range(count)
         ],
     )
+
+
+def test_queue_images_and_finalization_receive_the_same_absolute_deadline():
+    class BudgetService(UrlService):
+        deadlines = []
+
+        async def extract_image_async(self, request, image, *, absolute_deadline=None):
+            self.deadlines.append(absolute_deadline)
+            await asyncio.sleep(0.01)
+            return await super().extract_image_async(
+                request, image, absolute_deadline=absolute_deadline
+            )
+
+        async def assist_with_batch_async(self, request, initial_batch, *, absolute_deadline=None):
+            self.deadlines.append(absolute_deadline)
+            return await super().assist_with_batch_async(
+                request, initial_batch, absolute_deadline=absolute_deadline
+            )
+
+    service = BudgetService()
+    scheduler = FairAsyncScheduler(global_limit=1, per_job_limit=1)
+    manager = ReviewJobManager(service, scheduler=scheduler, review_deadline=0.5)
+    try:
+        created = manager.create_urls(request(2))
+        assert manager.wait(created.job_id, 2)
+        assert len(service.deadlines) == 3
+        assert service.deadlines[0] is not None
+        assert len(set(service.deadlines)) == 1
+    finally:
+        manager.close()
 
 
 def test_url_job_schedules_each_image_once_and_reuses_batch():
@@ -79,7 +109,7 @@ def test_presence_survives_partial_image_merge_and_is_visible_before_finalizatio
     release = threading.Event()
 
     class PartialService(UrlService):
-        async def extract_image_async(self, request, image):
+        async def extract_image_async(self, request, image, *, absolute_deadline=None):
             image_id = str(image.image_id)
             if image.index == 1:
                 return RecognitionBatchResult(
@@ -98,7 +128,7 @@ def test_presence_survives_partial_image_merge_and_is_visible_before_finalizatio
                 ],
             )
 
-        async def assist_with_batch_async(self, request, initial_batch):
+        async def assist_with_batch_async(self, request, initial_batch, *, absolute_deadline=None):
             started.set()
             while not release.is_set():
                 await asyncio.sleep(0.005)
@@ -160,7 +190,7 @@ def test_collection_errors_are_archived_without_model_call():
 
 def test_missing_terminal_results_are_partial():
     class Incomplete(UrlService):
-        async def extract_image_async(self, request, image):
+        async def extract_image_async(self, request, image, *, absolute_deadline=None):
             return RecognitionBatchResult(total_count=1)
 
     manager = ReviewJobManager(Incomplete())
@@ -173,7 +203,7 @@ def test_missing_terminal_results_are_partial():
 
 def test_timeouts_are_partial_and_retained():
     class Timeout(UrlService):
-        async def extract_image_async(self, request, image):
+        async def extract_image_async(self, request, image, *, absolute_deadline=None):
             return RecognitionBatchResult(
                 total_count=1, timed_out_count=1, timed_out_image_ids=[str(image.image_id)]
             )
@@ -190,7 +220,7 @@ def test_timeouts_are_partial_and_retained():
 
 def test_model_exception_does_not_lose_other_results():
     class Failing(UrlService):
-        async def extract_image_async(self, request, image):
+        async def extract_image_async(self, request, image, *, absolute_deadline=None):
             if image.index == 0:
                 raise RuntimeError("synthetic failure")
             return await super().extract_image_async(request, image)
@@ -207,7 +237,7 @@ def test_model_exception_does_not_lose_other_results():
 
 def test_finalization_failure_only_exposes_exception_type(caplog):
     class Failing(UrlService):
-        async def assist_with_batch_async(self, request, initial_batch):
+        async def assist_with_batch_async(self, request, initial_batch, *, absolute_deadline=None):
             raise AttributeError("private model details")
 
     manager = ReviewJobManager(Failing())
@@ -308,7 +338,7 @@ def test_cancel_removes_queued_images_and_never_finalizes():
     started, release = threading.Event(), threading.Event()
 
     class Blocking(UrlService):
-        async def extract_image_async(self, request, image):
+        async def extract_image_async(self, request, image, *, absolute_deadline=None):
             started.set()
             while not release.is_set():
                 await asyncio.sleep(0.005)
@@ -355,7 +385,7 @@ def test_every_terminal_outcome_logs_timing_once(outcome, caplog):
     entered = threading.Event()
 
     class TerminalService(UrlService):
-        async def assist_with_batch_async(self, request, initial_batch):
+        async def assist_with_batch_async(self, request, initial_batch, *, absolute_deadline=None):
             entered.set()
             if outcome == "FAILED":
                 raise ValueError("synthetic private exception payload")
@@ -388,10 +418,10 @@ def test_running_job_finishes_with_original_service_after_new_requests_switch():
     started, release = threading.Event(), threading.Event()
 
     class Delayed(UrlService):
-        async def extract_image_async(self, request, image):
+        async def extract_image_async(self, request, image, *, absolute_deadline=None):
             started.set()
             while not release.is_set():
-                await asyncio.sleep(.005)
+                await asyncio.sleep(0.005)
             return await super().extract_image_async(request, image)
 
     old, new = Delayed(), UrlService()

@@ -2,10 +2,11 @@
 import type { FieldDefinition } from "../dom.ts";
 import { manifestFieldDefinitions } from "./collect-manifest.ts";
 
-export const normalizeText = (value: unknown) => String(value || "")
-  .replace(/[＊*]/g, "")
-  .replace(/\s+/g, "")
-  .replace(/[：:]$/, "");
+export const normalizeText = (value: unknown) =>
+  String(value || "")
+    .replace(/[＊*]/g, "")
+    .replace(/\s+/g, "")
+    .replace(/[：:]$/, "");
 const EMPTY_DEFINITIONS: Record<string, FieldDefinition> = {};
 
 /** Fields are provided exclusively by the current backend manifest. */
@@ -41,4 +42,5 @@ export const isKnownLabel = (label: string) => {
   return definitionsByLabel().has(normalized);
 };
 
-export const isSectionRequired = (field: string) => Boolean(fieldDefinitions()[field]?.sectionRequired);
+export const isSectionRequired = (field: string) =>
+  Boolean(fieldDefinitions()[field]?.sectionRequired);

@@ -1,96 +1,59 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "vitest";
+import { h } from "vue";
+import { renderToString } from "vue/server-renderer";
+import QrUrl from "../src/features/review/ui/QrUrl.vue";
 
-import { qrCheckPresentation } from "../src/features/review/presentation/qr.ts";
+const officialUrl = "https://qclt.mofcom.gov.cn/deal/scrap/validdata/example";
 
-test("matched qr check exposes only official status and extracted fields", () => {
-  const presentation = qrCheckPresentation({
-    status: "MATCH",
-    raw_value: "http://secret.example/token",
-    url: "https://secret.example/token",
-    page_fields: { certificate_no: "CERT-1", vin: "VIN-1" },
-    message: "二维码网页字段已提取",
-  });
-
-  assert.deepEqual(presentation, {
-    title: "官网核验通过",
-    visualStatus: "MATCH",
-    fields: [
-      { label: "回收证明编号", value: "CERT-1" },
-      { label: "车架号", value: "VIN-1" },
-    ],
-    message: "二维码网页字段已提取",
-  });
-  assert.doesNotMatch(JSON.stringify(presentation), /secret\.example/);
-});
-
-test("invalid qr domain is presented as an explicit failure", () => {
-  const presentation = qrCheckPresentation({
-    status: "REVIEW_REQUIRED",
-    raw_value: "https://evil.example/token",
-    url: null,
-    domain_valid: false,
-    accessible: null,
-    page_fields: {},
-    message: "二维码网页无法完成核验",
-  });
-
-  assert.deepEqual(presentation, {
-    title: "官网网址不正确",
-    visualStatus: "CONFLICT",
-    fields: [],
-    message: "二维码网页无法完成核验",
-  });
-  assert.doesNotMatch(JSON.stringify(presentation), /evil\.example/);
-});
-
-test("valid qr domain requiring review keeps the warning presentation", () => {
-  const presentation = qrCheckPresentation({
-    status: "REVIEW_REQUIRED",
-    domain_valid: true,
-    accessible: false,
-    page_fields: {},
-    message: "二维码网页无法完成核验",
-  });
-
-  assert.deepEqual(presentation, {
-    title: "官网核验待复核",
-    visualStatus: "REVIEW_REQUIRED",
-    fields: [],
-    message: "二维码网页无法完成核验",
-  });
-});
-
-test("qr field layout isolates itself from the global definition list grid", () => {
-  const css = (readFileSync(new URL("../src/app/App.css", import.meta.url), "utf8") + readFileSync(new URL("../src/features/review/ui/EvidenceReviewWorkbench.css", import.meta.url), "utf8"));
-
-  assert.match(css, /\.qr-fields\s*{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s);
-  assert.match(css, /\.qr-fields dd\s*{[^}]*word-break:\s*normal/s);
-  assert.match(
-    css,
-    /@media\s*\(max-width:\s*420px\)[\s\S]*?\.qr-fields\s*>\s*div\s*{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s,
+function render(overrides = {}) {
+  return renderToString(
+    h(QrUrl, {
+      check: {
+        url: officialUrl,
+        raw_value: "raw-qr-content",
+        domain_valid: true,
+        accessible: true,
+        page_fields: {},
+        status: "MATCH",
+        ...overrides,
+      },
+    }),
   );
+}
+
+test("only a confirmed official URL becomes an external link", async () => {
+  const html = await render();
+  assert.ok(html.includes(`href="${officialUrl}"`));
+  assert.match(html, /target="_blank" rel="noreferrer noopener"/);
+  for (const domain_valid of [false, null]) {
+    const rejected = await render({ domain_valid });
+    assert.doesNotMatch(rejected, /<a /);
+    assert.match(rejected, /未取得已确认的官网网址/);
+  }
 });
 
-test("qr conflict explanation is rendered in the failure color", () => {
-  const css = (readFileSync(new URL("../src/app/App.css", import.meta.url), "utf8") + readFileSync(new URL("../src/features/review/ui/EvidenceReviewWorkbench.css", import.meta.url), "utf8"));
-
-  assert.match(css, /\.status-conflict strong\s*{[^}]*color:\s*var\(--review-danger\)/s);
-  assert.match(css, /\.qr-check\.status-conflict small\s*{[^}]*color:\s*var\(--review-danger\)/s);
-  assert.match(css, /\.status-review_required strong\s*{[^}]*color:\s*#d48806/s);
+test("confirmed URL remains available for manual review when the backend cannot access it", async () => {
+  for (const accessible of [false, null]) {
+    const html = await render({ accessible, status: "REVIEW_REQUIRED", message: "官网访问超时" });
+    assert.ok(html.includes(`href="${officialUrl}"`));
+    assert.match(html, /后台暂未访问成功。可点击网址人工核验/);
+    assert.match(html, /官网访问超时/);
+  }
 });
 
-test("qr card source does not render raw or canonical urls", () => {
-  const source = readFileSync(new URL("../src/features/review/ui/QrResults.vue", import.meta.url), "utf8");
-  const card = source;
-  assert.doesNotMatch(card, /check\.(?:url|raw_value)/);
-});
-
-test("qr card uses the presentation status for its color", () => {
-  const source = readFileSync(new URL("../src/features/review/ui/QrResults.vue", import.meta.url), "utf8");
-  const card = source;
-
-  assert.match(card, /status-\$\{presentation\.visualStatus\.toLowerCase\(\)\}/);
-  assert.doesNotMatch(card, /status-\$\{check\.status\.toLowerCase\(\)\}/);
+test("raw content and decoder diagnostics are confined to expandable technical details", async () => {
+  const html = await render({
+    decoder: "zxing",
+    decode_error: "decode_failed",
+    decode_elapsed_ms: 42,
+  });
+  const details = html.match(/<details class="qr-technical-details">([\s\S]*?)<\/details>/)?.[1];
+  assert.ok(details);
+  assert.match(details, /ZXing/);
+  assert.match(details, /decode_failed/);
+  assert.match(details, /42 ms/);
+  assert.match(details, /raw-qr-content/);
+  assert.doesNotMatch(html.slice(0, html.indexOf("<details")), /raw-qr-content/);
+  assert.doesNotMatch(await render({ raw_value: null }), /<details/);
 });

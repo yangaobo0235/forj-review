@@ -11,18 +11,33 @@ import type {
 } from "../../../shared/contracts/review";
 
 import { reviewApiBaseUrl } from "../../../shared/review-api-url.ts";
-export { reviewApiBaseUrl, localReviewApiBaseUrl, publicReviewApiBaseUrl, resolveReviewApiBaseUrl } from "../../../shared/review-api-url.ts";
+export {
+  reviewApiBaseUrl,
+  localReviewApiBaseUrl,
+  publicReviewApiBaseUrl,
+  resolveReviewApiBaseUrl,
+} from "../../../shared/review-api-url.ts";
 
 export type Fetcher = typeof fetch;
 
-async function reviewRequest<T>(url: string, init: RequestInit | undefined, fetcher: Fetcher, signal?: AbortSignal): Promise<T> {
+async function reviewRequest<T>(
+  url: string,
+  init: RequestInit | undefined,
+  fetcher: Fetcher,
+  signal?: AbortSignal,
+): Promise<T> {
   const controller = new AbortController();
   const cancel = () => controller.abort(signal?.reason);
   signal?.addEventListener("abort", cancel, { once: true });
   if (signal?.aborted) cancel();
-  const timer = setTimeout(() => controller.abort(new DOMException("审核请求超时，请检查网络后重新审核", "TimeoutError")), 15_000);
+  const timer = setTimeout(
+    () => controller.abort(new DOMException("审核请求超时，请检查网络后重新审核", "TimeoutError")),
+    15_000,
+  );
   let rejectAbort: (reason: unknown) => void = () => {};
-  const aborted = new Promise<never>((_resolve, reject) => { rejectAbort = reject; });
+  const aborted = new Promise<never>((_resolve, reject) => {
+    rejectAbort = reject;
+  });
   const onAbort = () => rejectAbort(controller.signal.reason);
   controller.signal.addEventListener("abort", onAbort, { once: true });
   try {
@@ -67,7 +82,7 @@ function requestFailure(status: number): Error {
 
 async function readReviewResponse<T>(response: Response): Promise<T> {
   try {
-    return await response.json() as T;
+    return (await response.json()) as T;
   } catch (cause) {
     throw new Error("审核服务返回的结果暂时无法读取，请重新审核；仍失败请联系管理员", { cause });
   }
@@ -81,30 +96,51 @@ export async function createUrlReviewJob(
 ): Promise<ReviewJobCreated> {
   const images = data.images.map((image) => {
     const metadata = {
-      index: image.index, src: image.src, imageId: image.imageId,
-      group: image.group, categoryHint: image.categoryHint, businessScope: image.businessScope,
-      groupTitle: image.groupTitle, groupOrder: image.groupOrder, documentTypeHint: image.documentTypeHint,
+      index: image.index,
+      src: image.src,
+      imageId: image.imageId,
+      group: image.group,
+      categoryHint: image.categoryHint,
+      businessScope: image.businessScope,
+      groupTitle: image.groupTitle,
+      groupOrder: image.groupOrder,
+      documentTypeHint: image.documentTypeHint,
       identitySidesHint: image.identitySidesHint,
-      alt: image.alt, pagePosition: image.pagePosition, collectionError: image.collectionError,
+      alt: image.alt,
+      pagePosition: image.pagePosition,
+      collectionError: image.collectionError,
     };
     if (!metadata.collectionError && !/^https?:\/\//i.test(metadata.src || "")) {
-      metadata.collectionError = "这份材料暂时无法读取，请刷新原页面后重新审核；仍失败请查看原图人工核对";
+      metadata.collectionError =
+        "这份材料暂时无法读取，请刷新原页面后重新审核；仍失败请查看原图人工核对";
     }
     return metadata;
   });
-  return reviewRequest<ReviewJobCreated>(`${reviewApiBaseUrl}/api/review/jobs/urls`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...data, images }),
-  }, fetcher, signal);
+  return reviewRequest<ReviewJobCreated>(
+    `${reviewApiBaseUrl}/api/review/jobs/urls`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...data, images }),
+    },
+    fetcher,
+    signal,
+  );
 }
 
 export async function cancelReviewJob(jobId: string, fetcher: Fetcher = fetch): Promise<void> {
   try {
-    await reviewRequest(`${reviewApiBaseUrl}/api/review/jobs/${jobId}`, { method: "DELETE" }, fetcher);
+    await reviewRequest(
+      `${reviewApiBaseUrl}/api/review/jobs/${jobId}`,
+      { method: "DELETE" },
+      fetcher,
+    );
   } catch (reason) {
     // 取消属于善后动作，失败不能覆盖已取得的结论或产生未处理的 Promise 拒绝。
-    console.warn("[ForjReview] 审核任务取消失败", reason instanceof Error ? reason.name : "request_failed");
+    console.warn(
+      "[ForjReview] 审核任务取消失败",
+      reason instanceof Error ? reason.name : "request_failed",
+    );
   }
 }
 
@@ -114,11 +150,17 @@ export async function fetchReviewJob(
   fetcher: Fetcher = fetch,
   signal?: AbortSignal,
 ): Promise<ReviewJobSnapshot> {
-  return reviewRequest<ReviewJobSnapshot>(`${reviewApiBaseUrl}/api/review/jobs/${jobId}`, undefined, fetcher, signal);
+  return reviewRequest<ReviewJobSnapshot>(
+    `${reviewApiBaseUrl}/api/review/jobs/${jobId}`,
+    undefined,
+    fetcher,
+    signal,
+  );
 }
 
 export function completionNotice(
-  snapshot: Pick<ReviewJobSnapshot, "status"> & Partial<Pick<ReviewJobSnapshot, "result" | "progress">>,
+  snapshot: Pick<ReviewJobSnapshot, "status"> &
+    Partial<Pick<ReviewJobSnapshot, "result" | "progress">>,
 ): string {
   if (snapshot.status === "RUNNING") {
     return snapshot.result
@@ -128,7 +170,9 @@ export function completionNotice(
   if (snapshot.status === "PARTIAL") {
     const failed = snapshot.progress?.failed_count ?? 0;
     const timedOut = snapshot.progress?.timed_out_count ?? 0;
-    const details = [failed ? `失败 ${failed} 张` : "", timedOut ? `超时 ${timedOut} 张` : ""].filter(Boolean).join("，");
+    const details = [failed ? `失败 ${failed} 张` : "", timedOut ? `超时 ${timedOut} 张` : ""]
+      .filter(Boolean)
+      .join("，");
     return `部分材料未完成识别${details ? `（${details}）` : ""}，已完成结果仅供参考；请刷新原页面后重新审核，仍未完成的材料请查看原图人工核对`;
   }
   return "";

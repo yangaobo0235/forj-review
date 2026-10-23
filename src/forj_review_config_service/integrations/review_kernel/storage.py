@@ -4,6 +4,9 @@ from forj_review_service.businesses.page_config.errors import (
     PublicationConflict as PublicationConflict,
 )
 from forj_review_service.businesses.page_config.inspection import digest as digest
+from forj_review_service.businesses.page_config.kernel import (
+    KERNEL_CONTRACT_VERSION as KERNEL_CONTRACT_VERSION,
+)
 from forj_review_service.businesses.page_config.kernel import KERNEL_VERSION as KERNEL_VERSION
 from forj_review_service.integrations.storage.configuration import (
     extract_receipt as extract_receipt,

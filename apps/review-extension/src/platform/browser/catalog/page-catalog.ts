@@ -6,7 +6,6 @@
  * 报废置换保持路径识别；声明 review_tab 的页面必须由当前激活页签及面板确认。
  * DOM 定位留在浏览器平台，目录只声明页签名称，不包含选择器或节点。
  */
-import { pagePath } from "../adapters/selection.ts";
 import type { BusinessSelection, BusinessType, Region } from "../../../shared/contracts/review";
 
 export interface PageIdentityDeclaration {
@@ -37,20 +36,25 @@ let applied: PageCatalog | null = null;
 
 function isIdentity(value: unknown): value is PageIdentityDeclaration {
   const item = value as PageIdentityDeclaration | null;
-  return Boolean(item)
-    && typeof item?.business_type === "string"
-    && typeof item?.region === "string"
-    && Array.isArray(item?.paths)
-    && Array.isArray(item?.anchors)
-    && (item?.review_tab === undefined || (typeof item.review_tab === "string" && Boolean(item.review_tab.trim())));
+  return (
+    Boolean(item) &&
+    typeof item?.business_type === "string" &&
+    typeof item?.region === "string" &&
+    Array.isArray(item?.paths) &&
+    Array.isArray(item?.anchors) &&
+    (item?.review_tab === undefined ||
+      (typeof item.review_tab === "string" && Boolean(item.review_tab.trim())))
+  );
 }
 
 function isValid(value: unknown): value is PageCatalog {
   const catalog = value as PageCatalog | null;
-  return Boolean(catalog)
-    && Array.isArray(catalog?.identities)
-    && catalog.identities.length > 0
-    && catalog.identities.every(isIdentity);
+  return (
+    Boolean(catalog) &&
+    Array.isArray(catalog?.identities) &&
+    catalog.identities.length > 0 &&
+    catalog.identities.every(isIdentity)
+  );
 }
 
 /** 应用后端下发的页面识别清单；传空则清空，不保留旧页面身份。 */
@@ -73,7 +77,9 @@ export async function fetchPageCatalog(
   fetcher: typeof fetch = fetch,
 ): Promise<PageCatalog | null> {
   try {
-    const response = await fetcher(`${baseUrl}/api/review/page-catalog`, { signal: AbortSignal.timeout(10_000) });
+    const response = await fetcher(`${baseUrl}/api/review/page-catalog`, {
+      signal: AbortSignal.timeout(10_000),
+    });
     if (!response.ok) return null;
     const catalog = await response.json();
     return isValid(catalog) ? catalog : null;
@@ -82,18 +88,38 @@ export async function fetchPageCatalog(
   }
 }
 
+/** Invalid URLs never match a configured page. */
+function pagePath(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return "";
+  }
+}
+
 /** 路径是否命中该前缀。按完整路径段匹配，避免相似前缀互相误判。 */
 function pathMatches(path: string, prefix: string): boolean {
   return path === prefix || path.startsWith(`${prefix}/`);
 }
 
-export function pageIdentitiesForUrl(catalog: PageCatalog | null, url: string): PageIdentityDeclaration[] {
+export function pageIdentitiesForUrl(
+  catalog: PageCatalog | null,
+  url: string,
+): PageIdentityDeclaration[] {
   const path = pagePath(url);
-  return (catalog?.identities ?? []).filter(item => item.paths.some(route => pathMatches(path, route)));
+  return (catalog?.identities ?? []).filter((item) =>
+    item.paths.some((route) => pathMatches(path, route)),
+  );
 }
 
 export function reviewTabLabels(catalog: PageCatalog | null, url: string): string[] {
-  return [...new Set(pageIdentitiesForUrl(catalog, url).flatMap(item => item.review_tab ? [item.review_tab] : []))];
+  return [
+    ...new Set(
+      pageIdentitiesForUrl(catalog, url).flatMap((item) =>
+        item.review_tab ? [item.review_tab] : [],
+      ),
+    ),
+  ];
 }
 
 /** 页面特征是否全部出现。空特征集视为命中——那表示这条声明不看内容。 */
@@ -145,10 +171,12 @@ export function explainPageIdentity(
 ): PageMatchDiagnostics {
   const path = pagePath(url);
   const byPath = pageIdentitiesForUrl(catalog, url);
-  const usesTabs = byPath.some(item => item.review_tab);
-  const matched = byPath.filter(item => usesTabs
-    ? Boolean(reviewTab?.panelReady && item.review_tab === reviewTab.label)
-    : !missingAnchors(item, text).length);
+  const usesTabs = byPath.some((item) => item.review_tab);
+  const matched = byPath.filter((item) =>
+    usesTabs
+      ? Boolean(reviewTab?.panelReady && item.review_tab === reviewTab.label)
+      : !missingAnchors(item, text).length,
+  );
   return {
     path,
     byPath: byPath.map(label),
@@ -176,9 +204,9 @@ export function matchPageIdentity(
   if (!catalog?.identities.length) return null;
   const byPath = pageIdentitiesForUrl(catalog, url);
 
-  if (byPath.some(item => item.review_tab)) {
+  if (byPath.some((item) => item.review_tab)) {
     if (!reviewTab?.panelReady) return null;
-    const matched = byPath.filter(item => item.review_tab === reviewTab.label);
+    const matched = byPath.filter((item) => item.review_tab === reviewTab.label);
     return matched.length === 1 ? toSelection(matched[0]) : null;
   }
 

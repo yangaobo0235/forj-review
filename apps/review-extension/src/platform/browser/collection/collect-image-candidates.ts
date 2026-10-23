@@ -6,7 +6,7 @@ import { manifestIgnoresImage } from "../catalog/collect-manifest.ts";
 export function collectImageCandidates(classifyImage: (hint: string) => string) {
   const pageImages = Array.from(document.images);
   const imageIndexes = new Map(pageImages.map((image, index) => [image, index]));
-  const scopeItems: Array<{ kind: "label"; text: string } | { kind: "image"; index: number }> = []
+  const scopeItems: Array<{ kind: "label"; text: string } | { kind: "image"; index: number }> = [];
   document.body.querySelectorAll("*").forEach((element) => {
     const directText = Array.from(element.childNodes)
       .filter((node) => node.nodeType === Node.TEXT_NODE)
@@ -22,7 +22,7 @@ export function collectImageCandidates(classifyImage: (hint: string) => string) 
     }
   });
   const scopeByIndex = new Map(
-    ReviewBusinessScope.assign(scopeItems).map((item) => [item.index, item])
+    ReviewBusinessScope.assign(scopeItems).map((item) => [item.index, item]),
   );
 
   const imageCandidates = pageImages.map((image, index) => {
@@ -37,11 +37,12 @@ export function collectImageCandidates(classifyImage: (hint: string) => string) 
       .filter(Boolean)
       .join(" ");
     const parent = image.parentElement;
-    const emptySlot = /暂无图片|尚未上传|未上传图片/.test(ownHint)
-      || Boolean(
-        parent
-        && parent.querySelectorAll("img").length === 1
-        && /暂无图片|尚未上传|未上传图片/.test(parent.textContent || ""),
+    const emptySlot =
+      /暂无图片|尚未上传|未上传图片/.test(ownHint) ||
+      Boolean(
+        parent &&
+          parent.querySelectorAll("img").length === 1 &&
+          /暂无图片|尚未上传|未上传图片/.test(parent.textContent || ""),
       );
     const scope = scopeByIndex.get(index) || {
       businessScope: "unknown",
@@ -54,7 +55,11 @@ export function collectImageCandidates(classifyImage: (hint: string) => string) 
       index,
       ...scope,
       src: image.currentSrc || image.src,
-      visible: rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden",
+      visible:
+        rect.width > 0 &&
+        rect.height > 0 &&
+        style.display !== "none" &&
+        style.visibility !== "hidden",
       naturalWidth: image.naturalWidth || 0,
       naturalHeight: image.naturalHeight || 0,
       className: typeof image.className === "string" ? image.className : "",

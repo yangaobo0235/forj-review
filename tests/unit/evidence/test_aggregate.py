@@ -193,8 +193,8 @@ def test_aggregate_requires_review_for_one_source() -> None:
     assert [item.conflicting for item in comparison.evidence] == [False]
 
 
-def test_uncertain_evidence_cannot_pass_even_with_legacy_opt_out() -> None:
-    """统一保护，不允许通过旧参数关闭识别不确定性检查。"""
+def test_uncertain_evidence_requires_review() -> None:
+    """页面与不确定材料相同，也不能证明字段一致。"""
     observations = [
         FieldObservation(
             field="new_vehicle.vin",
@@ -206,15 +206,9 @@ def test_uncertain_evidence_cannot_pass_even_with_legacy_opt_out() -> None:
         observation("new_vehicle.vin", "VIN-1", "review_page", "page"),
     ]
 
-    for options in ({}, {"uncertain_requires_review": False}):
-        legacy = aggregate_field("new_vehicle.vin", observations, **options)
-        assert legacy.status is FieldStatus.REVIEW_REQUIRED
-        assert legacy.reason_codes == ["RECOGNITION_UNCERTAIN"]
-
-    target = aggregate_field(
-        "new_vehicle.vin", observations, uncertain_requires_review=True, business=TEST_BUSINESS
-    )
+    target = aggregate_field("new_vehicle.vin", observations, business=TEST_BUSINESS)
     assert target.status is FieldStatus.REVIEW_REQUIRED
+    assert target.reason_codes == ["RECOGNITION_UNCERTAIN"]
     assert target.message == "图片识别结果不确定，请核对原图"
 
 
@@ -479,7 +473,6 @@ def vin_by_authority(observations: list[FieldObservation]):
         "old_vehicle.vin",
         observations,
         VIN_AUTHORITY,
-        uncertain_requires_review=True,
         business=TEST_BUSINESS,
     )
 
@@ -587,13 +580,11 @@ def test_uncertain_message_distinguishes_retried_evidence() -> None:
     fresh = aggregate_field(
         "old_vehicle.vin",
         [uncertain_item, page],
-        uncertain_requires_review=True,
         business=TEST_BUSINESS,
     )
     retried = aggregate_field(
         "old_vehicle.vin",
         [uncertain_item.model_copy(update={"retried": True}), page],
-        uncertain_requires_review=True,
         business=TEST_BUSINESS,
     )
 

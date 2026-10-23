@@ -30,18 +30,16 @@ class EngineStandardCandidate:
 # 车辆品牌不是发动机厂家，不参与系列判定。
 ENGINE_EMISSION_PATTERNS = (
     EngineEmissionPattern("ca_e", "锡柴/大柴 CA", r"CA[A-Z0-9]", r"E([3-6])(?![0-9])"),
-    EngineEmissionPattern("xichai_e", "锡柴 4DW/4DX", r"4D[WX][A-Z0-9]",
-                          r"E([3-6])(?![0-9])"),
+    EngineEmissionPattern("xichai_e", "锡柴 4DW/4DX", r"4D[WX][A-Z0-9]", r"E([3-6])(?![0-9])"),
     EngineEmissionPattern("wp_e", "潍柴 WP", r"WP[A-Z0-9]", r"E([3-6])(?![0-9])"),
-    EngineEmissionPattern("cummins_s", "康明斯 ISF/ISB/ISD/ISG", r"IS[FBDG]",
-                          r"S([3-6])(?![0-9])"),
+    EngineEmissionPattern("cummins_s", "康明斯 ISF/ISB/ISD/ISG", r"IS[FBDG]", r"S([3-6])(?![0-9])"),
     EngineEmissionPattern("sc_q", "上柴 SC", r"SC[A-Z0-9]", r"Q([3-6])(?![0-9])"),
     EngineEmissionPattern("jx_q", "江铃 JX493ZL", r"JX493ZL", r"Q([3-6])(?![0-9])"),
     EngineEmissionPattern("yz_dash", "扬柴 YZ", r"YZ[A-Z0-9]", r"-([3-6])0(?=[^0-9]|$)"),
-    EngineEmissionPattern("yc_dash", "玉柴 YC（含 YCS/YCK/YCY）", r"YC[A-Z0-9]",
-                          r"-([3-6])0(?=[^0-9]|$)"),
-    EngineEmissionPattern("united_dash", "联合动力 6K", r"6K[0-9]",
-                          r"-([3-6])0(?=[^0-9]|$)"),
+    EngineEmissionPattern(
+        "yc_dash", "玉柴 YC（含 YCS/YCK/YCY）", r"YC[A-Z0-9]", r"-([3-6])0(?=[^0-9]|$)"
+    ),
+    EngineEmissionPattern("united_dash", "联合动力 6K", r"6K[0-9]", r"-([3-6])0(?=[^0-9]|$)"),
 )
 
 

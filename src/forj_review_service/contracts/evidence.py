@@ -37,14 +37,6 @@ class EvidenceFact(BaseModel):
     confidence: float | None = Field(default=None, ge=0, le=1)
     page_number: int | None = Field(default=None, ge=1)
 
-    def __getitem__(self, key: str):
-        """Temporary mapping-style compatibility for legacy rule consumers."""
-        return getattr(self, key)
-
-    def get(self, key: str, default: Any = None) -> Any:
-        """Read a field using the legacy mapping convention at the boundary."""
-        return getattr(self, key, default)
-
 
 class FieldObservation(BaseModel):
     """One independently observed value and its review-document source."""
@@ -66,4 +58,3 @@ class FieldObservation(BaseModel):
     group_title: str | None = None
     group_order: int | None = None
     confidence: float | None = Field(default=None, ge=0, le=1)
-

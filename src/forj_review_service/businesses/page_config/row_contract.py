@@ -67,33 +67,20 @@ class RuleBinding(Declaration):
 
 
 def vehicle_model_action():
-    pairs = [
-        ("model", "modelName", "vehicle.model", "modelId"),
-        ("drive_form", "config.driveForm", "spec.drive_form", None),
-        ("fuel_type", "config.fuelType", "spec.fuel_type", None),
-        ("emission", "config.emissionStandard", "spec.emission_standard", None),
-        ("hp", "config.maxHp", "spec.max_hp", None),
-        ("engine_brand", "config.engineBrand", "spec.engine_brand", None),
-        ("engine", "config.engineType", "spec.engine_model", None),
-    ]
     return ActionBinding(
         action_id="vehicle_model_fill",
         handler_id="vehicle_model_fill",
         label="车型回填",
-        mappings=tuple(
+        mappings=(
             ActionMapping(
-                mapping_id=key,
+                mapping_id="model",
                 source_kind="MODEL_CANDIDATE",
-                source_property=source,
-                source_option_property=option,
-                target_field=target,
-                order=order,
-                depends_on=(() if order == 0 else (pairs[order - 1][0],)),
-                converter_id="text",
-                missing_policy="BLOCK",
-                wait_condition_id="options_ready" if option else "none",
-            )
-            for order, (key, source, target, option) in enumerate(pairs)
+                source_property="modelName",
+                source_option_property="modelId",
+                target_field="vehicle.model",
+                order=0,
+                wait_condition_id="options_ready",
+            ),
         ),
     )
 

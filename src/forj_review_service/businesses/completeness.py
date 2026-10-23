@@ -2,7 +2,7 @@
 
 from collections.abc import Iterable
 
-from forj_review_service.businesses.context import DEFAULT_BUSINESS, BusinessContext
+from forj_review_service.businesses.context import BusinessContext
 from forj_review_service.businesses.material_policies import (
     MaterialRequirement,
     SourceSelector,
@@ -304,7 +304,7 @@ def _missing_pages_reason(
 def evaluate_extracted(
     request: ReviewRequest, profile: BusinessProfile, batch: RecognitionBatchResult
 ) -> MaterialCompletenessReport:
-    business = BusinessContext.from_profile(profile) if profile is not None else DEFAULT_BUSINESS
+    business = BusinessContext.from_profile(profile)
     policy = profile.material_policy
     if policy is None or policy.mode == "disabled":
         return MaterialCompletenessReport(phase="EXTRACTED", status="COMPLETE", enforced=False)

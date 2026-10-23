@@ -90,6 +90,7 @@ def test_unsupported_windows_loop_reports_startup_fix_before_connecting(monkeypa
 
     async def probe():
         async with AsyncDatabase(Database("host=127.0.0.1 port=1 dbname=unused")) as database:
+
             def unexpected_connection(**kwargs):
                 pytest.fail("An unsupported event loop must fail before opening a connection")
 

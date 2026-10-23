@@ -4,7 +4,11 @@ import { readFileSync } from "node:fs";
 import { test } from "vitest";
 
 import { applyCollectManifest } from "../src/platform/browser/catalog/collect-manifest.ts";
-import { documentTypeForImageLabel, imageLabelFor, nearestAncestorText } from "../src/platform/browser/collection/image-label.ts";
+import {
+  documentTypeForImageLabel,
+  imageLabelFor,
+  nearestAncestorText,
+} from "../src/platform/browser/collection/image-label.ts";
 
 const manifest = JSON.parse(
   readFileSync(new URL("./fixtures/collect-manifest-synthetic.json", import.meta.url), "utf8"),
@@ -18,7 +22,8 @@ const el = (textContent, imgCount, parentElement = null) => ({
   textContent,
   parentElement,
   ownerDocument: { body: null },
-  querySelectorAll: (selector) => (selector === "img" ? Array.from({ length: imgCount }, () => ({})) : []),
+  querySelectorAll: (selector) =>
+    selector === "img" ? Array.from({ length: imgCount }, () => ({})) : [],
 });
 
 /** 页面真实结构：分组容器 → 图片卡片 → 空壳预览层 → img，小标题在卡片里。 */
@@ -30,7 +35,10 @@ const cardImage = (label, groupText) => {
 };
 
 test("小标题从图片卡片读取，跳过只包着 img 的空壳", () => {
-  const { image } = cardImage(" 行驶证反面 ", "证件照 行驶证反面 登记证书1、2页 登记证书3、4页 行驶证正面");
+  const { image } = cardImage(
+    " 行驶证反面 ",
+    "证件照 行驶证反面 登记证书1、2页 登记证书3、4页 行驶证正面",
+  );
   assert.equal(imageLabelFor(image), "行驶证反面");
 });
 
@@ -68,11 +76,23 @@ test("动态材料的小标题直接定类型", () => {
   assert.equal(documentTypeForImageLabel("未知材料"), null);
 });
 
-
 test("trial and formal material hints prioritize card labels over positional slots", () => {
   applyCollectManifest(manifest);
-  assert.equal(imageDocumentType({labelHint: "许可证", businessScope: "sample", groupOrder: 1,
-    categoryHint: "registration_certificate"}), "permit");
-  assert.equal(imageDocumentType({labelHint: "未知", businessScope: "sample", categoryHint: "registration_certificate"}),
-    "registration_certificate");
+  assert.equal(
+    imageDocumentType({
+      labelHint: "许可证",
+      businessScope: "sample",
+      groupOrder: 1,
+      categoryHint: "registration_certificate",
+    }),
+    "permit",
+  );
+  assert.equal(
+    imageDocumentType({
+      labelHint: "未知",
+      businessScope: "sample",
+      categoryHint: "registration_certificate",
+    }),
+    "registration_certificate",
+  );
 });

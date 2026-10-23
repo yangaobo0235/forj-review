@@ -15,7 +15,12 @@ interface PollOptions {
   signal?: AbortSignal;
 }
 
-const terminalStatuses = new Set<PollableJobStatus>(["PARTIAL", "COMPLETED", "FAILED", "CANCELLED"]);
+const terminalStatuses = new Set<PollableJobStatus>([
+  "PARTIAL",
+  "COMPLETED",
+  "FAILED",
+  "CANCELLED",
+]);
 
 export async function pollReviewJob<T extends PollableJobSnapshot>(
   fetchSnapshot: (signal: AbortSignal) => Promise<T>,
@@ -29,11 +34,16 @@ export async function pollReviewJob<T extends PollableJobSnapshot>(
   let latest: T | undefined;
   const controller = new AbortController();
   const cancel = () => controller.abort(options.signal?.reason);
-  const timer = setTimeout(() => controller.abort(new DOMException("审核等待超时", "TimeoutError")), timeoutMs);
+  const timer = setTimeout(
+    () => controller.abort(new DOMException("审核等待超时", "TimeoutError")),
+    timeoutMs,
+  );
   options.signal?.addEventListener("abort", cancel, { once: true });
   if (options.signal?.aborted) cancel();
   let rejectAbort: (reason: unknown) => void = () => {};
-  const aborted = new Promise<never>((_resolve, reject) => { rejectAbort = reject; });
+  const aborted = new Promise<never>((_resolve, reject) => {
+    rejectAbort = reject;
+  });
   const onAbort = () => rejectAbort(controller.signal.reason);
   controller.signal.addEventListener("abort", onAbort, { once: true });
   // Promise.race 安全处理不响应 AbortSignal 的调用方，同时防止晚到结果回写。
@@ -45,7 +55,7 @@ export async function pollReviewJob<T extends PollableJobSnapshot>(
       onSnapshot(latest);
       if (terminalStatuses.has(latest.status)) return latest;
       if (intervalMs > 0) {
-        await Promise.race([new Promise(resolve => setTimeout(resolve, intervalMs)), aborted]);
+        await Promise.race([new Promise((resolve) => setTimeout(resolve, intervalMs)), aborted]);
       }
     }
   } catch (reason) {

@@ -28,8 +28,20 @@ def main() -> None:
         from tests.support.postgres import isolated_database, seed_complete_pages
 
         docker("network", "create", network)
-        docker("run", "--rm", "-d", "--name", pg_name, "--network", network,
-               "-e", "POSTGRES_PASSWORD=smoke-only", "-p", "127.0.0.1::5432", "postgres:16-alpine")
+        docker(
+            "run",
+            "--rm",
+            "-d",
+            "--name",
+            pg_name,
+            "--network",
+            network,
+            "-e",
+            "POSTGRES_PASSWORD=smoke-only",
+            "-p",
+            "127.0.0.1::5432",
+            "postgres:16-alpine",
+        )
         pg_port = docker("port", pg_name, "5432/tcp").rsplit(":", 1)[-1]
         pg_url = f"postgresql://postgres:smoke-only@127.0.0.1:{pg_port}/postgres"
         for _ in range(60):
@@ -37,19 +49,51 @@ def main() -> None:
                 with psycopg.connect(pg_url, connect_timeout=1):
                     break
             except psycopg.OperationalError:
-                time.sleep(.2)
+                time.sleep(0.2)
         else:
             raise RuntimeError("Smoke PostgreSQL timeout")
         database = stack.enter_context(isolated_database(pg_url))
         seed_complete_pages(database)
-        docker("run", "-d", "--name", name, "--network", network,
-               "-e", "PGHOST=" + pg_name, "-e", "PGPORT=5432", "-e", "PGDATABASE=postgres",
-               "-e", "PGUSER=postgres", "-e", "PGPASSWORD=smoke-only", "-e", "PGSSLMODE=disable",
-               "-e", "REVIEW_DATABASE_SCHEMA=" + database.schema, "--read-only", "--cap-drop=ALL",
-               "--security-opt=no-new-privileges:true", "--tmpfs", "/tmp:size=64m,mode=1777",
-               "--tmpfs", "/logs:size=16m,uid=10001,gid=10001,mode=0770",
-               "-p", "127.0.0.1::26101", "-e", "DASHSCOPE_API_KEY=", "-e", "REVIEW_LOG_DIR=/logs",
-               "-e", "REVIEW_LOG_REQUIRED=true", "-e", "TZ=Asia/Shanghai", image)
+        docker(
+            "run",
+            "-d",
+            "--name",
+            name,
+            "--network",
+            network,
+            "-e",
+            "PGHOST=" + pg_name,
+            "-e",
+            "PGPORT=5432",
+            "-e",
+            "PGDATABASE=postgres",
+            "-e",
+            "PGUSER=postgres",
+            "-e",
+            "PGPASSWORD=smoke-only",
+            "-e",
+            "PGSSLMODE=disable",
+            "-e",
+            "REVIEW_DATABASE_SCHEMA=" + database.schema,
+            "--read-only",
+            "--cap-drop=ALL",
+            "--security-opt=no-new-privileges:true",
+            "--tmpfs",
+            "/tmp:size=64m,mode=1777",
+            "--tmpfs",
+            "/logs:size=16m,uid=10001,gid=10001,mode=0770",
+            "-p",
+            "127.0.0.1::26101",
+            "-e",
+            "DASHSCOPE_API_KEY=",
+            "-e",
+            "REVIEW_LOG_DIR=/logs",
+            "-e",
+            "REVIEW_LOG_REQUIRED=true",
+            "-e",
+            "TZ=Asia/Shanghai",
+            image,
+        )
         port = docker("port", name, "26101/tcp").rsplit(":", 1)[-1]
         base = f"http://127.0.0.1:{port}"
         for _ in range(40):
@@ -63,8 +107,17 @@ def main() -> None:
             raise RuntimeError("Container health timeout")
         with opener.open(base + "/api/review/configuration/loaded", timeout=5) as response:
             assert json.load(response)["configuration_source"] == "postgresql:" + database.schema
-        payload = {"page_url": "https://example.test/review/synthetic", "region": "qingdao", "images": [], "trace_id": "smoke-trace"}
-        request = urllib.request.Request(base + "/api/review/assist", json.dumps(payload).encode(), {"Content-Type": "application/json"})
+        payload = {
+            "page_url": "https://example.test/review/synthetic",
+            "region": "qingdao",
+            "images": [],
+            "trace_id": "smoke-trace",
+        }
+        request = urllib.request.Request(
+            base + "/api/review/assist",
+            json.dumps(payload).encode(),
+            {"Content-Type": "application/json"},
+        )
         with opener.open(request, timeout=20) as response:
             body = json.load(response)
         assert body["recommendation"] == "REVIEW_REQUIRED"
@@ -76,10 +129,20 @@ def main() -> None:
         file_log = docker("exec", name, "cat", "/logs/review-service.log")
         console_log = docker("logs", name)
         for content in (file_log, console_log):
-            for event in ("review service started", "review node completed", "review capability completed", "review decision", "review http completed"):
+            for event in (
+                "review service started",
+                "review node completed",
+                "review capability completed",
+                "review decision",
+                "review http completed",
+            ):
                 assert event in content, f"Missing {event}"
             assert "trace_id=smoke-trace" in content
-            assert "SECRET" not in content and "example.test" not in content and "private-test" not in content
+            assert (
+                "SECRET" not in content
+                and "example.test" not in content
+                and "private-test" not in content
+            )
         assert docker("exec", name, "id", "-u") == "10001"
         assert docker("exec", name, "stat", "-c", "%a", "/logs/review-service.log") == "640"
         docker("stop", "--time=20", name)
@@ -88,8 +151,10 @@ def main() -> None:
         assert "Application shutdown complete" in shutdown_log
         assert "Application shutdown failed" not in shutdown_log
         assert "Event loop is closed" not in shutdown_log
-        print("Container smoke: health, real graph/capabilities, correlated logs, "
-              "non-root/read-only permissions and graceful shutdown OK")
+        print(
+            "Container smoke: health, real graph/capabilities, correlated logs, "
+            "non-root/read-only permissions and graceful shutdown OK"
+        )
     except BaseException:
         try:
             print(docker("logs", "--tail=40", name), file=sys.stderr)
@@ -97,12 +162,27 @@ def main() -> None:
             pass
         raise
     finally:
-        subprocess.run(["docker", "rm", "-f", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        subprocess.run(
+            ["docker", "rm", "-f", name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
         try:
             stack.close()
         finally:
-            subprocess.run(["docker", "rm", "-f", pg_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-            subprocess.run(["docker", "network", "rm", network], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            subprocess.run(
+                ["docker", "rm", "-f", pg_name],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+            subprocess.run(
+                ["docker", "network", "rm", network],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
 
 
 if __name__ == "__main__":

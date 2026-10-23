@@ -1,11 +1,10 @@
 /**
  * 读取与图片配对的小标题（材料名）。
  *
- * 职责边界：只做 DOM 定位，不判材料类型。类型判定归 `collect-manifest.ts` 的
- * 清单关键词和 `content.ts` 的内置兜底表——在这里写业务正则会让页面改文案时
- * 静默判错，而且和后端清单形成第二份材料表。
+ * 职责边界：从 DOM 定位标签，按当前页面清单生成类型提示；实际类型由后端识别。
+ * 不维护业务正则或固定图片序号，避免与活动清单形成第二份材料表。
  */
-import { manifestHintType } from "../catalog/collect-manifest.ts";
+import { manifestHintType, manifestMaterialLabels } from "../catalog/collect-manifest.ts";
 
 const MAX_LABEL_CHARS = 40;
 const MAX_WALK_DEPTH = 8;
@@ -58,5 +57,11 @@ export function nearestAncestorText(image: HTMLImageElement, limit = 160): strin
 /** 小标题 → 材料类型，只查清单声明；查不到返回 null 交给调用方继续兜底。 */
 export function documentTypeForImageLabel(label: string): string | null {
   if (!label) return null;
+  const normalize = (text: string) => text.replace(/\s+/g, "").replace(/[：:]+$/, "");
+  const matches = Object.entries(manifestMaterialLabels() ?? {}).filter(
+    ([, name]) => normalize(name) === normalize(label),
+  );
+  if (matches.length > 1) return null;
+  if (matches.length === 1) return matches[0][0];
   return manifestHintType(label);
 }

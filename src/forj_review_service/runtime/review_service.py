@@ -7,6 +7,8 @@
 import asyncio
 import inspect
 import logging
+import threading
+import weakref
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -41,6 +43,7 @@ from forj_review_service.integrations.qr.web_verifier import QrWebVerifier
 from forj_review_service.integrations.qr.workflow import QrVerificationWorkflow
 from forj_review_service.integrations.recognition.client import QwenClient
 from forj_review_service.integrations.recognition.extraction import (
+    REVIEW_DEADLINE_SECONDS,
     RecognitionService,
     declared_material_types,
 )
@@ -69,15 +72,22 @@ class ReviewService:
         vehicle_api=None,
     ) -> None:
         self.vehicle_api = vehicle_api
+        # The HTTP loop and job worker each own their SQLAlchemy engine.
+        self._emission_databases = weakref.WeakKeyDictionary()
+        self._emission_database_lock = threading.Lock()
         config = load_qwen_config() if load_model else None
         self.qr_web = QrWebVerifier(allowed_hosts=["qclt.mofcom.gov.cn"])
         self.qr_decoder = qr_decoder or QrImageDecoder(private_hosts=image_private_hosts())
         self.qr_workflow = QrVerificationWorkflow()
         self.registry = registry if registry is not None else BusinessRegistry(())
-        self._handler_overrides = dict(external_check_handlers=external_check_handlers,
-                                       business_rule_handlers=business_rule_handlers,
-                                       page_action_handlers=page_action_handlers)
-        self.recognition = RecognitionService(QwenClient(config)) if config and config.available else None
+        self._handler_overrides = dict(
+            external_check_handlers=external_check_handlers,
+            business_rule_handlers=business_rule_handlers,
+            page_action_handlers=page_action_handlers,
+        )
+        self.recognition = (
+            RecognitionService(QwenClient(config)) if config and config.available else None
+        )
         self.workflow = ReviewWorkflow(
             self,
             external_check_handlers=external_check_handlers,
@@ -86,14 +96,25 @@ class ReviewService:
         )
 
     async def lookup_engine_emissions(self, models):
+        from forj_review_service.integrations.database import AsyncDatabase, review_database
         from forj_review_service.integrations.engine_emissions import lookup_engine_emissions_async
 
-        return await lookup_engine_emissions_async(models, api=self.vehicle_api)
+        loop = asyncio.get_running_loop()
+        with self._emission_database_lock:
+            database = self._emission_databases.get(loop)
+            if database is None:
+                database = AsyncDatabase(review_database())
+                self._emission_databases[loop] = database
+        return await lookup_engine_emissions_async(models, database=database)
 
     async def aclose(self) -> None:
-        """Release recognition resources on their owning event loop."""
+        """Release recognition clients and database pools on their owning event loop."""
         if self.recognition is not None:
             await self.recognition.client.aclose()
+        with self._emission_database_lock:
+            database = self._emission_databases.pop(asyncio.get_running_loop(), None)
+        if database is not None:
+            await database.engine.dispose()
 
     def assist(
         self, request: ReviewRequest, *, business: BusinessContext = DEFAULT_BUSINESS
@@ -130,9 +151,12 @@ class ReviewService:
         initial_batch: RecognitionBatchResult | None = None,
         *,
         business: BusinessContext = DEFAULT_BUSINESS,
+        absolute_deadline: float | None = None,
     ) -> tuple[ReviewResponse, RecognitionBatchResult]:
         """执行审核并复用 URL 任务已完成的图片提取结果。"""
 
+        if absolute_deadline is None:
+            absolute_deadline = asyncio.get_running_loop().time() + REVIEW_DEADLINE_SECONDS
         profile = self.resolve_profile(request, business=business)
 
         async def handle_recognition_progress(batch: RecognitionBatchResult) -> None:
@@ -161,6 +185,7 @@ class ReviewService:
             profile,
             handle_recognition_progress,
             initial_batch=initial_batch,
+            absolute_deadline=absolute_deadline,
         )
         if on_progress:
             callback_result = on_progress(response, batch.model_copy(deep=True))
@@ -174,6 +199,7 @@ class ReviewService:
         batch_callback: Callable[[RecognitionBatchResult], Any] | None = None,
         profile: BusinessProfile | None = None,
         initial_report: MaterialCompletenessReport | None = None,
+        absolute_deadline: float | None = None,
     ) -> RecognitionBatchResult:
         business = (
             BusinessContext.from_profile(profile) if profile is not None else DEFAULT_BUSINESS
@@ -210,6 +236,7 @@ class ReviewService:
                 # 材料类型候选限制在本业务声明的集合内。
                 allowed_document_types=declared_material_types(business),
                 business=business,
+                absolute_deadline=absolute_deadline,
             )
 
         unavailable_image_ids = [
@@ -276,12 +303,15 @@ class ReviewService:
         image: ImageInput,
         *,
         business: BusinessContext = DEFAULT_BUSINESS,
+        absolute_deadline: float | None = None,
     ) -> RecognitionBatchResult:
         """识别 URL 清单中的一张图片，最终规则汇总阶段复用此结果。"""
 
         profile = self.resolve_profile(request, business=business)
         image_request = request.model_copy(update={"images": [image]})
-        return await self._extract_documents(image_request, profile=profile)
+        return await self._extract_documents(
+            image_request, profile=profile, absolute_deadline=absolute_deadline
+        )
 
     @staticmethod
     def _build_unconfigured_response(

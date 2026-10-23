@@ -23,11 +23,17 @@ class VehicleModelCatalog:
     async def search(self, query: VehicleModelSearch) -> VehicleModelSearchResult:
         scope = query.pageScope
         try:
-            result = await self.api.post("/vehicle-model/review/search", {
-                "brandId": scope.brandId, "serialId": scope.seriesId,
-                "typeLevel": scope.typeLevel,
-                "announcementModel": query.announcementModel, "engineModel": query.engineModel,
-            }, ModelSearchResponse)
+            result = await self.api.post(
+                "/vehicle-model/review/search",
+                {
+                    "brandId": scope.brandId,
+                    "serialId": scope.seriesId,
+                    "typeLevel": scope.typeLevel,
+                    "announcementModel": query.announcementModel,
+                    "engineType": query.engineModel,
+                },
+                ModelSearchResponse,
+            )
             if result.code != 0 or result.data is None:
                 raise VehicleApiUnavailable("车型业务查询失败，请稍后重试")
             if len({item.modelId for item in result.data}) != len(result.data):

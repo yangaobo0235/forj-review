@@ -3,7 +3,12 @@ import { test } from "vitest";
 import { createRandomId } from "../src/shared/random-id.ts";
 
 test("native UUID is used with the original crypto receiver", () => {
-  const source = {randomUUID() {assert.equal(this, source); return "native-uuid";}};
+  const source = {
+    randomUUID() {
+      assert.equal(this, source);
+      return "native-uuid";
+    },
+  };
   assert.equal(createRandomId(source), "native-uuid");
 });
 

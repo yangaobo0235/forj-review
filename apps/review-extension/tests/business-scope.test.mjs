@@ -19,12 +19,39 @@ test("assigns old and new images from page order with independent group numberin
     { kind: "image", index: 6 },
   ]);
 
-  assert.deepEqual(Array.from(assigned, (item) => ({ ...item })), [
-    { index: 1, businessScope: "business_license", groupTitle: "营业执照", groupOrder: 1, imageId: "business_license-01" },
-    { index: 3, businessScope: "old_vehicle", groupTitle: "报废车辆资料", groupOrder: 1, imageId: "old_vehicle-01" },
-    { index: 4, businessScope: "old_vehicle", groupTitle: "报废车辆资料", groupOrder: 2, imageId: "old_vehicle-02" },
-    { index: 6, businessScope: "new_vehicle", groupTitle: "新车资料", groupOrder: 1, imageId: "new_vehicle-01" },
-  ]);
+  assert.deepEqual(
+    Array.from(assigned, (item) => ({ ...item })),
+    [
+      {
+        index: 1,
+        businessScope: "business_license",
+        groupTitle: "营业执照",
+        groupOrder: 1,
+        imageId: "business_license-01",
+      },
+      {
+        index: 3,
+        businessScope: "old_vehicle",
+        groupTitle: "报废车辆资料",
+        groupOrder: 1,
+        imageId: "old_vehicle-01",
+      },
+      {
+        index: 4,
+        businessScope: "old_vehicle",
+        groupTitle: "报废车辆资料",
+        groupOrder: 2,
+        imageId: "old_vehicle-02",
+      },
+      {
+        index: 6,
+        businessScope: "new_vehicle",
+        groupTitle: "新车资料",
+        groupOrder: 1,
+        imageId: "new_vehicle-01",
+      },
+    ],
+  );
 });
 
 test("recognizes business licenses as review evidence", () => {
@@ -48,10 +75,25 @@ test("does not infer a retired transfer scope", () => {
     { kind: "image", index: 3 },
   ]);
 
-  assert.deepEqual(Array.from(assigned, (item) => ({ ...item })), [
-    { index: 2, businessScope: "unknown", groupTitle: "未分类资料", groupOrder: 1, imageId: "unknown-01" },
-    { index: 3, businessScope: "unknown", groupTitle: "未分类资料", groupOrder: 2, imageId: "unknown-02" },
-  ]);
+  assert.deepEqual(
+    Array.from(assigned, (item) => ({ ...item })),
+    [
+      {
+        index: 2,
+        businessScope: "unknown",
+        groupTitle: "未分类资料",
+        groupOrder: 1,
+        imageId: "unknown-01",
+      },
+      {
+        index: 3,
+        businessScope: "unknown",
+        groupTitle: "未分类资料",
+        groupOrder: 2,
+        imageId: "unknown-02",
+      },
+    ],
+  );
 });
 
 test("没有清单时不按图片顺序或历史材料名猜类型", () => {

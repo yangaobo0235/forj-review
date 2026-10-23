@@ -4,7 +4,6 @@
 修改日期：2026-08-26
 """
 
-
 from forj_review_service.contracts.review import FieldComparison, FieldStatus
 
 
@@ -35,4 +34,3 @@ def raw_settled_value(
         if item.value not in (None, ""):
             return item.value
     return settled_value(comparisons, field)
-

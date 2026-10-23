@@ -4,50 +4,34 @@
     {
       "business_type": "scrap_replacement",
       "region": "qingdao",
-      "paths": [
-        "/scrap-replace-qingdao"
-      ],
+      "paths": ["/scrap-replace-qingdao"],
       "anchors": []
     },
     {
       "business_type": "scrap_replacement",
       "region": "changchun",
-      "paths": [
-        "/scrap-replace-changchun"
-      ],
+      "paths": ["/scrap-replace-changchun"],
       "anchors": []
     },
     {
       "business_type": "permit_initial",
       "region": "default",
       "review_tab": "初审",
-      "paths": [
-        "/sample-review-qingdao",
-        "/sample-review-changchun",
-        "/sample-review"
-      ],
+      "paths": ["/sample-review-qingdao", "/sample-review-changchun", "/sample-review"],
       "anchors": []
     },
     {
       "business_type": "permit_final",
       "region": "default",
       "review_tab": "复审",
-      "paths": [
-        "/sample-review-qingdao",
-        "/sample-review-changchun",
-        "/sample-review"
-      ],
+      "paths": ["/sample-review-qingdao", "/sample-review-changchun", "/sample-review"],
       "anchors": []
     },
     {
       "business_type": "permit_consistency",
       "region": "default",
       "review_tab": "终审",
-      "paths": [
-        "/sample-review-qingdao",
-        "/sample-review-changchun",
-        "/sample-review"
-      ],
+      "paths": ["/sample-review-qingdao", "/sample-review-changchun", "/sample-review"],
       "anchors": []
     }
   ]

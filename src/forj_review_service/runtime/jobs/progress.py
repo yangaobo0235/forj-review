@@ -22,15 +22,22 @@ def batch_progress(batch: RecognitionBatchResult, submitted_count: int) -> Revie
 
 
 def scope_progress(
-    request: ReviewRequest, batch: RecognitionBatchResult, scopes: Sequence[str], *, final: bool,
+    request: ReviewRequest,
+    batch: RecognitionBatchResult,
+    scopes: Sequence[str],
+    *,
+    final: bool,
 ) -> dict[str, ReviewGroupProgress]:
     completed_ids = set(batch.completed_image_ids)
     failed_ids = set(batch.failed_image_ids)
     timed_out_ids = set(batch.timed_out_image_ids)
     groups = {}
     for scope in scopes:
-        ids = {str(image.image_id or image.index) for image in request.images
-               if image.business_scope == scope}
+        ids = {
+            str(image.image_id or image.index)
+            for image in request.images
+            if image.business_scope == scope
+        }
         completed = len(ids & completed_ids)
         failed = len(ids & failed_ids)
         timed_out = len(ids & timed_out_ids)
@@ -42,7 +49,10 @@ def scope_progress(
         else:
             status = JobStatus.RUNNING
         groups[scope] = ReviewGroupProgress(
-            status=status, total_count=len(ids), completed_count=completed,
-            failed_count=failed, timed_out_count=timed_out,
+            status=status,
+            total_count=len(ids),
+            completed_count=completed,
+            failed_count=failed,
+            timed_out_count=timed_out,
         )
     return groups

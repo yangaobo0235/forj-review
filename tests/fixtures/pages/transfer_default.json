@@ -52,7 +52,7 @@
         "登记证书1，2页",
         "登记证书"
       ],
-      "guidance": "只读取旧车登记证书第1、2页的完整车辆识别代号，写入transfer_registration.vin。不根据初始车主推定本次买卖方，不推断过户日期或当前车主。registration.covered_pages仅记录图片明确可见的页码，输出整数数组，不猜测缺页。",
+      "guidance": "读取登记证原图真实可见页码 registration.covered_pages；不得根据上传顺序、图片张数或页面标签猜页码。不提取旧车 VIN 用于发票字段核对。",
       "scopes": [
         "transfer_vehicle"
       ],
@@ -72,7 +72,7 @@
         "scoped_guidance": [
           [
             "transfer_vehicle",
-            "只读取旧车登记证书第1、2页的完整车辆识别代号，写入transfer_registration.vin。不根据初始车主推定本次买卖方，不推断过户日期或当前车主。registration.covered_pages仅记录图片明确可见的页码，输出整数数组，不猜测缺页。"
+            "读取登记证原图真实可见页码 registration.covered_pages；不得根据上传顺序、图片张数或页面标签猜页码。不提取旧车 VIN 用于发票字段核对。"
           ]
         ],
         "scoped_names": [],
@@ -90,7 +90,7 @@
         "二手车销售统一发票",
         "过户发票"
       ],
-      "guidance": "只读取二手车销售统一发票。buyer_name和buyer_id属于买方；seller_name和seller_id属于卖方；market_name和market_tax_no只读二手车市场及其对应纳税人识别号，不得混用买卖方证件号、经营拍卖单位或其他主体的信息。amount读取车价合计小写金额，不读取税额、不推算金额；brand_model保留票面实际厂牌型号，只有品牌也原样输出，不补全整车型号或销售车型。vin读取完整车辆识别代号，plate_no读取车牌照号。invoice_no保留全部位数和前导零；invoice_date只读开票日期，不提取或核对发票代码。",
+      "guidance": "只读取二手车销售统一发票。buyer_name和buyer_id属于买方；seller_name和seller_id属于卖方；market_name和market_tax_no只读二手车市场及其对应纳税人识别号，不得混用买卖方证件号、经营拍卖单位或其他主体的信息。amount读取车价合计小写金额，不读取税额、不推算金额；brand_model保留票面实际厂牌型号，只有品牌也原样输出，不补全整车型号或销售车型。vin读取完整车辆识别代号，plate_no读取车牌照号。invoice_no保留全部位数和前导零；invoice_date只读开票日期，不提取或核对发票代码。 转入地车管所映射到 transfer_invoice.transfer_department：逐格查找“转入地车辆管理所名称”“转入地车辆管理所”或“转入地车管所”栏，读取该栏实际机构全称；该栏常在车辆信息行右侧、车牌照号附近，不要漏掉换行标签后的值。不能以买卖方地址、市场地址、主管税务机关或开票单位替代；看不清才标记不确定，不根据页面值补写。",
       "scopes": [
         "transfer_vehicle"
       ],
@@ -143,12 +143,7 @@
         "scoped_names": [],
         "scope_independent": false,
         "scoped_vehicle_fields": [],
-        "slots": [
-          [
-            "transfer_new",
-            1
-          ]
-        ],
+        "slots": [],
         "derived_field": null
       }
     }
@@ -269,7 +264,7 @@
       "page_section": "transfer_vehicle",
       "section_required": true,
       "reviewable": true,
-      "mode": null,
+      "mode": "SINGLE_SOURCE",
       "evidence": [
         {
           "material": "used_car_invoice",
@@ -280,8 +275,25 @@
         }
       ],
       "normalizer": "vin",
-      "authority": [],
-      "required": false,
+      "authority": [
+        {
+          "source": "image",
+          "label": "二手车发票",
+          "document_types": [
+            "used_car_invoice"
+          ],
+          "match": "full",
+          "required": false
+        },
+        {
+          "source": "page",
+          "label": "页面字段",
+          "document_types": [],
+          "match": "full",
+          "required": true
+        }
+      ],
+      "required": true,
       "writable": true,
       "allow_single_evidence": true,
       "uncertain_requires_review": true,
@@ -291,9 +303,7 @@
       "locator_name": "",
       "locator_id": "",
       "occurrence": 1,
-      "checks": [
-        "TRANSFER-OLD-VIN"
-      ],
+      "checks": [],
       "task_projector": ""
     },
     {
@@ -1030,39 +1040,6 @@
       "task_projector": ""
     },
     {
-      "key": "transfer_registration.vin",
-      "label": "登记证书VIN",
-      "section": "",
-      "aliases": [],
-      "page_section": "unknown",
-      "section_required": false,
-      "reviewable": false,
-      "mode": null,
-      "evidence": [
-        {
-          "material": "registration_certificate",
-          "field": "transfer_registration.vin",
-          "scope": "transfer_vehicle",
-          "group_order": null,
-          "comparison": false
-        }
-      ],
-      "normalizer": "default",
-      "authority": [],
-      "required": false,
-      "writable": false,
-      "allow_single_evidence": true,
-      "uncertain_requires_review": true,
-      "page_evidence_required": true,
-      "material_field": null,
-      "max_age_days": null,
-      "locator_name": "",
-      "locator_id": "",
-      "occurrence": 1,
-      "checks": [],
-      "task_projector": ""
-    },
-    {
       "key": "registration.covered_pages",
       "label": "登记证书可见页码",
       "section": "",
@@ -1217,19 +1194,6 @@
     "replacement_policy": null,
     "capability_specs": [
       {
-        "capability_id": "transfer_documents",
-        "kind": "RULE",
-        "version": "1.0",
-        "stage": "POST_COMPARE",
-        "input_facts": [],
-        "output_facts": [],
-        "required": true,
-        "dependencies": [],
-        "timeout_seconds": 30.0,
-        "retries": 0,
-        "failure_policy": "MANUAL_REVIEW"
-      },
-      {
         "capability_id": "material_completeness",
         "kind": "MATERIAL",
         "version": "1.0",
@@ -1244,12 +1208,6 @@
       }
     ],
     "binding_declarations": [
-      {
-        "capability_id": "transfer_documents",
-        "enabled": true,
-        "required": null,
-        "parameters": []
-      },
       {
         "capability_id": "material_completeness",
         "enabled": true,

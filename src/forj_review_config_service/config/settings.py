@@ -13,13 +13,21 @@ WORKSPACE_ROOT = DEFAULT_ENV_FILE.parent.parent.parent
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="CONFIGURATION_", extra="ignore", frozen=True,
-        env_file_encoding="utf-8-sig", populate_by_name=True, hide_input_in_errors=True)
+    model_config = SettingsConfigDict(
+        env_prefix="CONFIGURATION_",
+        extra="ignore",
+        frozen=True,
+        env_file_encoding="utf-8-sig",
+        populate_by_name=True,
+        hide_input_in_errors=True,
+    )
     state_dir: Path = WORKSPACE_ROOT / ".review-config"
     cases_dir: Path = WORKSPACE_ROOT / "examples/page-config"
     review_url: str = "http://127.0.0.1:26101"
-    endpoint: str = Field(default="https://dashscope.aliyuncs.com/compatible-mode/v1",
-                          validation_alias="CONFIGURATION_MODEL_ENDPOINT")
+    endpoint: str = Field(
+        default="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        validation_alias="CONFIGURATION_MODEL_ENDPOINT",
+    )
     model: str = "qwen3.7-plus"
     api_key: str = Field(default="", repr=False)
     timeout: float = Field(default=90, gt=0)

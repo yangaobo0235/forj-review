@@ -130,10 +130,10 @@ def test_application_closes_model_pools_on_both_worker_loops_before_stopping_the
         for scheduler in schedulers:
             # 同一循环内多次请求仍然复用一个连接池。
             for _ in range(2):
-                result = scheduler.submit("pool-test", lambda: model.classify_document(image))
+                result = scheduler.submit("pool-test", lambda: model.extract_document(image))
                 assert result.result(timeout=2).document_type == "invoice"
         # HTTP 主循环也可能持有连接，后台循环退出后还要清理这一份。
-        assert client.portal.call(model.classify_document, image).document_type == "invoice"
+        assert client.portal.call(model.extract_document, image).document_type == "invoice"
         assert len(model._clients) == 3
     assert transport.closed == transport.owners
     assert len(transport.closed) == 3
@@ -148,7 +148,7 @@ def test_application_cancels_active_model_request_before_closing_its_pool():
     image = {"index": 1, "src": "https://images.example.test/test.jpg"}
     with TestClient(app):
         jobs = app.state.review_jobs
-        future = jobs.scheduler.submit("running", lambda: model.classify_document(image))
+        future = jobs.scheduler.submit("running", lambda: model.extract_document(image))
         assert transport.started.wait(2)
     assert future.cancelled()
     assert transport.closed == transport.owners
@@ -182,7 +182,7 @@ def test_synchronous_assist_closes_pool_before_its_temporary_loop(monkeypatch, f
     service.recognition = RecognitionService(model)
 
     async def assist_async(request, *, business):
-        await model.classify_document({"index": 1, "src": "https://images.example.test/test.jpg"})
+        await model.extract_document({"index": 1, "src": "https://images.example.test/test.jpg"})
         if fail:
             raise ValueError("review failed")
         return ReviewResponse(recommendation="REVIEW_REQUIRED", risk_level="MEDIUM", summary="test")
@@ -252,7 +252,7 @@ def test_real_http_keepalive_connections_close_before_worker_loops(monkeypatch, 
                 for scheduler in (jobs.scheduler, jobs.finalize_scheduler):
                     for _ in range(2):
                         future = scheduler.submit(
-                            "real-http", lambda: model.classify_document(image)
+                            "real-http", lambda: model.extract_document(image)
                         )
                         assert future.result(timeout=5).document_type == "invoice"
                 pools = list(model._clients.values())

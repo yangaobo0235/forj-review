@@ -18,7 +18,7 @@ from forj_review_config_service.integrations.async_database import (
     ExecutorCheckpointer,
 )
 from forj_review_config_service.integrations.configuration_store.async_postgres import (
-    AsyncSessionStore,
+    AsyncTaskStore,
 )
 from forj_review_config_service.integrations.conversation.client import ConversationClient
 from forj_review_config_service.integrations.database import Database
@@ -54,18 +54,23 @@ def create_app(settings: Settings | None = None, *, model=None, kernel=None):
             )
         )
         logger = logging.getLogger("forj_review_config_service")
+        previous_level, previous_propagate = logger.level, logger.propagate
         logger.setLevel(logging.INFO)
+        console = logging.StreamHandler()
+        console.setFormatter(handler.formatter)
         logger.addHandler(handler)
+        logger.addHandler(console)
+        logger.propagate = False
         client = model or ConversationClient(settings)
         try:
             async with AsyncExitStack() as stack:
                 database = await stack.enter_async_context(
                     AsyncDatabase(Database(settings.database_url, settings.database_schema))
                 )
-                await database.require_ready()
+                await database.require_ready(consumer="configuration")
                 await database.acquire_executor()
                 saver = ExecutorCheckpointer(database)
-                store = AsyncSessionStore(database)
+                store = AsyncTaskStore(database)
                 await store.interrupt_running()
                 adapter = kernel or PostgresReviewKernel(
                     database,
@@ -82,7 +87,7 @@ def create_app(settings: Settings | None = None, *, model=None, kernel=None):
                 async def cleanup_loop():
                     while True:
                         try:
-                            await store.cleanup(saver)
+                            await app.state.service.retain()
                         except Exception as exc:
                             logger.error(
                                 "workflow cleanup failed error_type=%s", type(exc).__name__
@@ -103,7 +108,11 @@ def create_app(settings: Settings | None = None, *, model=None, kernel=None):
                 await client.close()
             logger.info("stopped")
             logger.removeHandler(handler)
+            logger.removeHandler(console)
             handler.close()
+            console.close()
+            logger.setLevel(previous_level)
+            logger.propagate = previous_propagate
             lock.release()
 
     app = FastAPI(title="FORJ Review Configuration Service", lifespan=lifespan)
@@ -154,7 +163,7 @@ def create_app(settings: Settings | None = None, *, model=None, kernel=None):
     async def health():
         if app.state.database.lost.is_set():
             return JSONResponse({"status": "unavailable", "code": "EXECUTOR_LOST"}, status_code=503)
-        return {"status": "ok", "service": "review-config-service", "protocol": "1.0"}
+        return {"status": "ok", "service": "review-config-service", "protocol": "2.0"}
 
     app.include_router(router)
     return app

@@ -53,12 +53,6 @@ class BusinessContext:
         )
 
     @cached_property
-    def slot_document_types(self):
-        from forj_review_service.businesses.packs.model import slot_document_types
-
-        return MappingProxyType(slot_document_types(self.pack) if self.pack else {})
-
-    @cached_property
     def composites(self):
         from forj_review_service.evidence.comparison.composite_fields import declared_composites
 

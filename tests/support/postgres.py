@@ -35,15 +35,25 @@ def publish_validated_test_state(db, state, **kwargs):
 
     identifier = uuid4().hex
     now = datetime.now(UTC)
-    db.orm.add(ValidationRun(
-        id=identifier, purpose=kwargs.get("operation_type", "PUBLISH"),
-        base_release_id=state.release_id,
-        manifest_digest=digest({p: digest(state.source(p, v)) for p, v in sorted(state.active.items())}),
-        digest_version="manifest-v1", kernel_version=KERNEL_VERSION, kernel_fingerprint=KERNEL_VERSION,
-        report_schema_version="1.0", status="PASSED",
-        report={"checks": [], "collection": None, "replays": [], "summary": {}},
-        performed_by="synthetic-storage-test", started_at=now, completed_at=now,
-    ))
+    db.orm.add(
+        ValidationRun(
+            id=identifier,
+            purpose=kwargs.get("operation_type", "PUBLISH"),
+            base_release_id=state.release_id,
+            manifest_digest=digest(
+                {p: digest(state.source(p, v)) for p, v in sorted(state.active.items())}
+            ),
+            digest_version="manifest-v1",
+            kernel_version=KERNEL_VERSION,
+            kernel_fingerprint=KERNEL_VERSION,
+            report_schema_version="1.0",
+            status="PASSED",
+            report={"checks": [], "collection": None, "replays": [], "summary": {}},
+            performed_by="synthetic-storage-test",
+            started_at=now,
+            completed_at=now,
+        )
+    )
     db.orm.flush()
     return publish_state(db, state, validation_id=identifier, **kwargs)
 

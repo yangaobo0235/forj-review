@@ -10,17 +10,6 @@ from forj_review_service.contracts.review import EvidenceFact, ReviewDisplayTarg
 Category = Literal["FIELD", "EXTERNAL", "BUSINESS_RULE"]
 ResultStatus = Literal["MATCH", "CONFLICT", "INSUFFICIENT"]
 
-def _evidence_source(item: EvidenceFact | dict[str, object]) -> str:
-    """兼容历史业务规则返回 dict evidence 和新 EvidenceFact 模型。"""
-    if isinstance(item, dict):
-        return str(item.get("source") or "未知来源")
-    return item.source
-
-
-def _coerce_evidence(item: EvidenceFact | dict[str, object]) -> EvidenceFact:
-    """Normalize legacy business-rule evidence dictionaries for the API model."""
-    return item if isinstance(item, EvidenceFact) else EvidenceFact.model_validate(item)
-
 
 def make_task(
     *,
@@ -61,24 +50,33 @@ def make_task(
         page_values=list(page_values),
         control_type=control_type,
         writable=writable,
-        requires_reviewer_action=(result_status != "MATCH") if requires_reviewer_action is None else requires_reviewer_action,
+        requires_reviewer_action=(result_status != "MATCH")
+        if requires_reviewer_action is None
+        else requires_reviewer_action,
         label=label,
         result_status=result_status,
         reason=reason,
         reason_codes=list(reason_codes) or default_reason_codes(result_status),
-        values=[item.model_copy(update={
-            "comparison_status": item.comparison_status or (
-                "INSUFFICIENT" if item.uncertain else result_status
-                if item.conflicting is not None or item.differences else None
-            ),
-        }) for item in values],
-        evidence=[_coerce_evidence(item) for item in evidence],
+        values=[
+            item.model_copy(
+                update={
+                    "comparison_status": item.comparison_status
+                    or (
+                        "INSUFFICIENT"
+                        if item.uncertain
+                        else result_status
+                        if item.conflicting is not None or item.differences
+                        else None
+                    ),
+                }
+            )
+            for item in values
+        ],
+        evidence=list(evidence),
         details=resolved_details,
         evidence_count=len(evidence),
-        evidence_sources=list(dict.fromkeys(_evidence_source(item) for item in evidence)),
+        evidence_sources=list(dict.fromkeys(item.source for item in evidence)),
         evidence_mode=evidence_mode,
         not_found_sources=list(not_found_sources),
         normalized_page_value=normalized_page_value,
     )
-
-

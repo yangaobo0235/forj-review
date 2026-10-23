@@ -18,8 +18,12 @@ TABLES = (
     "cfg_head",
     "cfg_validation_run",
     "cfg_capture",
-    "cfg_session",
-    "cfg_session_event",
+    "cfg_task_capture",
+    "cfg_task",
+    "cfg_task_requirement",
+    "cfg_task_run",
+    "cfg_task_interaction",
+    "cfg_task_event",
     "cfg_idempotency",
     "ref_vehicle_model_key",
     "ref_engine_emission",
@@ -35,12 +39,17 @@ TABLES = (
 )
 
 # Historical baseline/backup tables remain intact. Runtime no longer depends on
-# the retired copied catalog or its derived reference datasets.
-RETIRED_REFERENCE_TABLES = frozenset({
-    "ref_vehicle_model_key", "ref_engine_emission", "ref_dataset_import",
-    "forj_vehicle_brand", "forj_vehicle_series", "forj_vehicle_model",
-    "forj_vehicle_model_config",
-})
+# the retired copied vehicle catalog. Engine emissions still use their reference table.
+RETIRED_REFERENCE_TABLES = frozenset(
+    {
+        "ref_vehicle_model_key",
+        "ref_dataset_import",
+        "forj_vehicle_brand",
+        "forj_vehicle_series",
+        "forj_vehicle_model",
+        "forj_vehicle_model_config",
+    }
+)
 RUNTIME_TABLES = tuple(table for table in TABLES if table not in RETIRED_REFERENCE_TABLES)
 
 
@@ -49,3 +58,22 @@ def schema_checksum():
     if checksum != BASELINE_CHECKSUM:
         raise ValueError("已发布的 v4 基线被修改，请恢复 schema.sql 并追加迁移")
     return checksum
+
+
+# Readiness is scoped to actual consumers. All known migration checksums remain mandatory.
+REVIEW_TABLES = tuple(
+    table
+    for table in RUNTIME_TABLES
+    if not table.startswith("checkpoint")
+    and table
+    not in {
+        "cfg_capture",
+        "cfg_task",
+        "cfg_task_capture",
+        "cfg_task_requirement",
+        "cfg_task_run",
+        "cfg_task_interaction",
+        "cfg_task_event",
+        "cfg_idempotency",
+    }
+)

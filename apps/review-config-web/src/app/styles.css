@@ -1,8 +1,4 @@
-/* Preserve this order: later responsive rules intentionally override base components. */
 @import "../ui/base.css";
-@import "./layout.css";
-@import "../features/ConfigurationConversation.css";
-@import "../features/ConfigurationInspector.css";
-@import "../features/SourceDialog.css";
-@import "./responsive.css";
+@import "./task-workbench.css";
+@import "./task-start.css";
 @import "../ui/markdown.css";

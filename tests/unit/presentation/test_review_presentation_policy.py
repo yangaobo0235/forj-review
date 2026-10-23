@@ -38,8 +38,6 @@ def test_display_and_page_interaction_do_not_change_evidence_judgment():
 def test_declared_visibility_keeps_machine_results_without_material_tasks():
     from forj_review_service.contracts.recognition import (
         CheckResult,
-        MaterialCompletenessIssue,
-        MaterialCompletenessReport,
     )
     from forj_review_service.presentation.routing import build_review_tasks
 
@@ -61,21 +59,6 @@ def test_declared_visibility_keeps_machine_results_without_material_tasks():
                 reason="关系冲突",
             )
         ],
-        completeness=MaterialCompletenessReport(
-            phase="EXTRACTED",
-            status="INCOMPLETE",
-            enforced=False,
-            issues=[
-                MaterialCompletenessIssue(
-                    code="MISSING_MATERIAL",
-                    material_type="invoice",
-                    business_scope="new_vehicle",
-                    message="缺少新车发票",
-                    suggested_action="补充新车发票后重试",
-                )
-            ],
-        ),
-        limitations=[],
     )
     material_tasks = [task for task in tasks if task.category == "MATERIAL"]
     assert material_tasks == []

@@ -5,13 +5,11 @@
  */
 
 import { manifestFieldLabels } from "../../../platform/browser/catalog/collect-manifest.ts";
-import type { PageCatalog, PageIdentityDeclaration } from "../../../platform/browser/catalog/page-catalog.ts";
 import type {
-  BusinessSelection,
-  BusinessType,
-  FieldComparison,
-  JobStatus,
-} from "../../../shared/contracts/review";
+  PageCatalog,
+  PageIdentityDeclaration,
+} from "../../../platform/browser/catalog/page-catalog.ts";
+import type { BusinessSelection, BusinessType } from "../../../shared/contracts/review";
 
 export type BusinessChoice =
   | "AUTO"
@@ -33,25 +31,38 @@ export const businessLabels: Record<BusinessChoice, string> = {
 
 export function catalogBusinessLabel(identity: PageIdentityDeclaration): string {
   const legacyKey = `${identity.business_type}_${identity.region}` as BusinessChoice;
-  const title = identity.title || businessLabels[legacyKey]
-    || businessLabels[identity.business_type as BusinessChoice] || identity.business_type;
-  if (identity.title === "报废置换审核" && identity.business_type === "scrap_replacement" && businessLabels[legacyKey])
+  const title =
+    identity.title ||
+    businessLabels[legacyKey] ||
+    businessLabels[identity.business_type as BusinessChoice] ||
+    identity.business_type;
+  if (
+    identity.title === "报废置换审核" &&
+    identity.business_type === "scrap_replacement" &&
+    businessLabels[legacyKey]
+  )
     return businessLabels[legacyKey];
   return identity.title && identity.region !== "default" ? `${title} · ${identity.region}` : title;
 }
 
 /** The catalog is authoritative whenever available, including version 1.0 pages. */
 export function catalogBusinessChoices(catalog: PageCatalog | null): Record<string, string> {
-  const effective = catalog ?? {version: "1.0", identities: []};
+  const effective = catalog ?? { version: "1.0", identities: [] };
   return {
     AUTO: businessLabels.AUTO,
-    ...Object.fromEntries(effective.identities.map(identity => [
-      `config:${encodeURIComponent(JSON.stringify({
-        businessType: identity.business_type, region: identity.region,
-        profileVersion: identity.profile_version || "1.0", pageId: identity.page_id,
-      }))}`,
-      catalogBusinessLabel(identity),
-    ])),
+    ...Object.fromEntries(
+      effective.identities.map((identity) => [
+        `config:${encodeURIComponent(
+          JSON.stringify({
+            businessType: identity.business_type,
+            region: identity.region,
+            profileVersion: identity.profile_version || "1.0",
+            pageId: identity.page_id,
+          }),
+        )}`,
+        catalogBusinessLabel(identity),
+      ]),
+    ),
   };
 }
 
@@ -62,7 +73,12 @@ export function manualBusinessSelection(
     const encoded = choice.slice("config:".length);
     // One encoded payload preserves page identity, including colons in page_id.
     try {
-      const parsed = JSON.parse(decodeURIComponent(encoded)) as { businessType?: string; region?: string; profileVersion?: string; pageId?: string };
+      const parsed = JSON.parse(decodeURIComponent(encoded)) as {
+        businessType?: string;
+        region?: string;
+        profileVersion?: string;
+        pageId?: string;
+      };
       if (parsed.businessType && parsed.region) {
         return {
           businessType: parsed.businessType as BusinessType,
@@ -73,7 +89,9 @@ export function manualBusinessSelection(
           ...(parsed.pageId ? { pageId: parsed.pageId } : {}),
         };
       }
-    } catch { /* Report invalid catalog metadata below. */ }
+    } catch {
+      /* Report invalid catalog metadata below. */
+    }
     throw new Error("页面配置标识无效，请重新选择审核页面");
   }
   const region = choice.endsWith("_qingdao")
@@ -85,7 +103,7 @@ export function manualBusinessSelection(
     ? "scrap_replacement"
     : choice.startsWith("consistency")
       ? "consistency"
-      : choice as BusinessType;
+      : (choice as BusinessType);
   return {
     businessType,
     region,
@@ -97,35 +115,8 @@ export function manualBusinessSelection(
 
 /**
  * 字段键 → 中文标签。优先用后端清单里的声明（新增业务时只改后端声明，
- * 面板自动跟上），清单不可用时退回下面的内置表。
+ * 面板自动跟上），清单不可用时保留字段键。
  */
 export function fieldLabel(field: string): string {
   return manifestFieldLabels()?.[field] ?? field;
-}
-
-export function statusLabel(status: FieldComparison["status"]): string {
-  switch (status) {
-    case "MATCH":
-      return "一致";
-    case "CONFLICT":
-      return "冲突";
-    case "REVIEW_REQUIRED":
-      return "待复核";
-  }
-}
-
-export function groupStatusLabel(status?: JobStatus): string {
-  switch (status) {
-    case "COMPLETED":
-      return "已完成";
-    case "PARTIAL":
-      return "部分完成";
-    case "FAILED":
-      return "处理失败";
-    case "CANCELLED":
-      return "已取消";
-    case "RUNNING":
-    case undefined:
-      return "识别中";
-  }
 }

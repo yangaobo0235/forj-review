@@ -19,8 +19,17 @@ export function identitySidesForLabel(label: string): Array<"FRONT" | "BACK"> {
 }
 
 export function imageDocumentType(candidate: {
-  labelHint?: string; businessScope: string; groupOrder?: number; categoryHint?: string;
+  labelHint?: string;
+  businessScope: string;
+  groupOrder?: number;
+  categoryHint?: string;
 }): string {
-  return documentTypeForImageLabel(candidate.labelHint || "")
-    || ReviewBusinessScope.documentTypeFor(candidate.businessScope, candidate.groupOrder ?? 0, candidate.categoryHint || "unknown");
+  return (
+    documentTypeForImageLabel(candidate.labelHint || "") ||
+    ReviewBusinessScope.documentTypeFor(
+      candidate.businessScope,
+      candidate.groupOrder ?? 0,
+      candidate.categoryHint || "unknown",
+    )
+  );
 }

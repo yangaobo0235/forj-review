@@ -25,7 +25,10 @@ from forj_review_service.contracts.recognition import (
     QwenExtraction,
     RecognitionBatchResult,
 )
-from forj_review_service.integrations.recognition.client import QwenClient
+from forj_review_service.integrations.recognition.client import (
+    QwenClient,
+    restrict_extraction_to_policy,
+)
 from forj_review_service.integrations.recognition.errors import (
     classify_qwen_error,
     describe_qwen_error,
@@ -44,37 +47,10 @@ REVIEW_DEADLINE_SECONDS = 55.0
 CLASSIFICATION_CONFIDENCE_THRESHOLD = 0.70
 logger = logging.getLogger(__name__)
 
+
 def declared_material_types(business: BusinessContext) -> frozenset[str]:
     """Material candidates belong to the explicitly selected database page."""
     return frozenset(business.document_policies)
-
-
-def _expected_document_type(
-    image: Any,
-    allowed_document_types: frozenset[str] | None = None,
-    *,
-    business: BusinessContext = DEFAULT_BUSINESS,
-) -> str | None:
-    """Resolve a physical document type from an explicit label or fixed upload slot."""
-    for raw_hint in (
-        getattr(image, "document_type_hint", "unknown"),
-        getattr(image, "category_hint", "unknown"),
-    ):
-        hint = str(raw_hint or "").strip()
-        active_pack = business.pack
-        scopes = active_pack.scopes if active_pack else {scope for scope, _ in business.slot_document_types}
-        if hint in {"", "unknown", *scopes}:
-            continue
-        normalized = normalize_document_type(hint)
-        # 命中全局政策表还不够：它还得是本业务声明过的材料，否则就是拿别的
-        # 业务的白名单在提取这张图。
-        if normalized in business.document_policies and (
-            allowed_document_types is None or normalized in allowed_document_types
-        ):
-            return normalized
-    return business.slot_document_types.get(
-        (getattr(image, "business_scope", "unknown"), getattr(image, "group_order", None))
-    )
 
 
 ProgressCallback = Callable[[RecognitionBatchResult], Any]
@@ -97,7 +73,6 @@ class RecognitionService:
         self.image_timeout = image_timeout
         self.review_deadline = review_deadline
         self.image_workflow = ImageRecognitionWorkflow(
-            self._classify_image,
             self._extract_image,
             build_extracted_evidence,
             self._focus_boxes,
@@ -116,40 +91,23 @@ class RecognitionService:
         business: BusinessContext = DEFAULT_BUSINESS,
     ) -> RecognitionBatchResult:
         """并发处理一批图片，在单图或整单超时时保留已经完成的部分结果。"""
-        result = RecognitionBatchResult(total_count=len(images), material_completeness=initial_report)
+        result = RecognitionBatchResult(
+            total_count=len(images), material_completeness=initial_report
+        )
         semaphore = asyncio.Semaphore(self.max_concurrency)
         loop = asyncio.get_running_loop()
         deadline = absolute_deadline or loop.time() + self.review_deadline
+        deadline_expired = asyncio.Event()
 
         async def run_one(image: Any) -> None:
             """处理单张图片，并在每个终态向调用方发送进度快照。"""
             image_name = image.image_id or image.index
-            classification: DocumentClassification | None = None
+            first_read = None
 
-            def remember_classification(fact: DocumentClassification) -> None:
-                nonlocal classification
-                classification = fact
-                result.document_classifications[:] = [
-                    item
-                    for item in result.document_classifications
-                    if item.target_id != fact.target_id
-                ]
-                result.document_classifications.append(fact)
+            def preserve_first_read(extraction: QwenExtraction, policy: DocumentPolicy | None):
+                nonlocal first_read
+                first_read = (extraction, policy)
 
-            expected_type = _expected_document_type(
-                image, allowed_document_types, business=business
-            )
-            if expected_type:
-                remember_classification(
-                    DocumentClassification(
-                        target_id=str(image_name),
-                        document_type=expected_type,
-                        business_scope=image.business_scope,
-                        identity_sides=image.identity_sides_hint
-                        if expected_type == "identity_card"
-                        else [],
-                    )
-                )
             if image.business_scope == "other":
                 result.limitations.append(f"图片 {image_name} 不属于车辆审核资料，已跳过")
                 result.completed_count += 1
@@ -173,13 +131,13 @@ class RecognitionService:
                                 "image": image,
                                 "business": business,
                                 "allowed_document_types": allowed_document_types,
-                                "classification": classification,
-                                "on_classified": remember_classification,
                                 "retry_policy": retry_policy,
                                 "deadline": deadline,
                                 "attempt_deadline": min(deadline, loop.time() + self.image_timeout),
                                 "attempts": attempt_log,
                                 "limitations": image_limitations,
+                                "on_first_read": preserve_first_read,
+                                "deadline_expired": deadline_expired,
                             }
                         )
                     finally:
@@ -188,18 +146,33 @@ class RecognitionService:
                     extraction, policy = outcome["extraction"], outcome["policy"]
                     retry_attempts = sum(attempt.result != "skipped" for attempt in attempt_log)
                     retry_result = attempt_log[-1].result if attempt_log else "-"
-            except TimeoutError:
-                result.timed_out_count += 1
-                result.timed_out_image_ids.append(str(image_name))
-                result.limitations.append(f"图片 {image_name} Qwen 识别超时")
-                logger.warning(
-                    "Recognition image timed out: image=%s type=%s duration_ms=%d",
-                    image_name,
-                    image.category_hint or "-",
-                    max(0, int((loop.time() - started) * 1000)),
-                )
-                await self._notify(on_progress, result)
-                return
+            except (TimeoutError, asyncio.CancelledError) as exc:
+                if isinstance(exc, asyncio.CancelledError) and not deadline_expired.is_set():
+                    raise
+                if first_read is not None:
+                    extraction, policy = first_read
+                    outcome = {
+                        "evidence": build_extracted_evidence(
+                            image, extraction, policy, business=business
+                        )
+                    }
+                    retry_attempts = sum(attempt.result != "skipped" for attempt in attempt_log)
+                    retry_result = attempt_log[-1].result if attempt_log else "-"
+                    result.limitations.append(
+                        f"图片 {image_name} 补读截止，已保留首次读值与不确定状态"
+                    )
+                else:
+                    result.timed_out_count += 1
+                    result.timed_out_image_ids.append(str(image_name))
+                    result.limitations.append(f"图片 {image_name} Qwen 识别超时")
+                    logger.warning(
+                        "Recognition image timed out: image=%s type=%s duration_ms=%d",
+                        image_name,
+                        image.category_hint or "-",
+                        max(0, int((loop.time() - started) * 1000)),
+                    )
+                    await self._notify(on_progress, result)
+                    return
             except RuntimeError as exc:
                 error_code = classify_qwen_error(exc)
                 result.failed_count += 1
@@ -218,9 +191,44 @@ class RecognitionService:
                 await self._notify(on_progress, result)
                 return
 
+            type_confidence = extraction.type_confidence
+            if type_confidence is None:
+                type_confidence = extraction.confidence
+            if (
+                type_confidence is not None
+                and type_confidence >= CLASSIFICATION_CONFIDENCE_THRESHOLD
+            ):
+                sides = extraction.identity_sides
+                side = extraction.fields.get("identity_card.side")
+                if (
+                    not sides
+                    and isinstance(side, str)
+                    and side in {"FRONT", "BACK"}
+                    and "identity_card.side" not in extraction.uncertain_fields
+                ):
+                    sides = [side]
+                result.document_classifications.append(
+                    DocumentClassification(
+                        target_id=str(image_name),
+                        document_type=extraction.document_type,
+                        business_scope=image.business_scope,
+                        identity_sides=sides if extraction.document_type == "identity_card" else [],
+                    )
+                )
+            if extraction.location_warnings:
+                result.limitations.append(f"图片 {image_name} 部分原文定位不可用，原文读值已保留")
+            hints = {image.document_type_hint, image.category_hint} & set(
+                business.document_policies
+            )
+            if hints and extraction.document_type not in hints:
+                result.limitations.append(
+                    f"图片 {image_name} 实际类型与页面标签不一致，请核对上传位置"
+                )
             if (
                 policy is None
                 or normalize_document_type(extraction.document_type) != policy.document_type
+                or extraction.type_confidence is not None
+                and extraction.type_confidence < CLASSIFICATION_CONFIDENCE_THRESHOLD
             ):
                 result.failed_count += 1
                 result.failed_image_ids.append(str(image_name))
@@ -280,69 +288,24 @@ class RecognitionService:
                 task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
             raise
-        # 整单截止后取消剩余任务，但不丢弃截止前已经生成的观察结果。
+        # A retry may preserve its first-pass evidence when cancellation reaches it.
+        deadline_expired.set()
         for task in pending:
             task.cancel()
-            image = tasks[task]
-            image_name = image.image_id or image.index
-            result.timed_out_count += 1
-            result.timed_out_image_ids.append(str(image_name))
-            result.limitations.append(f"图片 {image_name} 超过整单审核时限")
         if pending:
             await asyncio.gather(*pending, return_exceptions=True)
+            finished = set(
+                result.completed_image_ids + result.failed_image_ids + result.timed_out_image_ids
+            )
+            for task in pending:
+                image = tasks[task]
+                image_name = str(image.image_id or image.index)
+                if image_name not in finished:
+                    result.timed_out_count += 1
+                    result.timed_out_image_ids.append(image_name)
+                    result.limitations.append(f"图片 {image_name} 超过整单审核时限")
             await self._notify(on_progress, result)
         return result
-
-    async def _classify_image(
-        self,
-        image,
-        allowed_document_types,
-        known_classification,
-        on_classified,
-        *,
-        business: BusinessContext = DEFAULT_BUSINESS,
-    ) -> DocumentClassification:
-        expected_type = (
-            known_classification.document_type
-            if known_classification
-            else _expected_document_type(image, allowed_document_types, business=business)
-        )
-        policy = business.document_policies.get(expected_type or "")
-        if policy is None:
-            classification = await self.client.classify_document(
-                image.model_dump(), business=business
-            )
-            classified_type = normalize_document_type(classification.document_type)
-            if (
-                classified_type not in business.document_policies
-                or allowed_document_types is not None
-                and classified_type not in allowed_document_types
-                or classification.confidence < CLASSIFICATION_CONFIDENCE_THRESHOLD
-            ):
-                raise RuntimeError("资料类型无法可靠识别")
-            policy = business.document_policies[classified_type]
-            known_classification = DocumentClassification(
-                target_id=str(image.image_id or image.index),
-                document_type=classified_type,
-                business_scope=image.business_scope,
-                identity_sides=classification.identity_sides
-                if classified_type == "identity_card"
-                else [],
-            )
-            if on_classified:
-                on_classified(known_classification)
-        if known_classification is None:
-            known_classification = DocumentClassification(
-                target_id=str(image.image_id or image.index),
-                document_type=policy.document_type,
-                business_scope=image.business_scope,
-                identity_sides=image.identity_sides_hint
-                if policy.document_type == "identity_card"
-                else [],
-            )
-            if on_classified:
-                on_classified(known_classification)
-        return known_classification
 
     async def _extract_image(
         self,
@@ -351,49 +314,24 @@ class RecognitionService:
         retry_reason: str | None = None,
         focus_boxes: Sequence[Sequence[float]] | None = None,
         allowed_document_types: frozenset[str] | None = None,
-        known_classification: DocumentClassification | None = None,
-        on_classified: Callable[[DocumentClassification], None] | None = None,
         business: BusinessContext = DEFAULT_BUSINESS,
     ) -> tuple[QwenExtraction, DocumentPolicy | None]:
-        """已知槽位使用专属提示词；真正未知的图片先分类再专属提取。
-
-        URL 图片直接交给模型重读原图，区域坐标随重读原因传递。
-        """
-        payload = image.model_dump()
-        if focus_boxes:
-            retry_reason = (
-                (retry_reason or "") + "；重点重读原图归一化区域 " + str(list(focus_boxes))
-            )
-        known_classification = await self._classify_image(
-            image, allowed_document_types, known_classification, on_classified, business=business
-        )
-        policy = business.document_policies[known_classification.document_type]
-        extract_fields = self.client.extract_fields
-        extraction = await extract_fields(
-            payload,
-            policy,
+        """One content-based type confirmation and extraction, independent of upload order."""
+        extraction = await self.client.extract_document(
+            image.model_dump(),
             retry_reason=retry_reason,
+            focus_boxes=focus_boxes,
+            business=business,
         )
-        normalized = extraction.model_copy(
-            update={"document_type": normalize_document_type(extraction.document_type)}
-        )
-        side = extraction.fields.get("identity_card.side")
+        policy = business.document_policies.get(extraction.document_type)
         if (
-            known_classification
-            and policy.document_type == "identity_card"
-            and normalize_document_type(extraction.document_type) == "identity_card"
-            and isinstance(side, str)
-            and side in {"FRONT", "BACK"}
-            and "identity_card.side" not in extraction.uncertain_fields
-            and (
-                extraction.confidence is None
-                or extraction.confidence >= CLASSIFICATION_CONFIDENCE_THRESHOLD
-            )
-            and not known_classification.identity_sides
-            and on_classified
+            allowed_document_types is not None
+            and extraction.document_type not in allowed_document_types
         ):
-            on_classified(known_classification.model_copy(update={"identity_sides": [side]}))
-        return normalized, policy
+            policy = None
+        if policy is not None:
+            extraction = restrict_extraction_to_policy(extraction, policy, image.business_scope)
+        return extraction, policy
 
     @staticmethod
     def _focus_boxes(extraction: QwenExtraction | None, reason: str) -> list[list[float]]:

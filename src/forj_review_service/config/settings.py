@@ -72,5 +72,8 @@ def load_qwen_config(env_file: Path | None = None) -> QwenConfig:
 
 def image_private_hosts() -> tuple[str, ...]:
     """Only the operator can explicitly allow internal image hosts, never page input."""
-    return tuple(host.strip().lower().rstrip(".") for host in
-                 os.getenv("REVIEW_IMAGE_PRIVATE_HOSTS", "").split(",") if host.strip())
+    return tuple(
+        host.strip().lower().rstrip(".")
+        for host in os.getenv("REVIEW_IMAGE_PRIVATE_HOSTS", "").split(",")
+        if host.strip()
+    )

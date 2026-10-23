@@ -55,8 +55,6 @@ def response(page_value, material_value, *, mapped=True):
         comparisons=result.comparisons,
         external_checks=[],
         business_checks=[],
-        completeness=None,
-        limitations=[],
     )
     return result
 

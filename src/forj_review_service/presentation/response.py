@@ -4,7 +4,7 @@
 修改日期：2026-08-26
 """
 
-from forj_review_service.businesses.context import DEFAULT_BUSINESS, BusinessContext
+from forj_review_service.businesses.context import BusinessContext
 from forj_review_service.businesses.profiles import BusinessProfile
 from forj_review_service.contracts.recognition import RecognitionBatchResult
 from forj_review_service.contracts.review import (
@@ -44,6 +44,7 @@ def response_from_results(
         risk_level="MEDIUM",
         summary="审核检查正在进行",
         comparisons=comparisons,
+        recognized_documents=batch.recognized_documents,
         qr_checks=qr_checks or [],
         cross_checks=unique_checks(business_checks or []),
         issues=issues,
@@ -81,7 +82,7 @@ def build_review_response(
 ) -> ReviewResponse:
     """把提取结果和确定性检查组装为稳定的审核响应。"""
 
-    business = BusinessContext.from_profile(profile) if profile is not None else DEFAULT_BUSINESS
+    business = BusinessContext.from_profile(profile)
     resolved_qr_checks = qr_checks or []
     append_qr_observations(observations, resolved_qr_checks, profile)
     comparisons = build_field_comparisons(request, profile, observations)
@@ -116,7 +117,7 @@ def build_unconfigured_response(
 ) -> ReviewResponse:
     """Build the stable manual-review response for an unconfigured profile."""
 
-    business = BusinessContext.from_profile(profile) if profile is not None else DEFAULT_BUSINESS
+    business = BusinessContext.from_profile(profile)
     message = profile.unconfigured_message or "当前审核业务规则尚未配置，请人工复核"
     response = ReviewResponse(
         presentation="FIELD_WORKBENCH" if profile.rules_configured else "MANUAL_REVIEW",

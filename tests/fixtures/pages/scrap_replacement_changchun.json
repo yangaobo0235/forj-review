@@ -1244,33 +1244,6 @@
       "task_projector": ""
     },
     {
-      "key": "application.terminal_phone",
-      "label": "终端客户手机号",
-      "section": "new_vehicle",
-      "aliases": [
-        "终端客户手机号"
-      ],
-      "page_section": "new_vehicle",
-      "section_required": false,
-      "reviewable": true,
-      "mode": "SYSTEM",
-      "evidence": [],
-      "normalizer": "default",
-      "authority": [],
-      "required": true,
-      "writable": true,
-      "allow_single_evidence": true,
-      "uncertain_requires_review": true,
-      "page_evidence_required": true,
-      "material_field": null,
-      "max_age_days": null,
-      "locator_name": "",
-      "locator_id": "",
-      "occurrence": 1,
-      "checks": [],
-      "task_projector": ""
-    },
-    {
       "key": "application.id",
       "label": "申请单ID",
       "section": "",
@@ -1324,33 +1297,6 @@
       "occurrence": 1,
       "checks": [],
       "task_projector": ""
-    },
-    {
-      "key": "application.owner_type",
-      "label": "车辆所有人类型",
-      "section": "",
-      "aliases": [
-        "车辆所有人类型"
-      ],
-      "page_section": "unknown",
-      "section_required": false,
-      "reviewable": true,
-      "mode": "SYSTEM",
-      "evidence": [],
-      "normalizer": "default",
-      "authority": [],
-      "required": false,
-      "writable": true,
-      "allow_single_evidence": true,
-      "uncertain_requires_review": true,
-      "page_evidence_required": true,
-      "material_field": null,
-      "max_age_days": null,
-      "locator_name": "",
-      "locator_id": "",
-      "occurrence": 1,
-      "checks": [],
-      "task_projector": "owner_type"
     },
     {
       "key": "application.dealer_name",
@@ -1481,7 +1427,7 @@
     "date",
     "select"
   ],
-  "review_declared_fields_only": false,
+  "review_declared_fields_only": true,
   "settings": {
     "material_policy": {
       "mode": "enforce",

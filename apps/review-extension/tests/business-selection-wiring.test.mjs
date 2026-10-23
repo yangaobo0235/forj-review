@@ -39,18 +39,6 @@ test("workflow focuses original images on the collected tab with collected page 
   assert.match(focusSource, /focusReviewImage\(imageId, pageData\)/);
 });
 
-test("side panel renders exception sections derived from the review response", () => {
-  const source = readFileSync(
-    new URL("../src/features/review/ui/LegacyReviewResults.vue", import.meta.url),
-    "utf8",
-  );
-
-  assert.match(source, /exceptionSections\(props\.review\.sections, props\.review\.comparisons\)/);
-  assert.match(source, /exceptionGroups\.value\.map/);
-  assert.doesNotMatch(source, /title="报废车辆信息"/);
-  assert.doesNotMatch(source, /title="新车及发票信息"/);
-});
-
 test("standalone preview reports that browser extension APIs are required", () => {
   const source = readFileSync(
     new URL("../src/features/review/api/collect-page.ts", import.meta.url),

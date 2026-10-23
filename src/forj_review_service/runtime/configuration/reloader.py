@@ -17,8 +17,11 @@ logger = logging.getLogger(__name__)
 class ConfigurationReloader:
     def __init__(self, app, database, interval=2.0):
         self.app, self.database, self.interval = app, database, interval
-        self.status = {"desired_release_id": app.state.review_service.registry.release_id,
-                       "load_error": None, "last_loaded_at": datetime.now(UTC).isoformat()}
+        self.status = {
+            "desired_release_id": app.state.review_service.registry.release_id,
+            "load_error": None,
+            "last_loaded_at": datetime.now(UTC).isoformat(),
+        }
 
     async def refresh(self):
         async with self.database.session(readonly=True) as session:
@@ -37,8 +40,11 @@ class ConfigurationReloader:
         self.app.state.review_jobs.review_service = replacement
         self.app.state.review_service = replacement
         self.status.update(load_error=None, last_loaded_at=datetime.now(UTC).isoformat())
-        logger.info("configuration loaded release_id=%s pages=%d", registry.release_id,
-                    len(registry.active_profiles))
+        logger.info(
+            "configuration loaded release_id=%s pages=%d",
+            registry.release_id,
+            len(registry.active_profiles),
+        )
         return True
 
     async def run(self):
@@ -48,7 +54,10 @@ class ConfigurationReloader:
             except Exception as exc:
                 error = type(exc).__name__
                 if self.status["load_error"] != error:
-                    logger.error("configuration reload failed desired_release_id=%s error_type=%s",
-                                 self.status["desired_release_id"], error)
+                    logger.error(
+                        "configuration reload failed desired_release_id=%s error_type=%s",
+                        self.status["desired_release_id"],
+                        error,
+                    )
                 self.status["load_error"] = error
             await asyncio.sleep(self.interval)

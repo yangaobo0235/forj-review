@@ -118,8 +118,18 @@ def canonical_emission_standard(value: object | None) -> str | None:
     if not text:
         return None
     roman = {
-        "I": "一", "II": "二", "III": "三", "IV": "四", "V": "五", "VI": "六",
-        "Ⅰ": "一", "Ⅱ": "二", "Ⅲ": "三", "Ⅳ": "四", "Ⅴ": "五", "Ⅵ": "六",
+        "I": "一",
+        "II": "二",
+        "III": "三",
+        "IV": "四",
+        "V": "五",
+        "VI": "六",
+        "Ⅰ": "一",
+        "Ⅱ": "二",
+        "Ⅲ": "三",
+        "Ⅳ": "四",
+        "Ⅴ": "五",
+        "Ⅵ": "六",
     }
     for source, target in sorted(roman.items(), key=lambda item: -len(item[0])):
         text = text.replace(source, target)
@@ -157,6 +167,15 @@ def _normalize_upper(text: str) -> str:
     return text.upper()
 
 
+def _normalize_phone(text: str) -> str:
+    """Remove presentation punctuation; keep area codes, extensions and real differences."""
+    value = re.sub(r"[\s()\-－—]", "", text)
+    for prefix in ("+86", "0086"):
+        if value.startswith(prefix):
+            return value[len(prefix) :]
+    return value
+
+
 # 字段声明里 `normalizer` 的取值 → 实际处理函数。
 # 新增字段时在扩展包里声明归一化器即可，不需要改本文件的分派表。
 DECLARED_NORMALIZERS: dict[str, Callable[[str], str]] = {
@@ -175,6 +194,7 @@ DECLARED_NORMALIZERS: dict[str, Callable[[str], str]] = {
     "date": _normalize_date,
     # 主体名的空白和标点在预处理阶段就已去掉，这里不再加工。
     "party_name": lambda text: text,
+    "phone": _normalize_phone,
 }
 
 

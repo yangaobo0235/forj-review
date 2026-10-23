@@ -4,16 +4,25 @@ import { test } from "vitest";
 import { h } from "vue";
 import { renderToString } from "vue/server-renderer";
 
-
-
-
 function render(progress = {}, overrides = {}, props = {}) {
-  return renderToString(h(ReviewProgress, {
-    job: { status: "RUNNING", phase: "RECOGNIZING", progress: {
-      total_count: 4, submitted_count: 4, completed_count: 0, failed_count: 0, timed_out_count: 0,
-      ...progress,
-    }, ...overrides }, ...props,
-  }));
+  return renderToString(
+    h(ReviewProgress, {
+      job: {
+        status: "RUNNING",
+        phase: "RECOGNIZING",
+        progress: {
+          total_count: 4,
+          submitted_count: 4,
+          completed_count: 0,
+          failed_count: 0,
+          timed_out_count: 0,
+          ...progress,
+        },
+        ...overrides,
+      },
+      ...props,
+    }),
+  );
 }
 
 test("submitting every URL does not advance image processing", async () => {
@@ -40,7 +49,10 @@ test("finishing image processing does not claim the review conclusion is ready",
 });
 
 test("a finished partial review still calls for manual review", async () => {
-  const html = await render({ completed_count: 3, failed_count: 1 }, { status: "PARTIAL", phase: "COMPLETED" });
+  const html = await render(
+    { completed_count: 3, failed_count: 1 },
+    { status: "PARTIAL", phase: "COMPLETED" },
+  );
   assert.match(html, /审核部分完成，需人工复核/);
   assert.doesNotMatch(html, /审核已完成/);
 });
@@ -51,37 +63,56 @@ test("an empty image list has a finite progress value throughout finalization", 
 });
 
 test("failure list identifies only affected materials and offers the original image", async () => {
-  const html = await render({ completed_count: 1, failed_count: 1, timed_out_count: 1 }, {
-    failed_image_ids: ["failed"], timed_out_image_ids: ["timeout"],
-  }, {
-    pageData: { images: [
-      { index: 0, imageId: "success", alt: "成功材料" },
-      { index: 1, imageId: "failed", groupTitle: "报废机动车回收证明" },
-      { index: 2, imageId: "timeout", alt: "机动车销售发票" },
-    ] },
-    onFocusImage: async () => ({ ok: true }),
-  });
+  const html = await render(
+    { completed_count: 1, failed_count: 1, timed_out_count: 1 },
+    {
+      failed_image_ids: ["failed"],
+      timed_out_image_ids: ["timeout"],
+    },
+    {
+      pageData: {
+        images: [
+          { index: 0, imageId: "success", alt: "成功材料" },
+          { index: 1, imageId: "failed", groupTitle: "报废机动车回收证明" },
+          { index: 2, imageId: "timeout", alt: "机动车销售发票" },
+        ],
+      },
+      onFocusImage: async () => ({ ok: true }),
+    },
+  );
   assert.match(html, /第 2 张 · 报废机动车回收证明：识别失败/);
   assert.match(html, /第 3 张 · 机动车销售发票：识别超时/);
   assert.doesNotMatch(html, /成功材料/);
-  assert.equal((html.match(/查看原图<\/button>/g) ?? []).length, 2);
+  assert.equal((html.match(/查看原图\s*<\/button>/g) ?? []).length, 2);
 });
 
 test("collection failures remain actionable with a backend that only returns counts", async () => {
-  const html = await render({ failed_count: 1 }, {}, {
-    pageData: { images: [{ index: 0, imageId: "unreadable", groupTitle: "行驶证", collectionError: "unavailable" }] },
-    onFocusImage: async () => ({ ok: true }),
-  });
+  const html = await render(
+    { failed_count: 1 },
+    {},
+    {
+      pageData: {
+        images: [
+          { index: 0, imageId: "unreadable", groupTitle: "行驶证", collectionError: "unavailable" },
+        ],
+      },
+      onFocusImage: async () => ({ ok: true }),
+    },
+  );
   assert.match(html, /行驶证：暂时无法读取/);
-  assert.match(html, /查看原图<\/button>/);
+  assert.match(html, /查看原图\s*<\/button>/);
   assert.doesNotMatch(html, /unavailable/);
 });
 
 test("images without a DOM identifier can be listed but do not offer an unusable focus action", async () => {
-  const html = await render({ failed_count: 1 }, { failed_image_ids: ["0"] }, {
-    pageData: { images: [{ index: 0, groupTitle: "身份证" }] },
-    onFocusImage: async () => ({ ok: true }),
-  });
+  const html = await render(
+    { failed_count: 1 },
+    { failed_image_ids: ["0"] },
+    {
+      pageData: { images: [{ index: 0, groupTitle: "身份证" }] },
+      onFocusImage: async () => ({ ok: true }),
+    },
+  );
   assert.match(html, /身份证：识别失败/);
-  assert.doesNotMatch(html, /查看原图<\/button>/);
+  assert.doesNotMatch(html, /查看原图\s*<\/button>/);
 });

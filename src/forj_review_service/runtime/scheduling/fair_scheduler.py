@@ -58,7 +58,12 @@ class FairAsyncScheduler:
                 return future
             loop.call_soon_threadsafe(
                 self._enqueue,
-                _WorkItem(job_id=job_id, factory=factory, future=future, context=contextvars.copy_context()),
+                _WorkItem(
+                    job_id=job_id,
+                    factory=factory,
+                    future=future,
+                    context=contextvars.copy_context(),
+                ),
             )
         return future
 

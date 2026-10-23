@@ -16,8 +16,7 @@ import { applyCollectManifest } from "../src/platform/browser/catalog/collect-ma
 import { evidencePresentation } from "../src/features/review/presentation/evidence.ts";
 
 const labelOf = (documentType) =>
-  evidencePresentation({ source: "图片识别", document_type: documentType, value: "X" })
-    .label;
+  evidencePresentation({ source: "图片识别", document_type: documentType, value: "X" }).label;
 
 test("清单不可用时不编造材料名称", () => {
   applyCollectManifest(null);
@@ -29,10 +28,7 @@ test("清单不可用时不编造材料名称", () => {
 
 test("清单应用后材料名以清单为准，含内置表不认识的新材料类型", () => {
   const manifest = JSON.parse(
-    readFileSync(
-      new URL("./fixtures/collect-manifest-synthetic.json", import.meta.url),
-      "utf8",
-    ),
+    readFileSync(new URL("./fixtures/collect-manifest-synthetic.json", import.meta.url), "utf8"),
   );
   assert.equal(applyCollectManifest(manifest), true);
 

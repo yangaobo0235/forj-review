@@ -1,4 +1,7 @@
-import { manifestIdentityAnchors, manifestRecordIdentityFields } from "../catalog/collect-manifest.ts";
+import {
+  manifestIdentityAnchors,
+  manifestRecordIdentityFields,
+} from "../catalog/collect-manifest.ts";
 /** Page identity primitives shared by collection and write guards. */
 
 /** 强锚点：能唯一标识记录的编号类字段；只有它们存在时指纹才算数。 */
@@ -22,7 +25,9 @@ export function buildPageFingerprint(
   const present = anchors
     .map((field) => [field, String(fields?.[field] ?? "").trim()] as const)
     .filter(([, value]) => value);
-  return present.some(([field]) => isStrongIdentityAnchor(field, recordIdentityFields)) ? JSON.stringify(present) : "";
+  return present.some(([field]) => isStrongIdentityAnchor(field, recordIdentityFields))
+    ? JSON.stringify(present)
+    : "";
 }
 
 /** A changed target cannot vouch for itself: require an unchanged independent record identifier. */
@@ -35,10 +40,21 @@ export function sameRecordExceptFields(
   const parse = (value: string): Array<[string, string]> | null => {
     try {
       const entries: unknown = JSON.parse(value);
-      if (!Array.isArray(entries) || entries.some(item => !Array.isArray(item) || item.length !== 2
-        || typeof item[0] !== "string" || typeof item[1] !== "string")) return null;
+      if (
+        !Array.isArray(entries) ||
+        entries.some(
+          (item) =>
+            !Array.isArray(item) ||
+            item.length !== 2 ||
+            typeof item[0] !== "string" ||
+            typeof item[1] !== "string",
+        )
+      )
+        return null;
       return entries as Array<[string, string]>;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   };
   const expected = parse(expectedFingerprint);
   const actual = parse(actualFingerprint);

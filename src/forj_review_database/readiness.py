@@ -6,13 +6,13 @@ from sqlalchemy.orm import Session
 
 from forj_review_database.migrations import migration_history, validate_history
 from forj_review_database.models import SchemaMigration
-from forj_review_database.schema import RUNTIME_TABLES
+from forj_review_database.schema import REVIEW_TABLES, RUNTIME_TABLES
 
 
-def require_ready_sync(session: Session, schema: str) -> None:
+def require_ready_sync(session: Session, schema: str, *, consumer: str = "review") -> None:
     # Qualified lookup is intentional: absent local tables never resolve via public.
     missing = []
-    for table in RUNTIME_TABLES:
+    for table in RUNTIME_TABLES if consumer == "configuration" else REVIEW_TABLES:
         if session.scalar(select(func.to_regclass(schema + "." + table))) is None:
             missing.append(table)
     if missing:
@@ -23,5 +23,7 @@ def require_ready_sync(session: Session, schema: str) -> None:
     validate_history(rows, migration_history(), require_current=True)
 
 
-async def require_ready_async(session: AsyncSession, schema: str) -> None:
-    await session.run_sync(require_ready_sync, schema)
+async def require_ready_async(
+    session: AsyncSession, schema: str, *, consumer: str = "review"
+) -> None:
+    await session.run_sync(require_ready_sync, schema, consumer=consumer)

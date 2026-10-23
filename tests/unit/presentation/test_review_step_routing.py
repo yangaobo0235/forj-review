@@ -143,8 +143,6 @@ def build_steps(
         comparisons=comparisons or [],
         external_checks=external_checks or [],
         business_checks=business_checks or [],
-        completeness=completeness,
-        limitations=limitations or [],
     )
 
 
@@ -372,26 +370,37 @@ def test_present_affiliation_safeguard_routes_to_its_page_field(
     assert [item.step_id for item in steps if item.step_id.startswith("BUSINESS-")] == []
 
 
-def test_owner_type_control_is_a_non_writable_system_field() -> None:
-    steps = build_steps(
-        page_fields={"application.owner_type": "个人"},
-        review_fields=[
-            ReviewFieldSnapshot(
-                field="application.owner_type",
-                label="车辆所有人类型",
-                value="个人",
-                control_type="select",
-                editable=True,
-                order=1,
-                section="申请信息",
-            )
-        ],
+@pytest.mark.parametrize("profile", [SCRAP_REPLACEMENT_QINGDAO, SCRAP_REPLACEMENT_CHANGCHUN])
+def test_removed_scrap_fields_never_produce_tasks_even_from_stale_or_unknown_controls(profile):
+    snapshots = [
+        ReviewFieldSnapshot(field=key, label=label, value="合成值", order=i)
+        for i, (key, label) in enumerate(
+            [
+                ("application.owner_type", "车辆所有人类型"),
+                ("application.terminal_phone", "终端客户手机号"),
+                (None, "终端客户手机号"),
+                (None, "车辆所有人类型"),
+            ],
+            1,
+        )
+    ]
+    steps = build_review_tasks(
+        request=ReviewRequest(
+            page_url="https://example.test",
+            page_fields={
+                "application.owner_type": "个人",
+                "application.terminal_phone": "13800001234",
+            },
+            review_fields=snapshots,
+        ),
+        profile=profile,
+        comparisons=[],
+        external_checks=[],
+        business_checks=[],
     )
-
-    step = next(item for item in steps if item.step_id == "FIELD-application.owner_type")
-    assert step.result_status == "MATCH"
-    assert step.reason == "系统业务字段，无需材料比对"
-    assert step.writable is False
+    assert not any(t.label in {"终端客户手机号", "车辆所有人类型"} for t in steps)
+    assert "application.owner_type" not in profile.required_fields
+    assert "application.terminal_phone" not in profile.required_fields
 
 
 def test_external_check_routes_to_assistant() -> None:
@@ -429,7 +438,6 @@ def test_material_report_does_not_create_display_tasks(
         profile=replace(profile, page_interaction=page_interaction),
         comparisons=[],
         external_checks=[],
-        limitations=[],
         business_checks=[
             CheckResult(
                 check_id="MATERIAL-COMPLETENESS",
@@ -438,11 +446,6 @@ def test_material_report_does_not_create_display_tasks(
                 reason="材料完整",
             )
         ],
-        completeness=MaterialCompletenessReport(
-            phase="EXTRACTED",
-            status=status,
-            enforced=False,
-        ),
     )
 
     assert not any(item.category == "MATERIAL" for item in steps)
@@ -501,8 +504,6 @@ def test_non_target_profile_keeps_steps_as_assistant_contracts() -> None:
         comparisons=[matching_comparison("permit.vin")],
         external_checks=[],
         business_checks=[],
-        completeness=None,
-        limitations=[],
     )
 
     assert [(item.step_id, item.display_target, item.page_field) for item in steps] == [
@@ -599,18 +600,15 @@ def test_scrap_field_catalog_follows_the_current_dom_inventory() -> None:
     ]
 
     assert [item.label for item in field_steps] == [
-        "页面新增字段",
         "新车车架号",
         "新车燃料类型",
     ]
     assert [item.step_id for item in field_steps] == [
-        "FIELD-DOM-1",
         "FIELD-NEW-VEHICLE-VIN",
         "FIELD-new_vehicle.fuel_type",
     ]
     assert field_steps[0].result_status == "INSUFFICIENT"
     assert field_steps[1].result_status == "INSUFFICIENT"
-    assert field_steps[2].result_status == "INSUFFICIENT"
 
 
 def test_affiliation_controls_are_compared_with_the_subject_type() -> None:
@@ -778,8 +776,6 @@ def test_changchun_collected_field_routes_to_assistant() -> None:
         comparisons=[matching_comparison("new_vehicle.vin")],
         external_checks=[],
         business_checks=[],
-        completeness=None,
-        limitations=[],
     )
 
     step = next(item for item in steps if item.step_id == "FIELD-NEW-VEHICLE-VIN")
@@ -803,8 +799,6 @@ def test_ambiguous_collected_page_field_routes_to_assistant() -> None:
         comparisons=[matching_comparison("new_vehicle.vin")],
         external_checks=[],
         business_checks=[],
-        completeness=None,
-        limitations=[],
     )
 
     step = next(item for item in steps if item.step_id == "FIELD-NEW-VEHICLE-VIN")

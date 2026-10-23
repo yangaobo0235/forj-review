@@ -131,7 +131,7 @@ async def run_review(*, region, page_fields, business_type="scrap_replacement"):
     """端到端执行真实 LangGraph 主图；仅桩掉文档提取，避免调用真实模型。"""
     service = ReviewService(registry=business_registry())
 
-    async def extract(*args):
+    async def extract(*args, absolute_deadline=None):
         return RecognitionBatchResult()
 
     service._extract_documents = extract
@@ -264,7 +264,7 @@ async def test_graph_blocks_intent_for_additional_bad_license_with_all_auxiliary
     ]
     service = ReviewService(registry=business_registry())
 
-    async def extract(*args):
+    async def extract(*args, absolute_deadline=None):
         return RecognitionBatchResult(observations=observations)
 
     monkeypatch.setattr(service, "_extract_documents", extract)

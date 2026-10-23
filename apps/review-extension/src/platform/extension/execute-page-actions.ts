@@ -9,10 +9,7 @@ export async function executePageActions(
   const registry = new PageActionRegistry();
   registry.register("verify_invoice", async (action, page) => {
     const field = action.payload.field;
-    if (
-      typeof field !== "string" ||
-      typeof page.pageFields[field] !== "string"
-    ) {
+    if (typeof field !== "string" || typeof page.pageFields[field] !== "string") {
       return "未取得发票号码的页面原值，请在原页面人工验真";
     }
     const verification = await verifyInvoice({

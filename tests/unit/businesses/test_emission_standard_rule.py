@@ -72,7 +72,7 @@ def test_exact_model_lookup_does_not_require_engine_manufacturer(model: str, exp
     assert check.status == "MATCH"
     assert check.details["source"] == "engine_model"
     assert check.details["standard"] == expected
-    assert check.details["lookup_api"] == "/vehicle-model/engine-emission/query"
+    assert check.details["lookup_table"] == "ref_engine_emission"
 
 
 def test_lng_engine_uses_the_same_explicit_registration_standard() -> None:

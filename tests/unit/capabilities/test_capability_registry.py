@@ -4,7 +4,9 @@
 排查一次降级只能去翻响应里的 `capability_results`，看不到控制台。
 """
 
+import asyncio
 import logging
+from dataclasses import replace
 
 import pytest
 
@@ -18,6 +20,28 @@ from forj_review_service.contracts.recognition import RecognitionBatchResult
 from forj_review_service.contracts.review import ReviewRequest
 from forj_review_service.runtime.workflow.planner import CapabilityPlanItem
 from tests.support.pages import TRANSFER_DEFAULT
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("expired", [True, False])
+async def test_external_waits_share_the_absolute_job_deadline(expired):
+    calls = []
+    spec = CapabilitySpec("bounded", kind="EXTERNAL", retries=1, timeout_seconds=10)
+
+    async def handler(_context, _spec):
+        calls.append(True)
+        await asyncio.Event().wait()
+
+    current = replace(
+        context(), absolute_deadline=asyncio.get_running_loop().time() + (-1 if expired else 0.02)
+    )
+    result = await registry(spec, handler).execute(
+        spec, CapabilityPlanItem("bounded", "READY"), current
+    )
+    assert len(calls) == (0 if expired else 1)
+    assert result.status == "FAILED"
+    assert result.error_code == "REVIEW_DEADLINE_EXCEEDED"
+    assert result.checks[0].status == "INSUFFICIENT"
 
 
 def context(trace_id: str = "trace-1") -> ReviewExecutionContext:

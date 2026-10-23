@@ -14,14 +14,17 @@ class AsyncSnapshotKernel:
     def field_dependencies(self, draft):
         return self.snapshot.field_dependencies(draft)
 
+    def comparison_configurable_fields(self, draft):
+        return self.snapshot.comparison_configurable_fields(draft)
+
     def page_options(self, draft):
         return self.snapshot.page_options(draft)
 
     def __init__(self, snapshot):
         self.snapshot = snapshot
 
-    async def baseline(self):
-        return self.snapshot.baseline()
+    async def baseline(self, page_id=None):
+        return self.snapshot.baseline(page_id)
 
     async def context(self, page_id=None):
         return self.snapshot.context(page_id)

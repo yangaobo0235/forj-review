@@ -21,14 +21,8 @@ from forj_review_service.contracts.review import (
     Region,
     ReviewRequest,
     ReviewResponse,
-    ReviewStep,
-    ReviewTask,
     SelectionMode,
 )
-
-
-def test_review_step_legacy_name_aliases_review_task() -> None:
-    assert ReviewStep is ReviewTask
 
 
 def test_review_request_accepts_collection_diagnostics_aliases() -> None:
@@ -93,13 +87,13 @@ def test_response_and_batch_preserve_completeness_and_retry_records() -> None:
 
 
 def test_upload_presence_is_additive_and_survives_job_serialization():
-    from forj_review_service.contracts.recognition import QwenClassification
+    from forj_review_service.contracts.recognition import QwenExtraction
     from forj_review_service.contracts.review import ReviewJobSnapshot
 
     legacy = MaterialCompletenessReport(phase="EXTRACTED", status="INCOMPLETE")
     assert legacy.presence is None
     assert RecognitionBatchResult().document_classifications == []
-    assert QwenClassification(document_type="identity_card", confidence=0.9).identity_sides == []
+    assert QwenExtraction(document_type="identity_card", confidence=0.9).identity_sides == []
     assert ImageInput(index=0, src="https://example.test/0.jpg").identity_sides_hint == []
     assert ImageInput(
         index=0, src="https://example.test/0.jpg", identitySidesHint=["BACK"]
@@ -203,7 +197,7 @@ def test_legacy_request_keeps_business_but_requires_an_explicit_scrap_region() -
     assert request.selection_mode is SelectionMode.AUTO
 
 
-def test_image_input_accepts_business_scope_metadata_and_derives_legacy_scope() -> None:
+def test_image_input_requires_scope_metadata_instead_of_guessing_from_material() -> None:
     explicit = ImageInput(
         index=5,
         src="image",
@@ -219,7 +213,10 @@ def test_image_input_accepts_business_scope_metadata_and_derives_legacy_scope() 
     assert explicit.group_title == "新车资料"
     assert explicit.group_order == 2
     assert explicit.document_type_hint == "vehicle_license"
-    assert legacy.business_scope == "old_vehicle"
+    assert legacy.business_scope == "unknown"
+    assert (
+        ImageInput(index=2, src="image", categoryHint="old_vehicle").business_scope == "old_vehicle"
+    )
 
 
 def test_field_status_and_recommendation_are_restricted() -> None:

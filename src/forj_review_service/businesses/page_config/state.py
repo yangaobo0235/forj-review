@@ -40,6 +40,14 @@ class ConfigurationState:
             }
         )
 
+    def page_baseline(self, page_id, kernel):
+        version = self.active.get(page_id)
+        if version is None:
+            raise ConfigurationInputError("指定页面不存在活动版本")
+        return digest(
+            {"page_id": page_id, "source": self.source(page_id, version), "kernel": kernel}
+        )
+
     def source(self, page_id, version):
         return next(
             (d for d in self.definitions if (d["page_id"], d["version"]) == (page_id, version)),

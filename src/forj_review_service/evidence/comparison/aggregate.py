@@ -157,7 +157,6 @@ def aggregate_field(
     field_name: str,
     observations: list[FieldObservation],
     *,
-    uncertain_requires_review: bool = True,
     single_evidence_requires_review: bool = True,
     page_evidence_required: bool = False,
     required_document_types: tuple[str, ...] = (),
@@ -193,7 +192,7 @@ def aggregate_field(
         for item in valid
     ]
 
-    # 兼容旧调用参数 uncertain_requires_review；不确定的材料始终不能证明通过或冲突。
+    # 不确定的材料始终不能证明通过或冲突。
     reliable = [
         item
         for item in valid
@@ -394,7 +393,6 @@ def aggregate_by_authority(
     observations: list[FieldObservation],
     authority: tuple[AuthorityRule, ...],
     *,
-    uncertain_requires_review: bool = True,
     page_evidence_required: bool = False,
     business: BusinessContext = DEFAULT_BUSINESS,
 ) -> FieldComparison:

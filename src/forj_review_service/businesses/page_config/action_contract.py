@@ -46,6 +46,8 @@ class ActionBinding(_ActionContract):
         if len(set(ids)) != len(ids) or len(set(orders)) != len(orders):
             raise ValueError("动作映射编号或次序重复")
         previous = set()
+        # Legacy properties remain valid for immutable published definitions.
+        # The model handler now executes only the model ID/name mapping.
         allowed = {
             "brandName",
             "brandId",

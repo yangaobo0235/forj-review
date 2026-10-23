@@ -229,7 +229,7 @@ async def test_real_graph_stages_accumulate_facts_checks_and_render_only_at_the_
         },
     )
 
-    async def extract(*args):
+    async def extract(*args, absolute_deadline=None):
         events.append("extract")
         return RecognitionBatchResult()
 

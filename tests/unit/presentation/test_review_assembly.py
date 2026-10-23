@@ -1,9 +1,6 @@
-"""组装入口的风险与摘要语义。
+"""已配置页面按完整建议汇总风险，未配置页面保留人工审核提示。"""
 
-目标 Profile（报废置换青岛/长春 1.0）使用建议驱动的新语义；
-过户、车源和一致性保持分支前（0edf622）语义：HIGH 只保留给
-同字段比较冲突和二维码官网冲突，业务规则检查结果不抬升风险级别。
-"""
+from typing import Literal
 
 from forj_review_service.contracts.recognition import CheckResult, RecognitionBatchResult
 from forj_review_service.contracts.review import (
@@ -24,13 +21,10 @@ def response_for(
     *,
     comparisons: list[FieldComparison] | None = None,
     issues: list[str] | None = None,
+    presentation: Literal["FIELD_WORKBENCH", "MANUAL_REVIEW"] = "MANUAL_REVIEW",
 ) -> ReviewResponse:
     return ReviewResponse(
-        presentation=(
-            "FIELD_WORKBENCH"
-            if business_type is BusinessType.SCRAP_REPLACEMENT
-            else "MANUAL_REVIEW"
-        ),
+        presentation=presentation,
         business_type=business_type,
         region=region,
         profile_version="1.0",
@@ -61,7 +55,7 @@ def conflict_business_check() -> CheckResult:
     )
 
 
-def test_legacy_comparison_conflict_is_high_with_legacy_summary() -> None:
+def test_manual_review_comparison_conflict_is_high_with_manual_summary() -> None:
     assembled = assemble_review_response(
         response_for(
             BusinessType.TRANSFER,
@@ -78,7 +72,7 @@ def test_legacy_comparison_conflict_is_high_with_legacy_summary() -> None:
     assert assembled.recommendation is Recommendation.REVIEW_REQUIRED
 
 
-def test_legacy_business_check_conflict_does_not_raise_risk_level() -> None:
+def test_manual_review_business_check_conflict_does_not_raise_risk_level() -> None:
     assembled = assemble_review_response(
         response_for(BusinessType.TRANSFER, Region.DEFAULT),
         RecognitionBatchResult(),
@@ -91,7 +85,7 @@ def test_legacy_business_check_conflict_does_not_raise_risk_level() -> None:
     assert assembled.summary == "字段检查通过"
 
 
-def test_legacy_review_required_comparison_is_medium_with_legacy_summary() -> None:
+def test_manual_review_review_required_comparison_is_medium_with_manual_summary() -> None:
     assembled = assemble_review_response(
         response_for(
             BusinessType.TRANSFER,
@@ -107,7 +101,7 @@ def test_legacy_review_required_comparison_is_medium_with_legacy_summary() -> No
     assert assembled.summary == "审核辅助结果需要人工复核"
 
 
-def test_legacy_clean_review_is_low_with_legacy_summary() -> None:
+def test_manual_review_clean_review_is_low_with_manual_summary() -> None:
     assembled = assemble_review_response(
         response_for(
             BusinessType.TRANSFER,
@@ -124,9 +118,11 @@ def test_legacy_clean_review_is_low_with_legacy_summary() -> None:
     assert assembled.summary == "字段检查通过"
 
 
-def test_target_profile_business_conflict_is_high_with_advice_summary() -> None:
+def test_configured_page_business_conflict_is_high_with_advice_summary() -> None:
     assembled = assemble_review_response(
-        response_for(BusinessType.SCRAP_REPLACEMENT, Region.QINGDAO),
+        response_for(
+            BusinessType.SCRAP_REPLACEMENT, Region.QINGDAO, presentation="FIELD_WORKBENCH"
+        ),
         RecognitionBatchResult(),
         business_checks=[conflict_business_check()],
         business=TEST_BUSINESS,
@@ -137,11 +133,12 @@ def test_target_profile_business_conflict_is_high_with_advice_summary() -> None:
     assert assembled.summary == "发现 1 项需要审核人员确认"
 
 
-def test_target_profile_clean_review_is_low_with_advice_summary() -> None:
+def test_configured_page_clean_review_is_low_with_advice_summary() -> None:
     assembled = assemble_review_response(
         response_for(
             BusinessType.SCRAP_REPLACEMENT,
             Region.CHANGCHUN,
+            presentation="FIELD_WORKBENCH",
             comparisons=[comparison("new_vehicle.vin", FieldStatus.MATCH)],
         ),
         RecognitionBatchResult(),

@@ -21,7 +21,7 @@ from forj_review_service.contracts.review import (
 )
 
 # 保留历史特征元数据；声明 review_tab 后浏览器不再使用整页文字判定步骤。
-CONSISTENCY_ANCHORS = ("新车信息", "车辆所有人类型", "新车挂靠")
+CONSISTENCY_ANCHORS = ("新车信息", "新车挂靠")
 
 # 已配置页面的地址与审核页签从活动 Profile 的地区声明汇总。
 

@@ -36,11 +36,12 @@ class SequencedClient:
     def __init__(self) -> None:
         self.calls = 0
 
-    async def extract_fields(
+    async def extract_document(
         self,
         image: dict[str, object],
-        policy: object,
         *,
+        business=None,
+        focus_boxes=None,
         retry_reason: str | None = None,
     ) -> QwenExtraction:
         self.calls += 1
@@ -168,10 +169,10 @@ async def test_uncertain_field_retry_asks_the_model_to_reread_that_region() -> N
 
     assert len(prompts) == 2
     assert "上一次识别把以下字段标记为不确定" not in prompts[0]
-    assert "上一次识别把以下字段标记为不确定：invoice.amount" in prompts[1]
-    assert "evidence_regions" in prompts[1]
+    assert '只补读以下标准字段，不重复整页原文及其他字段：["invoice.amount"]' in prompts[1]
+    assert "原图" in prompts[1]
     # 只说明哪些字段不确定，不回传模型上一次的输出内容。
-    assert "26320000000801433801" not in prompts[1].split("上一次识别")[1]
+    assert "26320000000801433801" not in prompts[1].split("【补充识别】")[1]
     assert result.retry_summary.attempts[0].reason_code == "uncertain_field:invoice.amount"
 
 
@@ -182,7 +183,7 @@ class SteadyClient:
         self.calls = 0
         self.uncertain = list(uncertain or [])
 
-    async def extract_fields(self, image, policy, **_) -> QwenExtraction:
+    async def extract_document(self, image, **_) -> QwenExtraction:
         self.calls += 1
         return QwenExtraction(
             document_type="invoice",

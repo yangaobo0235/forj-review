@@ -433,7 +433,10 @@ async def test_custom_material_uses_generated_extraction_allowlist(declaration):
     profile = _compile(declaration)
 
     class Client:
-        async def extract_fields(self, image, policy, *, retry_reason=None):
+        async def extract_document(
+            self, image, *, business=None, retry_reason=None, focus_boxes=None
+        ):
+            policy = business.document_policies["permit"]
             assert policy.fields == ("license.vin",)
             return QwenExtraction(
                 document_type="permit", fields={"license.vin": "VIN1"}, confidence=0.99

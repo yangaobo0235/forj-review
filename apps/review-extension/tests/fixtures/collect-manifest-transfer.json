@@ -1,14 +1,18 @@
 {
+  "actions": [
+    {
+      "action_id": "fill_review_fields",
+      "handler_id": "fill_review_fields",
+      "contract_version": "1.0",
+      "enabled": true,
+      "label": "fill_review_fields",
+      "mappings": []
+    }
+  ],
   "business_type": "transfer",
-  "scopes": [
-    "transfer_vehicle",
-    "transfer_new"
-  ],
-  "ignored_image_labels": [
-    "登记证书3、4页",
-    "登记证书3,4页",
-    "登记证书3，4页"
-  ],
+  "review_declared_fields_only": true,
+  "scopes": ["transfer_vehicle", "transfer_new"],
+  "ignored_image_labels": ["登记证书3、4页", "登记证书3,4页", "登记证书3，4页"],
   "page_sections": [
     {
       "key": "transfer_vehicle",
@@ -35,9 +39,7 @@
     {
       "key": "transfer_invoice.invoice_date",
       "label": "开票日期",
-      "aliases": [
-        "开票日期"
-      ],
+      "aliases": ["开票日期"],
       "section": "transfer_vehicle",
       "section_required": true,
       "reviewable": true,
@@ -48,10 +50,7 @@
     {
       "key": "transfer_invoice.plate_no",
       "label": "车牌号",
-      "aliases": [
-        "车牌号",
-        "车牌号码"
-      ],
+      "aliases": ["车牌号", "车牌号码"],
       "section": "transfer_vehicle",
       "section_required": true,
       "reviewable": true,
@@ -62,9 +61,7 @@
     {
       "key": "transfer_invoice.vin",
       "label": "识别车架号",
-      "aliases": [
-        "识别车架号"
-      ],
+      "aliases": ["识别车架号"],
       "section": "transfer_vehicle",
       "section_required": true,
       "reviewable": true,
@@ -75,9 +72,7 @@
     {
       "key": "transfer_invoice.buyer_name",
       "label": "过户发票买家名称",
-      "aliases": [
-        "过户发票买家名称"
-      ],
+      "aliases": ["过户发票买家名称"],
       "section": "transfer_vehicle",
       "section_required": true,
       "reviewable": true,
@@ -88,9 +83,7 @@
     {
       "key": "transfer_invoice.buyer_id",
       "label": "证件号",
-      "aliases": [
-        "证件号"
-      ],
+      "aliases": ["证件号"],
       "section": "transfer_vehicle",
       "section_required": true,
       "reviewable": true,
@@ -101,9 +94,7 @@
     {
       "key": "transfer_invoice.invoice_no",
       "label": "发票号码",
-      "aliases": [
-        "发票号码"
-      ],
+      "aliases": ["发票号码"],
       "section": "transfer_vehicle",
       "section_required": true,
       "reviewable": true,
@@ -114,10 +105,7 @@
     {
       "key": "transfer_invoice.amount",
       "label": "开票金额(含税)",
-      "aliases": [
-        "开票金额(含税)",
-        "开票金额（含税）"
-      ],
+      "aliases": ["开票金额(含税)", "开票金额（含税）"],
       "section": "transfer_vehicle",
       "section_required": true,
       "reviewable": true,
@@ -128,9 +116,7 @@
     {
       "key": "transfer_invoice.seller_name",
       "label": "卖方名称",
-      "aliases": [
-        "卖方名称"
-      ],
+      "aliases": ["卖方名称"],
       "section": "transfer_vehicle",
       "section_required": true,
       "reviewable": true,
@@ -141,9 +127,7 @@
     {
       "key": "transfer_invoice.seller_id",
       "label": "卖方证件号",
-      "aliases": [
-        "卖方证件号"
-      ],
+      "aliases": ["卖方证件号"],
       "section": "transfer_vehicle",
       "section_required": true,
       "reviewable": true,
@@ -154,9 +138,7 @@
     {
       "key": "transfer_invoice.brand_model",
       "label": "厂牌型号",
-      "aliases": [
-        "厂牌型号"
-      ],
+      "aliases": ["厂牌型号"],
       "section": "transfer_vehicle",
       "section_required": true,
       "reviewable": true,
@@ -167,9 +149,7 @@
     {
       "key": "transfer_invoice.transfer_department",
       "label": "转入地车管所",
-      "aliases": [
-        "转入地车管所"
-      ],
+      "aliases": ["转入地车管所"],
       "section": "transfer_vehicle",
       "section_required": true,
       "reviewable": true,
@@ -180,9 +160,7 @@
     {
       "key": "transfer_invoice.market_name",
       "label": "二手车市场",
-      "aliases": [
-        "二手车市场"
-      ],
+      "aliases": ["二手车市场"],
       "section": "transfer_vehicle",
       "section_required": true,
       "reviewable": true,
@@ -193,9 +171,7 @@
     {
       "key": "transfer_invoice.market_tax_no",
       "label": "纳税人识别号",
-      "aliases": [
-        "纳税人识别号"
-      ],
+      "aliases": ["纳税人识别号"],
       "section": "transfer_vehicle",
       "section_required": true,
       "reviewable": true,
@@ -206,10 +182,7 @@
     {
       "key": "transfer_new_invoice.invoice_date",
       "label": "新车发票开票日期",
-      "aliases": [
-        "新车发票开票日期",
-        "开票日期"
-      ],
+      "aliases": ["新车发票开票日期", "开票日期"],
       "section": "transfer_new",
       "section_required": true,
       "reviewable": true,
@@ -220,10 +193,7 @@
     {
       "key": "transfer_new_invoice.invoice_no",
       "label": "新车发票号码",
-      "aliases": [
-        "新车发票号码",
-        "发票号码"
-      ],
+      "aliases": ["新车发票号码", "发票号码"],
       "section": "transfer_new",
       "section_required": true,
       "reviewable": true,
@@ -234,10 +204,7 @@
     {
       "key": "transfer_new_invoice.amount",
       "label": "新车发票价税合计",
-      "aliases": [
-        "新车发票价税合计",
-        "价税合计"
-      ],
+      "aliases": ["新车发票价税合计", "价税合计"],
       "section": "transfer_new",
       "section_required": true,
       "reviewable": true,
@@ -248,10 +215,7 @@
     {
       "key": "transfer_new_invoice.vin",
       "label": "新车发票OCR识别VIN",
-      "aliases": [
-        "新车发票OCR识别VIN",
-        "识别车架号"
-      ],
+      "aliases": ["新车发票OCR识别VIN", "识别车架号"],
       "section": "transfer_new",
       "section_required": true,
       "reviewable": true,
@@ -279,66 +243,27 @@
     "transfer_new_invoice.amount",
     "transfer_new_invoice.vin"
   ],
-  "writable_control_kinds": [
-    "text",
-    "textarea",
-    "number",
-    "date",
-    "select"
-  ],
-  "identity_anchors": [
-    "transfer_invoice.vin",
-    "transfer_new_invoice.vin"
-  ],
-  "record_identity_fields": [
-    "transfer_invoice.vin",
-    "transfer_new_invoice.vin"
-  ],
+  "writable_control_kinds": ["text", "textarea", "number", "date", "select"],
+  "identity_anchors": ["transfer_invoice.vin", "transfer_new_invoice.vin"],
+  "record_identity_fields": ["transfer_invoice.vin", "transfer_new_invoice.vin"],
   "materials": [
     {
       "document_type": "registration_certificate",
       "label": "登记证书1、2页",
-      "hints": [
-        "登记证书1、2页",
-        "登记证书1,2页",
-        "登记证书1，2页",
-        "登记证书"
-      ],
+      "hints": ["登记证书1、2页", "登记证书1,2页", "登记证书1，2页", "登记证书"],
       "slots": []
     },
     {
       "document_type": "used_car_invoice",
       "label": "二手车发票",
-      "hints": [
-        "二手车发票",
-        "二手车销售统一发票",
-        "过户发票"
-      ],
+      "hints": ["二手车发票", "二手车销售统一发票", "过户发票"],
       "slots": []
     },
     {
       "document_type": "invoice",
       "label": "新车发票",
-      "hints": [
-        "新车发票",
-        "机动车销售统一发票"
-      ],
-      "slots": [
-        [
-          "transfer_new",
-          1
-        ]
-      ]
-    }
-  ],
-  "actions": [
-    {
-      "action_id": "fill_review_fields",
-      "handler_id": "fill_review_fields",
-      "contract_version": "1.0",
-      "enabled": true,
-      "label": "fill_review_fields",
-      "mappings": []
+      "hints": ["新车发票", "机动车销售统一发票"],
+      "slots": []
     }
   ]
 }

@@ -8,8 +8,14 @@ export function logicalFormControl(control: DomElement): DomElement {
   const container = control.closest?.<DomElement>(SELECT_CONTAINER);
   if (!container) return control;
   const candidates = Array.from(container.querySelectorAll?.<DomElement>(COMBOBOX) || []);
-  return candidates.find(node => node.tagName === "INPUT" && node.getAttribute("role") === "combobox")
-    || candidates.find(node => node.getAttribute("role") === "combobox") || candidates[0] || control;
+  return (
+    candidates.find(
+      (node) => node.tagName === "INPUT" && node.getAttribute("role") === "combobox",
+    ) ||
+    candidates.find((node) => node.getAttribute("role") === "combobox") ||
+    candidates[0] ||
+    control
+  );
 }
 
 export function logicalFormControls(controls: DomElement[]): DomElement[] {
@@ -17,22 +23,32 @@ export function logicalFormControls(controls: DomElement[]): DomElement[] {
 }
 
 export function isSelectControl(control: DomElement | null | undefined): boolean {
-  return Boolean(control && (control.tagName === "SELECT" || control.getAttribute?.("role") === "combobox"
-    || control.getAttribute?.("aria-controls") || control.getAttribute?.("aria-owns")
-    || control.closest?.(SELECT_CONTAINER)));
+  return Boolean(
+    control &&
+      (control.tagName === "SELECT" ||
+        control.getAttribute?.("role") === "combobox" ||
+        control.getAttribute?.("aria-controls") ||
+        control.getAttribute?.("aria-owns") ||
+        control.closest?.(SELECT_CONTAINER)),
+  );
 }
 
 /** label 供展示和比较；value 只用于原生选项身份，不能把框架搜索 input.value 当作选中项。 */
 export function readFormControlValue(control: DomElement | null | undefined): string {
   if (!control) return "";
   if (control.tagName === "SELECT") {
-    const option = control.selectedOptions?.[0] || Array.from(control.options || [])
-      .find(item => String(item.value) === String(control.value));
+    const option =
+      control.selectedOptions?.[0] ||
+      Array.from(control.options || []).find(
+        (item) => String(item.value) === String(control.value),
+      );
     return String(option?.textContent || control.value || "").trim();
   }
   if (isSelectControl(control)) {
     const container = control.closest?.<DomElement>(SELECT_CONTAINER);
-    const scope = container || control.closest?.<DomElement>(".ant-form-item, .el-form-item, .form-item, [data-form-item]");
+    const scope =
+      container ||
+      control.closest?.<DomElement>(".ant-form-item, .el-form-item, .form-item, [data-form-item]");
     const selected = scope?.querySelector?.<DomElement>(
       ".ant-select-selection-item, .ant-select-selection-selected-value, .el-select__selected-item",
     );
@@ -53,7 +69,8 @@ export function readFormControlValue(control: DomElement | null | undefined): st
 /** A picker input is readonly because selection happens in its calendar. */
 export function antDatePicker(control: DomElement | null | undefined): DomElement | null {
   const picker = control?.closest?.<DomElement>(".ant-picker");
-  if (!picker?.classList?.contains("ant-picker") || picker.classList.contains("ant-picker-range")) return null;
+  if (!picker?.classList?.contains("ant-picker") || picker.classList.contains("ant-picker-range"))
+    return null;
   return picker.querySelectorAll("input").length === 1 ? picker : null;
 }
 

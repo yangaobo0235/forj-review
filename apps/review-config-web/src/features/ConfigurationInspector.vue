@@ -1,68 +1,487 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
 import type { Workbench } from "../model/use-workbench";
 import { request } from "../api/client";
-import { stateLabels } from "../model/presentation";
-import Icon from "../ui/Icon.vue";
+import ChangePreview from "./ChangePreview.vue";
+import AcceptanceCases from "./AcceptanceCases.vue";
 import FieldEditor from "./FieldEditor.vue";
-import { fieldChanges } from "../model/field-diff";
 import PageOptionsEditor from "./PageOptionsEditor.vue";
+import ModalDialog from "../ui/ModalDialog.vue";
+import ActivityTimeline from "./ActivityTimeline.vue";
+import PageEvidence from "./PageEvidence.vue";
+import { activityItems } from "../model/activity";
 
-const { work } = defineProps<{work: Workbench}>();
-const tab = ref<"scope" | "changes" | "fields" | "options">("scope");
-const caseId = ref(""), caseJson = ref("");
-const session = computed(() => work.session);
-const changes = computed(() => fieldChanges(session.value?.report?.diff));
+const { work } = defineProps<{ work: Workbench }>();
+const emit = defineEmits<{ message: [text: string]; chat: [] }>();
+const session = computed(() => work.session!);
+const tab = defineModel<string>("tab", { default: "result" });
+const expert = ref(false),
+  scroll = ref<HTMLElement | null>(null);
+const currentActivity = computed(() => activityItems(work.events).at(-1));
+const positionKey = (pane: string) => `review.workspace.v2.scroll.${work.sessionId}.${pane}`;
+function savePosition(pane: string) {
+  if (scroll.value) sessionStorage.setItem(positionKey(pane), String(scroll.value.scrollTop));
+}
+async function restorePosition() {
+  await nextTick();
+  if (scroll.value)
+    scroll.value.scrollTop = Number(sessionStorage.getItem(positionKey(tab.value)) || 0);
+}
+watch(tab, (_next, previous) => {
+  savePosition(previous);
+  void restorePosition();
+});
+onMounted(restorePosition);
+onBeforeUnmount(() => savePosition(tab.value));
+const confirmation = ref<{
+  id: string;
+  revision: number;
+  intent: number | undefined;
+  evidence: number | undefined;
+} | null>(null);
 const busy = computed(() => Boolean(work.busy) || work.running);
-const committing = computed(() => Boolean(session.value?.pending?.confirmed));
-const fields = computed(() => session.value?.snapshot.fields.filter(field => session.value!.selected_fields.includes(field.candidate_id)) ?? []);
-const samples = computed(() => session.value?.snapshot.samples.filter(sample => session.value!.selected_samples.includes(sample.sample_id)) ?? []);
-const decisions = computed(() => session.value?.decisions.filter(decision => decision.status === "RESOLVED" && decision.revision === session.value!.revision) ?? []);
-async function registerCases() {
-  await work.run("登记独立验收样例", async () => {
-    const result = await request<{case_set_id: string}>("/case-sets", {case_set_id: caseId.value, suite: JSON.parse(caseJson.value)});
-    await work.inventory();
-    work.setNotice(`已登记 ${result.case_set_id}，可在手动字段面板或对话中选择回放。`);
+const diff = computed(() => session.value.report?.diff ?? session.value.preview?.diff);
+const requirements = computed(() => session.value.task.coverage);
+watch(
+  () => [
+    session.value.revision,
+    session.value.intent_revision,
+    session.value.evidence_revision,
+    session.value.report?.report_id,
+    session.value.receipt,
+    session.value.task.can_publish,
+  ],
+  () => {
+    if (
+      confirmation.value &&
+      (confirmation.value.id !== session.value.report?.report_id ||
+        confirmation.value.revision !== session.value.revision ||
+        confirmation.value.intent !== session.value.intent_revision ||
+        confirmation.value.evidence !== session.value.evidence_revision ||
+        session.value.receipt ||
+        session.value.task.can_publish === false)
+    )
+      confirmation.value = null;
+  },
+);
+function openConfirmation() {
+  if (session.value.report)
+    confirmation.value = {
+      id: session.value.report.report_id,
+      revision: session.value.revision,
+      intent: session.value.intent_revision,
+      evidence: session.value.evidence_revision,
+    };
+}
+async function handoff() {
+  await work.run("导出开发接续任务", async () => {
+    const sid = session.value.task_id;
+    const value = await request(`/tasks/${sid}/handoff`);
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(value, null, 2)], { type: "application/json" }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `review-task-${sid}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    work.setNotice("已导出接续任务，由开发人员本地显式启动；导出不表示需求已实现。");
   });
 }
-function deleteSession() {
-  if (window.confirm("清理这个未保存会话及其执行记录？页面采集记录将保留。")) void work.run("清理会话", () => work.action("delete"));
+function followup() {
+  const pageId = String(session.value.draft.page_id),
+    sid = session.value.task_id;
+  void work.run("创建后续任务", () =>
+    work.startTask({ pageId, message: "", parentSessionId: sid }, work.source),
+  );
 }
 </script>
 
 <template>
-  <aside class="inspector" aria-label="配置详情">
-    <div class="inspector-header"><span class="eyebrow">配置上下文</span><h2>{{ session ? "当前页面" : "从页面开始" }}</h2></div>
-    <div v-if="!session" class="inspector-empty"><div class="outline-icon"><Icon name="file" :size="26"/></div><p>选定页面后，在这里查看材料、字段映射、配置差异和验证结果。</p><ol class="workflow-list"><li><span>1</span><div><strong>选定页面范围</strong><small>选择字段、图片与必传材料</small></div></li><li><span>2</span><div><strong>聊清业务规则</strong><small>助手推理映射，遇到歧义向你确认</small></div></li><li><span>3</span><div><strong>验证并确认保存</strong><small>试采集、样例回放与版本核对</small></div></li></ol></div>
-    <template v-else>
-      <div class="page-context"><div class="page-icon"><Icon name="file" :size="22"/></div><div><strong>{{ session.snapshot.title || "业务页面" }}</strong><span>草稿版本 {{ session.revision }} · {{ stateLabels[session.state] ?? "配置处理中" }}</span></div></div>
-      <div class="inspector-tabs"><button :class="{active: tab === 'options'}" @click="tab = 'options'">页面选项</button><button :class="{active: tab === 'fields'}" @click="tab = 'fields'">手动字段</button><button :class="{active: tab === 'scope'}" @click="tab = 'scope'">审核范围</button><button :class="{active: tab === 'changes'}" @click="tab = 'changes'">变更与验证<span v-if="session.report?.ok" class="status-dot"/></button></div>
-      <div class="inspector-body">
-        <template v-if="tab === 'scope'">
-          <div class="section-title"><h3>审核字段 <span>{{ session.selected_fields.length }}</span></h3><button class="text-button" :disabled="busy || Boolean(session.receipt) || committing" @click="work.run('读取页面范围', work.openScope)">调整范围</button></div>
-          <div class="selected-fields"><div v-for="field in fields" :key="field.candidate_id"><span>{{ field.label }}</span><small>{{ field.value || "未填写" }}</small></div><p v-if="!fields.length" class="muted small">没有选择页面字段</p></div>
-          <div class="section-title"><h3>材料样本 <span>{{ session.selected_samples.length }}</span></h3></div>
-          <div class="selected-materials"><a v-for="(sample, i) in samples" :key="sample.sample_id" :href="/^https?:/.test(sample.url) ? sample.url : undefined" target="_blank" rel="noreferrer"><img :src="sample.url" :alt="sample.label || `材料 ${i + 1}`" referrerpolicy="no-referrer"/><span>{{ sample.label || `材料 ${i + 1}` }}</span><em v-if="session.required_samples.includes(sample.sample_id)">必传</em></a></div>
-          <div class="section-title"><h3>规则依据</h3></div><div class="decision-list"><p v-for="(decision, i) in decisions" :key="i"><Icon name="check" :size="15"/><span>{{ decision.reason }}</span></p><p v-if="!decisions.length" class="muted small">助手核对后，字段映射和材料依据将显示在这里。</p></div>
-        </template>
-        <template v-else-if="tab === 'fields'"><FieldEditor :work="work"/></template>
-        <template v-else-if="tab === 'options'"><PageOptionsEditor :work="work"/></template>
-        <template v-else>
-          <div class="validation-heading" :class="{passed: session.report?.ok}"><Icon name="shield" :size="22"/><div><strong>{{ session.report ? session.report.ok ? "当前候选验证通过" : "还有项目需要处理" : "尚未验证" }}</strong><span>依据服务端验证结果展示</span></div></div>
-          <div v-for="(item, i) in session.report?.blockers" :key="i" class="blocker">{{ item }}</div><p v-if="!session.report" class="muted small">助手完成草稿、试采集和独立样例回放后，会提交候选配置验证。</p>
-          <p v-for="(item, i) in session.report?.decision_summary" :key="i" class="decision-summary"><Icon name="check" :size="14"/>{{ item }}</p>
-          <div v-for="change in changes" :key="change.page + change.key" class="blocker"><strong>{{ change.kind }} · {{ change.label }}</strong><p class="small">{{ change.key }} · {{ change.detail }}</p></div>
-          <p class="muted small">页面 {{ session.draft.page_id }} · 目标版本 {{ session.draft.version }}</p>
-          <details class="technical-details"><summary>查看完整配置差异</summary><pre>{{ JSON.stringify(session.report?.diff ?? {}, null, 2) }}</pre></details>
-          <button class="secondary full-width" :disabled="busy || Boolean(session.receipt) || committing || Boolean(session.pending && session.pending.kind !== 'confirmation')" @click="work.run('验证候选配置', () => work.action('validate'))">重新验证当前草稿</button>
-        </template>
-        <details class="technical-details"><summary>配置草稿与验收工具</summary><p class="muted small">仅支持系统声明的配置能力。独立样例的预期结果由操作人员登记，助手不能修改评分依据。</p><details><summary>查看配置 JSON</summary><pre>{{ JSON.stringify(session.draft, null, 2) }}</pre></details><label>样例集 ID<input v-model="caseId" placeholder="例如 permit-v2"/></label><label>ReplaySuite JSON<textarea v-model="caseJson" placeholder="粘贴人工确认的验收样例 JSON"/></label><button class="secondary full-width" :disabled="busy || !caseId.trim() || !caseJson.trim()" @click="registerCases">登记不可覆盖的样例集</button></details>
+  <section
+    class="inspector"
+    aria-label="修改结果"
+  >
+    <header class="inspector-heading">
+      <h2>{{ session.task.label || "当前修改结果" }}</h2>
+      <p
+        v-if="work.running && currentActivity"
+        class="muted small"
+      >
+        {{ currentActivity.title }}
+      </p>
+    </header>
+    <nav
+      class="workspace-tabs"
+      aria-label="工作区内容"
+    >
+      <button
+        :aria-pressed="tab === 'result'"
+        @click="tab = 'result'"
+      >
+        修改结果
+      </button>
+      <button
+        :aria-pressed="tab === 'evidence'"
+        @click="tab = 'evidence'"
+      >
+        页面资料
+      </button>
+      <button
+        :aria-pressed="tab === 'history'"
+        @click="tab = 'history'"
+      >
+        处理记录
+      </button>
+    </nav>
+    <div
+      v-show="tab !== 'history'"
+      ref="scroll"
+      class="inspector-scroll"
+    >
+      <div
+        v-show="tab === 'result'"
+        class="result-content"
+      >
+        <section
+          class="requirements"
+          aria-label="当前有效修改要求"
+        >
+          <span class="eyebrow">当前修改要求</span>
+          <div
+            v-for="item in requirements"
+            :key="item.requirement_id"
+            class="requirement-row"
+          >
+            <div>
+              <p>{{ item.text }}</p>
+              <small
+                v-for="a in item.acceptance"
+                :key="a"
+                class="muted"
+                >{{ a }}</small
+              >
+            </div>
+            <span class="tag">{{
+              item.verified ? "验证已覆盖" : item.resolved ? "已处理，待验证" : "待处理"
+            }}</span
+            ><button
+              v-if="!session.receipt && session.state !== 'CLOSED'"
+              class="text-button"
+              @click="emit('message', `关于「${item.text}」，我想更正：`)"
+            >
+              改述
+            </button>
+          </div>
+          <p
+            v-if="!requirements.length"
+            class="muted"
+          >
+            还没有有效修改目标，可以先在对话中描述。
+          </p>
+        </section>
+        <div
+          v-if="session.state === 'CLOSED'"
+          class="surface"
+        >
+          <h3>任务已归档</h3>
+          <p>需求与候选已保留。恢复后重新核对当前配置与现场。</p>
+          <button
+            class="primary"
+            :disabled="busy"
+            @click="work.run('恢复任务', () => work.action('restore'))"
+          >
+            恢复任务
+          </button>
+        </div>
+        <div
+          v-else-if="session.route === 'LOCAL_CODE' || session.route === 'HUMAN_HANDOFF'"
+          class="surface"
+        >
+          <h3>
+            {{ session.route === "LOCAL_CODE" ? "这项需求需要补充代码能力" : "需要人工设计决定" }}
+          </h3>
+          <p>{{ session.route_assessment?.reason }}</p>
+          <p
+            v-for="(gap, i) in session.capability_gaps"
+            :key="i"
+          >
+            {{ gap.missing_capability }}
+          </p>
+          <p class="muted">
+            {{
+              session.route === "LOCAL_CODE"
+                ? "导出后，由开发人员显式运行 forj-review-config-develop，在独立副本调查、修改和检查，交付补丁与未验证项。本机网页仍是配置模式，不会直接修改源码。"
+                : "人工接续材料须包含实际调查、可靠实现或验收障碍，以及具体决策事项；需求尚未实现。"
+            }}
+          </p>
+          <button
+            v-if="session.route === 'LOCAL_CODE'"
+            class="primary"
+            :disabled="busy"
+            @click="handoff"
+          >
+            导出开发接续任务
+          </button>
+        </div>
+        <div
+          v-else-if="session.waiting_reason === 'CAPTURE' && !session.receipt"
+          class="surface"
+        >
+          <h3>准备结果已保留，需要业务页面现场</h3>
+          <p>核对实际控件、页面身份和采集行为；无需全量选择字段或图片。</p>
+          <button
+            class="primary"
+            :disabled="busy"
+            @click="work.run('读取页面现场', work.openScope)"
+          >
+            关联现场并继续
+          </button>
+        </div>
+        <div
+          v-if="session.pending?.kind === 'question'"
+          class="surface"
+        >
+          <h3>有一个关键问题需要回答</h3>
+          <p>{{ session.pending.question }}</p>
+          <button
+            class="secondary"
+            @click="emit('chat')"
+          >
+            到对话中回答或自然语言说明
+          </button>
+        </div>
+        <ChangePreview :diff="diff" />
+        <section
+          v-if="session.report"
+          class="validation-section"
+          aria-label="验证结果"
+        >
+          <div class="panel-heading">
+            <h3>验证与需求覆盖</h3>
+            <span class="tag">{{ session.report.ok ? "必要检查通过" : "尚有待处理项" }}</span>
+          </div>
+          <div
+            v-for="check in session.report.checks"
+            :key="check.name"
+            class="result-row"
+          >
+            <span>{{ check.name }}</span
+            ><strong :class="{ 'success-text': check.ok }">{{
+              check.ok ? "通过" : "待完成"
+            }}</strong>
+          </div>
+          <p
+            v-for="blocker in session.report.blockers"
+            :key="blocker"
+            class="blocker"
+          >
+            {{ blocker }}
+          </p>
+          <details>
+            <summary>查看验证依据与范围</summary>
+            <p
+              v-for="item in session.report.decision_summary"
+              :key="item"
+            >
+              {{ item }}
+            </p>
+            <p class="muted small">
+              当前候选修订
+              {{
+                session.revision
+              }}；静态检查、真实页面采集、独立样例与需求覆盖分别核对。发布后还需采用核对。
+            </p>
+          </details>
+        </section>
+        <p
+          v-else
+          class="muted small"
+        >
+          Agent会自动组织相关验证；没有验证报告不表示已经通过。
+        </p>
+        <details
+          v-if="!session.receipt && session.state !== 'CLOSED'"
+          class="acceptance-section"
+        >
+          <summary>业务验收预期：仅缺少独立口径时补充</summary>
+          <AcceptanceCases :work="work" />
+        </details>
+        <section
+          v-if="session.receipt"
+          class="activation-section"
+          aria-label="发布与采用核对"
+        >
+          <h3>
+            {{ session.task.complete ? "配置已生效，本次任务完成" : "已发布，继续核对实际采用" }}
+          </h3>
+          <div class="result-row">
+            <span>配置发布记录</span><strong class="success-text">已保存</strong>
+          </div>
+          <div class="result-row">
+            <span>目标审核服务加载</span
+            ><strong>{{
+              session.activation?.state === "EFFECTIVE"
+                ? "已核对"
+                : session.activation?.reason || "等待核对"
+            }}</strong>
+          </div>
+          <div class="result-row">
+            <span>指定浏览器使用本次配置采集</span
+            ><strong>{{ session.adoption ? "已核对" : "等待核对" }}</strong>
+          </div>
+          <p class="muted small">
+            目标版本
+            {{
+              session.receipt.version
+            }}。只覆盖实际核对的服务与浏览器；已开始的审核任务保留原快照。
+          </p>
+          <div class="action-row">
+            <button
+              class="secondary"
+              :disabled="Boolean(work.busy)"
+              @click="work.run('核对服务加载', () => work.action('activation'))"
+            >
+              重新核对服务加载</button
+            ><button
+              v-if="!session.adoption"
+              class="primary"
+              :disabled="Boolean(work.busy) || session.activation?.state !== 'EFFECTIVE'"
+              @click="work.run('核对浏览器实际使用', work.adoption)"
+            >
+              核对业务浏览器使用</button
+            ><button
+              v-if="!session.adoption"
+              class="secondary"
+              :disabled="Boolean(work.busy)"
+              @click="work.run('重新关联现场', work.openScope)"
+            >
+              页面已刷新，重新关联
+            </button>
+          </div>
+        </section>
+        <details
+          class="expert-section"
+          @toggle="expert = ($event.target as HTMLDetailsElement).open"
+        >
+          <summary>专家维护与技术详情</summary>
+          <template v-if="expert"
+            ><p class="muted small">与Agent共用一个候选。人工修改使旧验证与确认失效。</p>
+            <FieldEditor :work="work" />
+            <details>
+              <summary>页面高级选项</summary>
+              <PageOptionsEditor :work="work" />
+            </details>
+            <details>
+              <summary>完整配置差异</summary>
+              <pre>{{ JSON.stringify(diff, null, 2) }}</pre>
+            </details></template
+          >
+        </details>
       </div>
-      <div class="inspector-footer">
-        <button v-if="session.state === 'READY_FOR_CONFIRMATION' && session.report?.ok" class="primary full-width" :disabled="busy || committing" @click="work.run('保存配置版本', work.confirm)"><Icon name="check" :size="17"/>{{ committing ? "保存待对账，请继续执行" : "确认变更并保存配置版本" }}</button>
-        <button v-if="session.receipt" class="primary full-width" :disabled="Boolean(work.busy)" @click="work.run('核对实际加载版本', () => work.action('activation'))"><Icon name="refresh" :size="16"/>核对审核服务加载版本</button>
-        <template v-else><button v-if="!work.running && ['FAILED', 'INTERRUPTED', 'CANCELLED'].includes(session.turn_status)" class="primary full-width" :disabled="busy" @click="work.run('恢复会话', () => work.action('resume'))">继续执行<Icon name="arrow" :size="17"/></button><button class="text-button subtle" :disabled="busy || committing" @click="deleteSession"><Icon name="trash" :size="14"/>清理未保存会话</button></template>
+      <PageEvidence
+        v-show="tab === 'evidence'"
+        :work="work"
+        @chat="emit('chat')"
+      />
+    </div>
+    <ActivityTimeline
+      v-if="tab === 'history'"
+      :work="work"
+      @evidence="tab = 'evidence'"
+    />
+    <footer
+      v-if="tab === 'result'"
+      class="task-actions"
+    >
+      <p class="muted small">
+        {{
+          session.receipt
+            ? "本次发布记录保持只读，后续修改从最新活动配置开始。"
+            : "尚未发布。修改经验证、审阅并明确确认后才进入正式配置。"
+        }}
+      </p>
+      <div class="action-row">
+        <button
+          v-if="session.task.can_publish"
+          class="primary"
+          :disabled="busy"
+          @click="openConfirmation"
+        >
+          审阅并发布</button
+        ><button
+          v-if="
+            !session.receipt && !session.pending?.confirmed && !busy && session.state !== 'CLOSED'
+          "
+          class="secondary"
+          @click="work.run('继续处理', () => work.action('resume'))"
+        >
+          {{
+            ["FAILED", "INTERRUPTED", "CANCELLED"].includes(session.turn_status)
+              ? "核对并继续处理"
+              : "继续调查与验证"
+          }}</button
+        ><button
+          v-if="session.pending?.confirmed"
+          class="primary"
+          :disabled="busy"
+          @click="work.run('核对原发布结果', () => work.action('resume'))"
+        >
+          核对原发布结果</button
+        ><button
+          v-if="session.receipt"
+          class="primary"
+          :disabled="Boolean(work.busy)"
+          @click="followup"
+        >
+          基于此页继续修改</button
+        ><button
+          v-if="!session.receipt && session.state !== 'CLOSED'"
+          class="text-button"
+          :disabled="busy || Boolean(session.pending?.confirmed)"
+          @click="work.run('归档任务', () => work.action('archive'))"
+        >
+          归档任务
+        </button>
       </div>
-    </template>
-  </aside>
+    </footer>
+    <ModalDialog
+      v-if="confirmation"
+      title="确认发布这个版本？"
+      :locked="Boolean(work.busy)"
+      @close="confirmation = null"
+      ><p>
+        页面：<strong>{{ session.draft.title }}</strong>
+      </p>
+      <p>
+        目标环境：<strong>{{ session.environment }}</strong> · 目标版本 {{ session.draft.version }}
+      </p>
+      <p>当前基线：{{ session.baseline_version }} · 草稿修订 {{ session.revision }}</p>
+      <ChangePreview :diff="diff" />
+      <p>当前必要检查通过。提交时会再次核对候选、需求、基线与证据有效性。</p>
+      <p class="muted">发布后仍需核对服务加载及业务浏览器实际使用。</p>
+      <p
+        v-if="work.error"
+        class="inline-error"
+        role="alert"
+      >
+        {{ work.error }}。可重试同一次操作核对回执，系统不会重复创建发布。
+      </p>
+      <div class="action-row">
+        <button
+          class="secondary"
+          :disabled="Boolean(work.busy)"
+          @click="confirmation = null"
+        >
+          返回修改</button
+        ><button
+          class="primary"
+          :disabled="Boolean(work.busy)"
+          @click="work.run('提交并核对发布', work.confirm)"
+        >
+          {{ work.busy || "确认发布此版本" }}
+        </button>
+      </div></ModalDialog
+    >
+  </section>
 </template>

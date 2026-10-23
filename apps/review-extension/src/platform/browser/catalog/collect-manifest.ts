@@ -7,7 +7,12 @@
 import type { FieldDefinition } from "../dom.ts";
 
 import type { CollectManifest } from "../../../shared/contracts/collection";
-export type { CollectManifest, ManifestField, ManifestPageGroup, ManifestMaterial } from "../../../shared/contracts/collection";
+export type {
+  CollectManifest,
+  ManifestField,
+  ManifestPageGroup,
+  ManifestMaterial,
+} from "../../../shared/contracts/collection";
 
 export interface ManifestImageProfile {
   /** 已知的图片类型：材料类型 + 页面分组分区（非材料分区除外）。 */
@@ -47,17 +52,22 @@ function buildImageProfile(manifest: CollectManifest): ManifestImageProfile {
     // 和行驶证，拿它定类型会让一张只写着分区名的图从 `old_vehicle` 漂移成
     // `scrap_certificate`。定类型只用材料自己的名字。
     hintTypes: (() => {
-      const groupLabels = new Set(manifest.page_groups
-        .filter(group => manifest.scopes.includes(group.scope)).map(group => group.label));
+      const groupLabels = new Set(
+        manifest.page_groups
+          .filter((group) => manifest.scopes.includes(group.scope))
+          .map((group) => group.label),
+      );
       return manifest.materials
-        .flatMap((item) => item.hints
-          .filter((hint) => Boolean(hint) && !groupLabels.has(hint))
-          .map((hint) => [hint, item.document_type] as [string, string]))
+        .flatMap((item) =>
+          item.hints
+            .filter((hint) => Boolean(hint) && !groupLabels.has(hint))
+            .map((hint) => [hint, item.document_type] as [string, string]),
+        )
         .sort((left, right) => right[0].length - left[0].length)
-        .map(([hint, documentType]) => [
-          new RegExp(escapeRegExp(hint), "i"),
-          documentType,
-        ] as [RegExp, string]);
+        .map(
+          ([hint, documentType]) =>
+            [new RegExp(escapeRegExp(hint), "i"), documentType] as [RegExp, string],
+        );
     })(),
   };
 }
@@ -67,7 +77,9 @@ export function toFieldDefinitions(manifest: CollectManifest): Record<string, Fi
   for (const field of manifest.fields) {
     const definition: FieldDefinition = {
       aliases: [...field.aliases],
-      locatorName: field.locator_name, locatorId: field.locator_id, occurrence: field.occurrence,
+      locatorName: field.locator_name,
+      locatorId: field.locator_id,
+      occurrence: field.occurrence,
       section: field.section,
     };
     // 与内置表保持同样的写法：只在偏离默认值时写出这两个标记。
@@ -83,14 +95,17 @@ export function toGroupLabelEntries(
 ): [string, { scope: string; title: string; occurrence?: number }][] {
   return manifest.page_groups.map((group) => [
     group.label,
-    { scope: group.scope, title: group.title, ...(group.occurrence ? {occurrence: group.occurrence} : {}) },
+    {
+      scope: group.scope,
+      title: group.title,
+      ...(group.occurrence ? { occurrence: group.occurrence } : {}),
+    },
   ]);
 }
 
 let appliedFields: Record<string, FieldDefinition> | null = null;
 let appliedGroups: [string, { scope: string; title: string; occurrence?: number }][] | null = null;
 let appliedImageProfile: ManifestImageProfile | null = null;
-let appliedSlots: [string, string][] | null = null;
 let appliedFieldLabels: Record<string, string> | null = null;
 let appliedMaterialLabels: Record<string, string> | null = null;
 let appliedWritableFields: Set<string> | null = null;
@@ -102,19 +117,24 @@ let currentManifest: unknown = null;
 
 export const currentCollectManifest = () => currentManifest;
 
+export function manifestReviewsDeclaredFieldsOnly(): boolean {
+  return isValid(currentManifest) && currentManifest.review_declared_fields_only === true;
+}
+
 const isValid = (manifest: unknown): manifest is CollectManifest => {
   const candidate = manifest as CollectManifest | null;
   return Boolean(
-    candidate
-      && Array.isArray(candidate.scopes)
-      && Array.isArray(candidate.fields)
-      && Array.isArray(candidate.page_groups)
-      && Array.isArray(candidate.materials)
-      && (candidate.record_identity_fields === undefined || (
-        Array.isArray(candidate.record_identity_fields)
-        && Array.isArray(candidate.identity_anchors)
-        && candidate.record_identity_fields.every(field => typeof field === "string" && candidate.identity_anchors!.includes(field))
-      )),
+    candidate &&
+      Array.isArray(candidate.scopes) &&
+      Array.isArray(candidate.fields) &&
+      Array.isArray(candidate.page_groups) &&
+      Array.isArray(candidate.materials) &&
+      (candidate.record_identity_fields === undefined ||
+        (Array.isArray(candidate.record_identity_fields) &&
+          Array.isArray(candidate.identity_anchors) &&
+          candidate.record_identity_fields.every(
+            (field) => typeof field === "string" && candidate.identity_anchors!.includes(field),
+          ))),
   );
 };
 
@@ -127,7 +147,6 @@ export function applyCollectManifest(manifest: unknown): boolean {
     appliedFields = null;
     appliedGroups = null;
     appliedImageProfile = null;
-    appliedSlots = null;
     appliedFieldLabels = null;
     appliedMaterialLabels = null;
     // Explicit identity metadata that fails validation must never enable legacy writes.
@@ -142,14 +161,7 @@ export function applyCollectManifest(manifest: unknown): boolean {
   appliedSections = manifest.page_sections ?? [];
   appliedGroups = toGroupLabelEntries(manifest);
   appliedImageProfile = buildImageProfile(manifest);
-  appliedSlots = manifest.materials.flatMap((item) =>
-    (item.slots ?? []).map(
-      ([scope, order]) => [`${scope}:${order}`, item.document_type] as [string, string],
-    ),
-  );
-  appliedFieldLabels = Object.fromEntries(
-    manifest.fields.map((field) => [field.key, field.label]),
-  );
+  appliedFieldLabels = Object.fromEntries(manifest.fields.map((field) => [field.key, field.label]));
   appliedMaterialLabels = Object.fromEntries(
     manifest.materials.map((item) => [item.document_type, item.label]),
   );
@@ -163,25 +175,24 @@ export function applyCollectManifest(manifest: unknown): boolean {
   appliedIdentityAnchors = Array.isArray(manifest.identity_anchors)
     ? manifest.identity_anchors
     : [];
-  appliedRecordIdentityFields = Array.isArray(manifest.record_identity_fields) ? manifest.record_identity_fields : [];
+  appliedRecordIdentityFields = Array.isArray(manifest.record_identity_fields)
+    ? manifest.record_identity_fields
+    : [];
   return true;
 }
 
-/** 已应用的上传槽位表；没有应用清单时返回 null，调用方保持未配置状态。 */
-export function manifestSlotEntries(): [string, string][] | null {
-  return appliedSlots;
-}
-
 export function manifestActions() {
-  return isValid(currentManifest) ? currentManifest.actions ?? [] : [];
+  return isValid(currentManifest) ? (currentManifest.actions ?? []) : [];
 }
 
 /** 唯一命中的原始区域标题；多个区域同时出现时保留歧义。 */
 export function manifestSectionFromText(text: string): string | null {
   const compact = (value: string) => value.replace(/\s+/g, "");
   const normalized = compact(text);
-  const matching = appliedSections.filter(section => section.title && normalized.includes(compact(section.title)));
-  const keys = new Set(matching.map(section => section.key));
+  const matching = appliedSections.filter(
+    (section) => section.title && normalized.includes(compact(section.title)),
+  );
+  const keys = new Set(matching.map((section) => section.key));
   return keys.size === 1 ? matching[0].key : null;
 }
 
@@ -194,7 +205,9 @@ export function manifestImageProfile(): ManifestImageProfile | null {
 export function manifestIgnoresImage(label: string): boolean {
   const normalize = (value: string) => value.replace(/\s+/g, "").trim();
   const manifest = isValid(currentManifest) ? currentManifest : null;
-  return Boolean(label && manifest?.ignored_image_labels?.some(item => normalize(item) === normalize(label)));
+  return Boolean(
+    label && manifest?.ignored_image_labels?.some((item) => normalize(item) === normalize(label)),
+  );
 }
 
 /**
@@ -223,7 +236,9 @@ export function manifestFieldDefinitions(): Record<string, FieldDefinition> | nu
 }
 
 /** 已应用的页面分组标题表；没有应用清单时返回 null。 */
-export function manifestGroupLabelEntries(): [string, { scope: string; title: string; occurrence?: number }][] | null {
+export function manifestGroupLabelEntries():
+  | [string, { scope: string; title: string; occurrence?: number }][]
+  | null {
   return appliedGroups;
 }
 
@@ -280,7 +295,7 @@ export async function fetchCollectManifest(
   baseUrl: string,
   businessType: string,
   fetcher: typeof fetch = fetch,
-  context?: {region: string; profile_version?: string; page_id?: string},
+  context?: { region: string; profile_version?: string; page_id?: string },
 ): Promise<CollectManifest | null> {
   try {
     const response = await fetcher(

@@ -66,13 +66,24 @@ async def verify_maintenance(state, plan, evidence, suite_data):
     snapshot = evidence["snapshot"]
     binding = {
         "revision": evidence["revision"],
+        **(
+            {"evidence_revision": evidence["evidence_revision"]}
+            if "evidence_revision" in evidence
+            else {"intent_revision": evidence["intent_revision"]}
+            if "intent_revision" in evidence
+            else {}
+        ),
         "snapshot_digest": hashlib.sha256(
             json.dumps(snapshot, ensure_ascii=False, sort_keys=True).encode()
         ).hexdigest(),
         "capture_id": evidence.get("capture_id"),
         **{
             key: sorted(evidence[key])
-            for key in ("selected_fields", "selected_samples", "required_samples")
+            for key in (
+                ("reference_fields", "reference_samples")
+                if evidence.get("schema_version") == "2.0"
+                else ("selected_fields", "selected_samples", "required_samples")
+            )
         },
     }
     if (
@@ -103,10 +114,13 @@ async def verify_maintenance(state, plan, evidence, suite_data):
     ]
     field_ids = {item["candidate_id"] for item in snapshot["fields"]}
     sample_ids = {item["sample_id"] for item in snapshot["samples"]}
+    reference_fields = evidence.get("reference_fields", evidence.get("selected_fields", []))
+    reference_samples = evidence.get("reference_samples", evidence.get("selected_samples", []))
+    legacy_scope = evidence.get("schema_version", "1.0") != "2.0"
     if (
-        set(evidence["selected_fields"]) - field_ids
-        or set(evidence["selected_samples"]) - sample_ids
-        or set(evidence["required_samples"]) - set(evidence["selected_samples"])
+        set(reference_fields) - field_ids
+        or set(reference_samples) - sample_ids
+        or set(evidence.get("required_samples", [])) - set(reference_samples)
     ):
         raise ValueError("选择项必须来自当前现场")
     fields = {item["key"] for item in preview["manifest"]["fields"]}
@@ -114,18 +128,24 @@ async def verify_maintenance(state, plan, evidence, suite_data):
     mappings = {
         d.get("sample_id"): d.get("material") for d in decisions if d.get("material") in materials
     }
-    if any(
+    if any(d.get("sample_id") and d.get("material") not in materials for d in decisions):
+        raise ValueError("当前材料映射指向已不存在的候选材料")
+    if legacy_scope and any(
         not any(d.get("candidate_id") == cid and d.get("field_key") in fields for d in decisions)
-        for cid in evidence["selected_fields"]
+        for cid in reference_fields
     ):
         raise ValueError("选中字段缺少有效映射")
     if any(
         mappings.get(sample) not in preview["required_materials"]
-        for sample in evidence["required_samples"]
+        for sample in evidence.get("required_samples", [])
     ):
         raise ValueError("所选必传材料未配置为必传")
     trial = evaluate_collection(
-        preview["manifest"], facts, draft["page_id"], evidence["selected_samples"], mappings
+        preview["manifest"],
+        facts,
+        draft["page_id"],
+        reference_samples if legacy_scope else sorted(mappings),
+        mappings,
     )
     if not trial["ok"]:
         raise ValueError("浏览器试采集检查未通过：" + json.dumps(trial, ensure_ascii=False))

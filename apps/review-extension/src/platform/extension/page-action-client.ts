@@ -26,7 +26,14 @@ export async function applyPageFieldValue(
   chromeApi: ChromeTabsLike = globalThis.chrome,
 ): Promise<PageFillResult> {
   if (!action.field || !action.value) return { ok: false, message: "回填值不能为空" };
-  if (!Number.isInteger(target.tabId) || !target.pageUrl || !target.pageInstanceId || !target.pageFingerprint || !target.collectionId || !chromeApi.tabs.sendMessage) {
+  if (
+    !Number.isInteger(target.tabId) ||
+    !target.pageUrl ||
+    !target.pageInstanceId ||
+    !target.pageFingerprint ||
+    !target.collectionId ||
+    !chromeApi.tabs.sendMessage
+  ) {
     return { ok: false, message: "原审核页面标识不完整，请重新审核" };
   }
   return chromeApi.tabs.sendMessage(target.tabId, {
@@ -44,10 +51,21 @@ export async function applyPageFieldGroupValue(
   target: PageFillTarget,
   chromeApi: ChromeTabsLike = globalThis.chrome,
 ): Promise<PageFillResult> {
-  if (action.fields.length < 2 || new Set(action.fields).size !== action.fields.length || !action.value) {
+  if (
+    action.fields.length < 2 ||
+    new Set(action.fields).size !== action.fields.length ||
+    !action.value
+  ) {
     return { ok: false, message: "组合字段回填参数不完整" };
   }
-  if (!Number.isInteger(target.tabId) || !target.pageUrl || !target.pageInstanceId || !target.pageFingerprint || !target.collectionId || !chromeApi.tabs.sendMessage) {
+  if (
+    !Number.isInteger(target.tabId) ||
+    !target.pageUrl ||
+    !target.pageInstanceId ||
+    !target.pageFingerprint ||
+    !target.collectionId ||
+    !chromeApi.tabs.sendMessage
+  ) {
     return { ok: false, message: "原审核页面标识不完整，请重新审核" };
   }
   return chromeApi.tabs.sendMessage(target.tabId, {
@@ -64,7 +82,14 @@ export async function verifyInvoice(
   target: PageFillTarget & { field: string; expectedValue: string },
   chromeApi: ChromeTabsLike = globalThis.chrome,
 ): Promise<PageFillResult> {
-  if (!Number.isInteger(target.tabId) || !target.pageUrl || !target.pageInstanceId || !target.pageFingerprint || !target.collectionId || !chromeApi.tabs.sendMessage) {
+  if (
+    !Number.isInteger(target.tabId) ||
+    !target.pageUrl ||
+    !target.pageInstanceId ||
+    !target.pageFingerprint ||
+    !target.collectionId ||
+    !chromeApi.tabs.sendMessage
+  ) {
     return { ok: false, message: "原审核页面标识不完整，请重新审核" };
   }
   return chromeApi.tabs.sendMessage(target.tabId, {
@@ -84,7 +109,14 @@ export async function setAffiliation(
   if (target.value !== "公司" && target.value !== "个人") {
     return { ok: false, message: "挂靠回填值缺少明确的主体材料依据" };
   }
-  if (!Number.isInteger(target.tabId) || !target.pageUrl || !target.pageInstanceId || !target.pageFingerprint || !target.collectionId || !chromeApi.tabs.sendMessage) {
+  if (
+    !Number.isInteger(target.tabId) ||
+    !target.pageUrl ||
+    !target.pageInstanceId ||
+    !target.pageFingerprint ||
+    !target.collectionId ||
+    !chromeApi.tabs.sendMessage
+  ) {
     return { ok: false, message: "原审核页面标识不完整，请重新审核" };
   }
   return chromeApi.tabs.sendMessage(target.tabId, {

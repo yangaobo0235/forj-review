@@ -8,14 +8,30 @@ test("diagnostics keep counts and correlation, dropping payloads and injection",
   console.info = (...args) => records.push(args);
   try {
     logDiagnostic("collect.complete", {
-      job_id: "job-123", collectionId: "collection:1", imageCount: 3, ok: false,
-      url: "https://example.test?token=SECRET", message: "PRIVATE", value: "PRIVATE",
-      fields: { name: "PRIVATE" }, code: "FORGED\nline", durationMs: Infinity, privateNumber: 123456,
+      job_id: "job-123",
+      collectionId: "collection:1",
+      imageCount: 3,
+      ok: false,
+      url: "https://example.test?token=SECRET",
+      message: "PRIVATE",
+      value: "PRIVATE",
+      fields: { name: "PRIVATE" },
+      code: "FORGED\nline",
+      durationMs: Infinity,
+      privateNumber: 123456,
     });
   } finally {
     console.info = original;
   }
-  assert.deepEqual(records, [["[ForjReview] collect.complete", {
-    job_id: "job-123", collectionId: "collection:1", imageCount: 3, ok: false,
-  }]]);
+  assert.deepEqual(records, [
+    [
+      "[ForjReview] collect.complete",
+      {
+        job_id: "job-123",
+        collectionId: "collection:1",
+        imageCount: 3,
+        ok: false,
+      },
+    ],
+  ]);
 });

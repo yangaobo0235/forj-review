@@ -69,8 +69,6 @@ def test_ocr_vin_compares_its_own_page_value_against_shared_materials(profile, v
         comparisons=comparisons,
         external_checks=[],
         business_checks=[],
-        completeness=None,
-        limitations=[],
     )
     by_id = {item.step_id: item for item in steps}
     task = by_id["FIELD-NEW-VEHICLE-VIN"]

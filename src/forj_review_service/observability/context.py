@@ -22,7 +22,10 @@ def current_log_context() -> dict[str, str]:
 
 @contextmanager
 def log_context(**values: object):
-    merged = {**current_log_context(), **{key: safe_id(value) for key, value in values.items() if key in CONTEXT_KEYS}}
+    merged = {
+        **current_log_context(),
+        **{key: safe_id(value) for key, value in values.items() if key in CONTEXT_KEYS},
+    }
     token = _context.set(merged)
     try:
         yield
@@ -42,8 +45,12 @@ def with_review_log_context(function):
             request = request.model_copy(update={"trace_id": uuid4().hex})
             bound.arguments["request"] = request
         image = bound.arguments.get("image")
-        values = dict(trace_id=request.trace_id, business=request.business_type,
-                      region=request.region, profile=request.profile_version)
+        values = dict(
+            trace_id=request.trace_id,
+            business=request.business_type,
+            region=request.region,
+            profile=request.profile_version,
+        )
         if image is not None:
             values["image_id"] = image.image_id or image.index
         with log_context(**values):

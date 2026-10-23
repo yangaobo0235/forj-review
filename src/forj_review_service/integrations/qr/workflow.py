@@ -77,13 +77,12 @@ class QrVerificationWorkflow:
     async def _decode(self, state: QrState):
         image = state["images"][state["position"]]
         document = state["documents"].get(image.index)
-        codes = list(document.qr_codes) if document and not image.collection_error else []
-        decoder = "model" if codes else None
+        codes = []
+        decoder = None
         decode_result = None
-        # 模型没有产出文档或文档没有 qr_codes，都进入二维码专用兜底。
-        # 这样模型整张图超时/解析失败时，官网核验仍有机会由本地解码完成；
-        # 材料识别状态会在诊断中保留，不会被伪装成成功。
-        if not codes and not image.collection_error:
+        # 模型可能把页眉、页脚的打印网址填进 qr_codes，不能作为扫码事实。
+        # 原图解码独立于模型提取，即使材料识别失败也继续执行。
+        if not image.collection_error:
             decode_result = await state["qr_decoder"].decode(image.recognition_source)
             codes = list(decode_result.values)
             decoder = decode_result.decoder if codes else None
@@ -101,6 +100,8 @@ class QrVerificationWorkflow:
             if decode_result is not None:
                 if decode_result.error_code == "decode_empty":
                     detail = "ZXing 未读到二维码；OpenCV 也未读到二维码"
+                elif decode_result.error_code == "image_too_large":
+                    detail = "原图超过二维码读取大小限制，请提供保留二维码清晰度的较小图片"
                 elif decode_result.error_code in {
                     "download_timeout",
                     "download_error",
@@ -109,14 +110,10 @@ class QrVerificationWorkflow:
                     detail = f"二维码图片读取失败（{decode_result.error_code}）"
                 else:
                     detail = f"二维码读取失败（{decode_result.error_code or 'unknown'}）"
-                prefix = "模型未提取到可靠的二维码" if document else "材料识别未完成"
-                message = f"{prefix}；{detail}，请查看原图人工核验"
+                prefix = "" if document else "材料识别未完成；"
+                message = f"{prefix}{detail}，请查看原图人工核验"
             else:
-                message = (
-                    "材料识别未完成，尚未取得二维码内容，请重试该材料或人工核验"
-                    if not document or image.collection_error
-                    else "模型未提取到可靠的二维码内容，请查看原图人工核验"
-                )
+                message = "材料采集失败，尚未取得二维码内容，请重新采集该材料或人工核验"
             missing = QrCheck(
                 image_index=image.index,
                 status=FieldStatus.REVIEW_REQUIRED,
@@ -194,4 +191,15 @@ class QrVerificationWorkflow:
             },
             config={"recursion_limit": max(25, 5 * len(images) + 5)},
         )
-        return result["checks"] or result["missing"][:1]
+        checks = result["checks"]
+        if any(check.domain_valid for check in checks):
+            return checks
+        # 其他候选图中的无关二维码不能遮住回收证明的读取故障。
+        preferred_indices = {image.index for image in preferred}
+        failures = [
+            check
+            for check in result["missing"]
+            if check.image_index in preferred_indices
+            or check.decode_error not in {None, "decode_empty"}
+        ]
+        return [*failures, *checks] or result["missing"][:1]

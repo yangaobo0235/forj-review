@@ -27,17 +27,26 @@ const steps = [
   },
 ];
 
-
-
 test("visibility follows the backend declaration rather than business field or task names", () => {
   const hidden = [
     { ...steps[0], step_id: "BUSINESS-AFFILIATION-SUBJECT-001" },
     { ...steps[0], step_id: "BUSINESS-AFFILIATION-AUX-CUSTOMER-NAME" },
-    { ...steps[0], step_id: "FIELD-old_vehicle.affiliation", category: "FIELD", page_target_field: "old_vehicle.affiliation" },
+    {
+      ...steps[0],
+      step_id: "FIELD-old_vehicle.affiliation",
+      category: "FIELD",
+      page_target_field: "old_vehicle.affiliation",
+    },
   ];
 
-  assert.equal(hidden.every((step) => isFieldFirstTaskVisible(step)), true);
-  assert.equal(hidden.every((step) => !isFieldFirstTaskVisible({ ...step, visible: false })), true);
+  assert.equal(
+    hidden.every((step) => isFieldFirstTaskVisible(step)),
+    true,
+  );
+  assert.equal(
+    hidden.every((step) => !isFieldFirstTaskVisible({ ...step, visible: false })),
+    true,
+  );
   assert.equal(isFieldFirstTaskVisible(steps[1]), true);
 });
 
@@ -49,15 +58,27 @@ test("retired material tasks stay hidden while field and external failures remai
   ];
 
   for (const status of ["MATCH", "CONFLICT", "INSUFFICIENT"]) {
-    assert.equal(material.every((step) => !isFieldFirstTaskVisible({ ...step, visible: true, result_status: status })), true);
+    assert.equal(
+      material.every(
+        (step) => !isFieldFirstTaskVisible({ ...step, visible: true, result_status: status }),
+      ),
+      true,
+    );
   }
-  for (const step_id of ["FIELD-old_vehicle.vin", "BUSINESS-QR-001", "BUSINESS-OWNER-001", steps[1].step_id]) {
+  for (const step_id of [
+    "FIELD-old_vehicle.vin",
+    "BUSINESS-QR-001",
+    "BUSINESS-OWNER-001",
+    steps[1].step_id,
+  ]) {
     assert.equal(isFieldFirstTaskVisible({ ...steps[1], step_id }), true);
   }
 });
 
 test("keeps step text readable in a narrow panel", () => {
-  const stylesheet = (readFileSync(new URL("../src/app/App.css", import.meta.url), "utf8") + readFileSync(new URL("../src/features/review/ui/EvidenceReviewWorkbench.css", import.meta.url), "utf8"));
+  const stylesheet =
+    readFileSync(new URL("../src/app/App.css", import.meta.url), "utf8") +
+    readFileSync(new URL("../src/features/review/ui/ReviewWorkbench.css", import.meta.url), "utf8");
 
   // 侧边栏只有几百像素宽，长理由/长字段值必须能断行，否则会横向溢出。
   // 断言只能落在 CSS 文本上——这里没有布局引擎，样式本身没法做行为测试。

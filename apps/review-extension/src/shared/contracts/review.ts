@@ -1,5 +1,18 @@
-export interface DifferenceRange { kind: "REPLACE" | "EXTRA" | "MISSING"; start: number; end: number; page_start: number; page_end: number; page_text: string; }
-export type ImageGroup = "身份证" | "回收证明" | "旧车资料" | "新车资料" | "发票及其他图片" | "未分类";
+export interface DifferenceRange {
+  kind: "REPLACE" | "EXTRA" | "MISSING";
+  start: number;
+  end: number;
+  page_start: number;
+  page_end: number;
+  page_text: string;
+}
+export type ImageGroup =
+  | "身份证"
+  | "回收证明"
+  | "旧车资料"
+  | "新车资料"
+  | "发票及其他图片"
+  | "未分类";
 // Identifiers come from the backend catalog; adding a page does not change this contract.
 export type BusinessType = string;
 export type Region = string;
@@ -64,7 +77,7 @@ export interface ReviewFieldSnapshot {
 }
 
 export interface PageData {
-    pageModelScope?: import("./vehicle-model").ModelPageScope;
+  pageModelScope?: import("./vehicle-model").ModelPageScope;
   pageSelection?: import("./vehicle-model").ModelPageSelection;
   pageSelectionError?: string;
   actions?: import("@forj/configuration-contracts").ActionBinding[];
@@ -120,7 +133,14 @@ export interface MaterialCompletenessIssue {
     image_id?: string | null;
     image_index?: number | null;
   }>;
-  reason_code?: "material_missing" | "image_unreadable" | "recognition_failed" | "recognition_uncertain" | "evidence_not_extracted" | "page_field_missing" | null;
+  reason_code?:
+    | "material_missing"
+    | "image_unreadable"
+    | "recognition_failed"
+    | "recognition_uncertain"
+    | "evidence_not_extracted"
+    | "page_field_missing"
+    | null;
   reason_detail?: string | null;
   material_type?: string | null;
   business_scope?: string | null;
@@ -186,7 +206,16 @@ export interface RetrySummary {
 export type FieldStatus = "MATCH" | "CONFLICT" | "REVIEW_REQUIRED";
 export type Recommendation = "PASS" | "REVIEW_REQUIRED";
 export type CheckResultStatus = "MATCH" | "CONFLICT" | "INSUFFICIENT";
-export type ReasonCode = "VALUE_MISMATCH" | "RULE_VIOLATION" | "EVIDENCE_MISSING" | "RECOGNITION_UNCERTAIN" | "AUTHORITY_MISSING" | "PAGE_VALUE_MISSING" | "POLICY_REVIEW" | "EXTERNAL_UNAVAILABLE" | "SYSTEM_INPUT";
+export type ReasonCode =
+  | "VALUE_MISMATCH"
+  | "RULE_VIOLATION"
+  | "EVIDENCE_MISSING"
+  | "RECOGNITION_UNCERTAIN"
+  | "AUTHORITY_MISSING"
+  | "PAGE_VALUE_MISSING"
+  | "POLICY_REVIEW"
+  | "EXTERNAL_UNAVAILABLE"
+  | "SYSTEM_INPUT";
 
 export interface CheckResultValue {
   fill_role?: "RECOMMENDATION" | "EVIDENCE" | null;
@@ -240,12 +269,13 @@ export interface ReviewTaskDetails {
     license_model: string;
     auxiliary_model: string;
     completed_value: string;
-    status: "READY" | "BLOCKED" | "UNAVAILABLE";
+    /** READY 表示组合值可供人工选择，不表示材料一致或审核通过。 */
+    status: "READY" | "UNAVAILABLE";
     basis: string;
     issues: string[];
   };
   /** 后端判定可靠的图片型号；空值表示无可靠材料值，禁止用页面字段补值。 */
-  model_search?: {announcement_model: string; engine_model: string; issues: string[]};
+  model_search?: { announcement_model: string; engine_model: string; issues: string[] };
   differences?: number[];
   subject_requirements?: SubjectEvidenceRequirement[];
   auxiliary_checks?: AuxiliaryCheckSummary[];
@@ -283,7 +313,6 @@ export interface EvidenceFact {
   conflicting?: boolean;
 }
 
-
 export interface FieldComparison {
   reason_codes?: ReasonCode[];
   field: string;
@@ -312,6 +341,19 @@ export interface QrCheck {
 }
 
 export interface ReviewResponse {
+  recognized_documents?: Array<{
+    target_id: string;
+    image_index?: number | null;
+    document_type: string;
+    business_scope: string;
+    raw_fields: Array<{
+      label: string;
+      value: string;
+      section: string;
+      box: number[];
+      uncertain: boolean;
+    }>;
+  }>;
   protocol_version: "2.0";
   presentation: "FIELD_WORKBENCH" | "MANUAL_REVIEW";
   business_type: BusinessType;
@@ -434,7 +476,13 @@ export interface ResultSection {
 }
 
 export type JobStatus = "RUNNING" | "PARTIAL" | "COMPLETED" | "FAILED" | "CANCELLED";
-export type ReviewJobPhase = "PREPARING" | "RECOGNIZING" | "FINALIZING" | "COMPLETED" | "FAILED" | "CANCELLED";
+export type ReviewJobPhase =
+  | "PREPARING"
+  | "RECOGNIZING"
+  | "FINALIZING"
+  | "COMPLETED"
+  | "FAILED"
+  | "CANCELLED";
 
 export interface ReviewProgress {
   total_count: number;

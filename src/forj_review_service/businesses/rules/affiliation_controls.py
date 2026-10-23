@@ -4,26 +4,8 @@ from collections.abc import Sequence
 from typing import Any, Literal
 
 from forj_review_service.businesses.context import DEFAULT_BUSINESS, BusinessContext
-from forj_review_service.businesses.rules.affiliation import normalize_page_owner_type
+from forj_review_service.businesses.rules.affiliation import normalize_subject_type
 from forj_review_service.contracts.checks import CheckResult, CheckResultValue
-
-
-def check_owner_type_input(
-    field: str,
-    value: Any,
-    *,
-    business: BusinessContext = DEFAULT_BUSINESS,
-) -> CheckResult:
-    valid = normalize_page_owner_type(value, business=business) is not None
-    return CheckResult(
-        check_id=f"FIELD-{field}",
-        label="所有人类型",
-        status="MATCH" if valid else "INSUFFICIENT",
-        reason="系统业务字段，无需材料比对"
-        if valid
-        else "车辆所有人类型为空或不是个人/企业，请人工确认",
-        values=[CheckResultValue(source="申请页面字段", value=value)],
-    )
 
 
 def check_affiliation_control(
@@ -41,7 +23,7 @@ def check_affiliation_control(
     )
     expected_type = str(expected_raw) if expected_raw in {"PERSONAL", "COMPANY"} else None
     expected_label = {"PERSONAL": "个人", "COMPANY": "公司"}.get(expected_type)
-    actual_type = normalize_page_owner_type(value, business=business)
+    actual_type = normalize_subject_type(value, business=business)
     values = [CheckResultValue(source="申请页面字段", value=value)]
     if expected_label:
         values.append(CheckResultValue(source="主体关系核验", value=expected_label))

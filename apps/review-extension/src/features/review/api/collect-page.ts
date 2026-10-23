@@ -6,36 +6,24 @@ import type { CollectManifest } from "../../../platform/browser/catalog/collect-
 import { fetchPageCatalog } from "../../../platform/browser/catalog/page-catalog.ts";
 import type { PageCatalog } from "../../../platform/browser/catalog/page-catalog.ts";
 import { reviewApiBaseUrl } from "./review-client";
-import {
-  manualBusinessSelection,
-  type BusinessChoice,
-} from "../model/review-panel";
+import { manualBusinessSelection, type BusinessChoice } from "../model/review-panel";
 import type { PageData } from "../../../shared/contracts/review";
 
 /**
  * 拉取服务目录中各页面的采集清单。缺失页面保持未配置状态。
  */
-async function loadCollectManifests(
-  catalog: PageCatalog | null,
-): Promise<CollectManifest[]> {
+async function loadCollectManifests(catalog: PageCatalog | null): Promise<CollectManifest[]> {
   const results = await Promise.all(
     catalog?.identities.length
       ? catalog.identities.map((identity) =>
-          fetchCollectManifest(
-            reviewApiBaseUrl,
-            identity.business_type,
-            fetch,
-            identity,
-          ),
+          fetchCollectManifest(reviewApiBaseUrl, identity.business_type, fetch, identity),
         )
       : [],
   );
   return results.filter((item): item is CollectManifest => item !== null);
 }
 
-export async function collectPageData(
-  selection: BusinessChoice,
-): Promise<PageData> {
+export async function collectPageData(selection: BusinessChoice): Promise<PageData> {
   if (!globalThis.chrome?.tabs) {
     throw new Error("请在浏览器扩展侧边栏中使用审核助手");
   }
@@ -49,8 +37,7 @@ export async function collectPageData(
   const manifests = pageCatalog ? await loadCollectManifests(pageCatalog) : [];
   const pageData = (await chrome.tabs.sendMessage(tab.id, {
     type: "COLLECT_PAGE_MANIFEST",
-    businessSelection:
-      selection === "AUTO" ? null : manualBusinessSelection(selection),
+    businessSelection: selection === "AUTO" ? null : manualBusinessSelection(selection),
     // 拉取失败时下发空数组，Content Script 清空旧字段及回填权限。
     collectManifests: manifests,
     pageCatalog,
@@ -59,24 +46,34 @@ export async function collectPageData(
   // 清单不会传到这里。面板重新应用同一份，用于把字段键和材料类型显示成中文；
   // 采集判定仍然只发生在 Content Script。
   const selectedManifest = manifests.find(
-      (item) =>
-        item.business_type === pageData.businessType &&
-        (!item.page_id || item.page_id === pageData.pageId) &&
-        (!item.region || item.region === pageData.region) &&
-        (!item.profile_version ||
-          item.profile_version === pageData.profileVersion),
+    (item) =>
+      item.business_type === pageData.businessType &&
+      (!item.page_id || item.page_id === pageData.pageId) &&
+      (!item.region || item.region === pageData.region) &&
+      (!item.profile_version || item.profile_version === pageData.profileVersion),
   );
   if (!pageCatalog) {
     applyCollectManifest(null);
-    return {...pageData, sourceTabId: tab.id,
-      reviewServiceError: "审核服务未连接，请确认服务已启动后点击“重新读取页面”。"};
+    return {
+      ...pageData,
+      sourceTabId: tab.id,
+      reviewServiceError: "审核服务未连接，请确认服务已启动后点击“重新读取页面”。",
+    };
   }
   if (pageData.pageId && !selectedManifest) {
     applyCollectManifest(null);
-    return {...pageData, sourceTabId: tab.id,
-      reviewServiceError: "当前页面已识别，但审核采集配置不可用或尚未配置，请检查服务配置后重新读取页面。"};
+    return {
+      ...pageData,
+      sourceTabId: tab.id,
+      reviewServiceError:
+        "当前页面已识别，但审核采集配置不可用或尚未配置，请检查服务配置后重新读取页面。",
+    };
   }
   applyCollectManifest(selectedManifest);
-  return { ...pageData, actions: selectedManifest?.actions ?? [],
-    fieldLabels: Object.fromEntries((selectedManifest?.fields ?? []).map(f => [f.key, f.label])), sourceTabId: tab.id };
+  return {
+    ...pageData,
+    actions: selectedManifest?.actions ?? [],
+    fieldLabels: Object.fromEntries((selectedManifest?.fields ?? []).map((f) => [f.key, f.label])),
+    sourceTabId: tab.id,
+  };
 }

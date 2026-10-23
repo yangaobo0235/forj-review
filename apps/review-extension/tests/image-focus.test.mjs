@@ -30,11 +30,14 @@ test("scrolls to, highlights, and opens the collected image", () => {
   const result = focus(image, (callback, delay) => timers.push({ callback, delay }));
 
   assert.deepEqual({ ...result }, { ok: true });
-  assert.deepEqual({ ...scrollCalls[0] }, {
-    behavior: "smooth",
-    block: "center",
-    inline: "nearest",
-  });
+  assert.deepEqual(
+    { ...scrollCalls[0] },
+    {
+      behavior: "smooth",
+      block: "center",
+      inline: "nearest",
+    },
+  );
   assert.deepEqual(events, ["scroll", "click"]);
   assert.equal(clickCount, 1);
   assert.equal(outlineAtClick, "4px solid #1677ff");
@@ -50,7 +53,9 @@ test("缩略图的可见容器一起高亮并滚动，小图也能被看见", ()
   const container = {
     tagName: "LI",
     style: { outline: "", outlineOffset: "" },
-    scrollIntoView() { scrollCalls.push("container"); },
+    scrollIntoView() {
+      scrollCalls.push("container");
+    },
   };
   const scrollCalls = [];
   const image = {
@@ -58,7 +63,9 @@ test("缩略图的可见容器一起高亮并滚动，小图也能被看见", ()
     tagName: "IMG",
     style: { outline: "", outlineOffset: "" },
     closest: () => container,
-    scrollIntoView() { scrollCalls.push("image"); },
+    scrollIntoView() {
+      scrollCalls.push("image");
+    },
     click() {},
   };
 
@@ -94,7 +101,9 @@ test("does not click an original image that is no longer connected", () => {
   let clickCount = 0;
   const image = {
     isConnected: false,
-    click() { clickCount += 1; },
+    click() {
+      clickCount += 1;
+    },
   };
 
   assert.deepEqual({ ...focus(image) }, { ok: false, error: "原图已变化，请重新采集" });

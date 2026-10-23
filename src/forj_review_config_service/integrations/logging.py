@@ -18,6 +18,8 @@ class ConfigurationLogFormatter(logging.Formatter):
         return super().format(item).replace("\n", "\\n").replace("\r", "\\r")
 
     def formatException(self, exc_info):
-        locations = " > ".join(f"{Path(f.filename).name}:{f.lineno}:{f.name}"
-                               for f in traceback.extract_tb(exc_info[2])[-12:])
+        locations = " > ".join(
+            f"{Path(f.filename).name}:{f.lineno}:{f.name}"
+            for f in traceback.extract_tb(exc_info[2])[-12:]
+        )
         return f"exception_type={exc_info[0].__name__} stack={locations}"

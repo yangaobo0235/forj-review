@@ -43,6 +43,7 @@ Normalizer = Literal[
     "amount",
     "date",
     "party_name",
+    "phone",
 ]
 
 
@@ -93,7 +94,8 @@ class FieldConfig(Declaration):
     locator_id: str = ""
     occurrence: int = Field(default=1, ge=1)
     checks: tuple[Text, ...] = ()
-    task_projector: TaskProjectorId = ""
+    # Read immutable history; compiler drops this retired projector before runtime.
+    task_projector: TaskProjectorId | Literal["owner_type"] = ""
 
     @model_validator(mode="after")
     def protect_uncertain_evidence(self):
@@ -110,7 +112,7 @@ class FieldConfig(Declaration):
 
 
 class MaterialDetails(Declaration):
-    """Developer-owned material behavior, never editable by field maintenance."""
+    """Material routing implementation plus scoped extraction instructions."""
 
     scoped_extra_fields: tuple[tuple[str, tuple[Key, ...]], ...] = ()
     scoped_guidance: tuple[tuple[str, str], ...] = ()

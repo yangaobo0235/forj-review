@@ -1,4 +1,4 @@
-"""报废车辆排放标准核验：明确材料值优先，型号先精确查询业务接口、未命中再按系列推导。"""
+"""报废车辆排放标准核验：明确材料值优先，型号先精确查询参考表、未命中再按系列推导。"""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from forj_review_service.capabilities.specs import ReviewExecutionContext, RuleE
 from forj_review_service.contracts.checks import CheckResult, CheckResultValue
 from forj_review_service.contracts.engine_emissions import (
     AsyncEngineEmissionLookup,
-    EngineEmissionLookup,
     EngineEmissionLookupUnavailable,
     engine_model_key,
 )
@@ -105,7 +104,7 @@ class _EmissionReference:
                     reason_codes=["EVIDENCE_MISSING"],
                     details={
                         "source": "engine_model",
-                        "lookup_api": "/vehicle-model/engine-emission/query",
+                        "lookup_table": "ref_engine_emission",
                         "engine_models": self.models,
                     },
                 ),
@@ -116,7 +115,7 @@ class _EmissionReference:
 def _prepare_emission(
     context: ReviewExecutionContext,
 ) -> RuleExecutionResult | _EmissionReference:
-    """核验旧车排放标准，登记证无明确值时先查询业务接口，再按已有系列规则兜底。"""
+    """核验旧车排放标准，登记证无明确值时先查询参考表，再按已有系列规则兜底。"""
 
     if context.profile.business_type != "scrap_replacement":
         return RuleExecutionResult()
@@ -226,7 +225,7 @@ def _prepare_emission(
             checks=(
                 _check(
                     "INSUFFICIENT",
-                    "登记证书未明确记载排放标准，发动机型号识别不完整，无法查询排放业务接口",
+                    "登记证书未明确记载排放标准，发动机型号识别不完整，无法查询排放参考表",
                     values=page_values + _values_for_observations(engine_items),
                     evidence=evidence,
                     reason_codes=["EVIDENCE_MISSING", "RECOGNITION_UNCERTAIN"],
@@ -240,7 +239,7 @@ def _prepare_emission(
             checks=(
                 _check(
                     "INSUFFICIENT",
-                    "发动机型号不完整，无法查询排放业务接口",
+                    "发动机型号不完整，无法查询排放参考表",
                     values=page_values + _values_for_observations(engine_items),
                     evidence=evidence,
                     reason_codes=["RECOGNITION_UNCERTAIN"],
@@ -260,7 +259,7 @@ def _evaluate_reference(
     fuel_items, evidence = reference.fuel_items, reference.evidence
     details = {
         "source": "engine_model",
-        "lookup_api": "/vehicle-model/engine-emission/query",
+        "lookup_table": "ref_engine_emission",
         "engine_models": models,
     }
     # Inference augments a local copy; callers may reuse their reference fixture.
@@ -298,7 +297,7 @@ def _evaluate_reference(
             checks=(
                 _check(
                     "INSUFFICIENT",
-                    "发动机排放业务接口未收录完整型号且无法按已配置系列规则推导："
+                    "发动机排放参考表未收录完整型号且无法按已配置系列规则推导："
                     + "、".join(missing)
                     + "，请人工复核",
                     values=page_values + _values_for_observations(engine_items),
@@ -368,25 +367,7 @@ def _evaluate_reference(
     )
 
 
-def run_emission_standard(
-    context: ReviewExecutionContext,
-    *,
-    lookup: EngineEmissionLookup | None = None,
-) -> RuleExecutionResult:
-    """Evaluate with a synchronous reference provider for standalone callers."""
-    prepared = _prepare_emission(context)
-    if isinstance(prepared, RuleExecutionResult):
-        return prepared
-    try:
-        if lookup is None:
-            raise EngineEmissionLookupUnavailable("发动机排放业务接口查询未配置，请检查服务装配")
-        standards = lookup(prepared.models)
-    except EngineEmissionLookupUnavailable as error:
-        return prepared.unavailable(error)
-    return _evaluate_reference(prepared, standards)
-
-
-async def run_emission_standard_async(
+async def run_emission_standard(
     context: ReviewExecutionContext,
     *,
     lookup: AsyncEngineEmissionLookup | None = None,
@@ -397,7 +378,7 @@ async def run_emission_standard_async(
         return prepared
     try:
         if lookup is None:
-            raise EngineEmissionLookupUnavailable("发动机排放业务接口查询未配置，请检查服务装配")
+            raise EngineEmissionLookupUnavailable("发动机排放参考表查询未配置，请检查服务装配")
         standards = await lookup(prepared.models)
     except EngineEmissionLookupUnavailable as error:
         return prepared.unavailable(error)

@@ -53,4 +53,3 @@ class CheckResult(BaseModel):
         if not self.reason_codes:
             self.reason_codes = default_reason_codes(self.status)
         return self
-

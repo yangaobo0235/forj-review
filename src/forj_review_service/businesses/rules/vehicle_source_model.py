@@ -21,6 +21,7 @@ LABELS = {
     "vehicle_nameplate": "铭牌",
 }
 AUXILIARY = {"registration_certificate", "vehicle_nameplate"}
+_EMPTY_PAGE_VALUES = frozenset({"请选择", "请输入", "暂无", "未填写", "未采集"})
 
 
 def _model_part(value: object) -> str:
@@ -49,21 +50,6 @@ def _resolve_reading(
     return MaterialReading(next(iter(values), ""))
 
 
-def _vin_conflict(observations: Sequence[FieldObservation]) -> bool:
-    def vins(documents: set[str]) -> set[str]:
-        return {
-            model_code(item.value)
-            for item in observations
-            if item.document_type in documents
-            and item.field == "vehicle.vin"
-            and not item.uncertain
-            and readable_value(item.value)
-        }
-
-    license_vins, auxiliary_vins = vins({"vehicle_license"}), vins(AUXILIARY)
-    return bool(license_vins and auxiliary_vins and len(license_vins | auxiliary_vins) != 1)
-
-
 def _values(items: Sequence[FieldObservation]) -> list[CheckResultValue]:
     return [
         CheckResultValue(
@@ -90,16 +76,19 @@ def _brand_check(
     reason_codes = []
     if desired:
         page_value = trusted_page_value(request, "vehicle.brand_model")
-        if not readable_value(page_value) or not _model_part(page_value):
+        if not readable_value(page_value) or str(page_value).strip() in _EMPTY_PAGE_VALUES:
             reason = "品牌型号未取得可靠页面值，请核对页面；材料完整值为" + desired
             reason_codes = ["PAGE_VALUE_MISSING"]
         else:
-            status = "MATCH" if model_code(page_value) == model_code(desired) else "CONFLICT"
+            page_matches = model_code(page_value) == model_code(desired)
+            status = "MATCH" if page_matches and not issues else "CONFLICT"
             reason = (
                 "品牌型号与材料一致"
-                if status == "MATCH"
-                else f"品牌型号应为{desired}，请回填完整值"
+                if page_matches
+                else f"页面品牌型号与材料组合值{desired}不一致，由人工判断是否回填"
             )
+        if issues:
+            reason = "；".join([*issues, reason])
     elif issues:
         reason = "；".join(issues)
     values = _values(materials)
@@ -148,15 +137,12 @@ def run_vehicle_source_model(context: ReviewExecutionContext) -> RuleExecutionRe
     license_model = _model_part(license_brand.value)
     announcement = _resolve_reading(announcements, "整车型号")
     engine = _resolve_reading(engines, "发动机型号")
-    identity_conflict = _vin_conflict(observations)
     incompatible = bool(
         announcement.value and license_model and not announcement.value.startswith(license_model)
     )
     brand_issues = [*license_brand.issues, *announcement.issues]
-    if identity_conflict:
-        brand_issues.append("行驶证与辅助材料VIN不一致，请确认材料属于同一辆车")
     if incompatible:
-        brand_issues.append("行驶证型号与辅助材料完整型号不兼容，不能自动补全")
+        brand_issues.append("行驶证型号与辅助材料整车型号不一致，组合值供人工判断")
 
     # 根本未提供辅助型号字段时才能回退；冲突、空值、不确定均不可回退。
     full_model = announcement.value if announcements else license_model
@@ -168,31 +154,32 @@ def run_vehicle_source_model(context: ReviewExecutionContext) -> RuleExecutionRe
         and full_model
         and not license_brand.issues
         and not announcement.issues
-        and not incompatible
         else ""
     )
-    desired = completed_value if not brand_issues else ""
+    # 型号差异是核对结论，不取消材料组合值，也不代替审核员决定是否回填。
+    desired = completed_value
     completion: dict[str, object] = {
         "license_value": license_brand.value,
         "brand_text": brand_text,
         "license_model": license_model,
         "auxiliary_model": announcement.value,
         "completed_value": completed_value,
-        "status": "READY" if desired else "BLOCKED" if completed_value else "UNAVAILABLE",
+        "status": "READY" if desired else "UNAVAILABLE",
         "basis": "行驶证品牌文字＋辅助材料完整整车型号"
         if announcements
         else "仅有行驶证型号，未提供辅助整车型号",
         "issues": brand_issues,
     }
-    # 发动机的不确定性只影响搜索，不影响独立的品牌型号补全。
+    # 各型号仅使用自己的材料读值，不借 VIN 或其他字段阻断。
+    search_issues = [*brand_issues, *engine.issues]
     inputs = {
-        "announcement_model": "" if brand_issues else full_model,
-        "engine_model": "" if identity_conflict else engine.value,
-        "issues": [*brand_issues, *engine.issues],
+        "announcement_model": full_model,
+        "engine_model": engine.value,
+        "issues": search_issues,
     }
     if not full_model and not brand_issues:
         inputs["issues"].append("未从图片取得可靠整车型号，请核对原图或手动输入")
-    if not engine.value and not engine.issues and not identity_conflict:
+    if not engine.value and not engine.issues:
         inputs["issues"].append("未从登记证或铭牌图片取得可靠发动机型号，请核对原图或手动输入")
     return RuleExecutionResult(
         checks=(

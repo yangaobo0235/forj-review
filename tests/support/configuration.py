@@ -9,7 +9,7 @@ from uuid import uuid4
 import pytest
 
 from forj_review_config_service.config.settings import Settings
-from forj_review_config_service.contracts.models import SessionRecord
+from forj_review_config_service.contracts.models import TaskRecord
 from forj_review_config_service.integrations.review_kernel.snapshot import SnapshotKernel
 from tests.support.postgres import read_page_state
 
@@ -82,12 +82,12 @@ def headers():
 
 def create(client, auth, request_id="create-1"):
     response = client.post(
-        "/api/review-config/sessions",
+        "/api/review-config/tasks",
         headers=auth,
         json={"client_request_id": request_id, "snapshot": SNAPSHOT, "page_id": "example_permit"},
     )
     assert response.status_code == 200, response.text
-    return response.json()["session_id"]
+    return response.json()["task_id"]
 
 
 def wait(client, sid, auth, status=None):
@@ -112,32 +112,57 @@ def candidate(settings):
 
     with Database(settings.database_url, settings.database_schema).connect() as db:
         state = read_state(db)
-    kernel = SnapshotKernel(
-        state, settings.cases_dir, settings.review_url
-    )
+    kernel = SnapshotKernel(state, settings.cases_dir, settings.review_url)
     draft = kernel.context("example_permit")["editable"]
     draft["version"] = "2.0"
-    record = SessionRecord(
-        session_id="test", snapshot=SNAPSHOT, baseline_digest=kernel.baseline(), draft=draft
+    record = TaskRecord(
+        task_id="test",
+        snapshot=SNAPSHOT,
+        baseline_digest=kernel.baseline("example_permit"),
+        draft=draft,
     )
-    record.report = {**kernel.validate(record), "report_id": uuid4().hex,
-                     "revision": record.revision, "ok": True, "blockers": [], "replays": []}
+    record.report = {
+        **kernel.validate(record),
+        "report_id": uuid4().hex,
+        "revision": record.revision,
+        "ok": True,
+        "blockers": [],
+        "replays": [],
+    }
     return (kernel, record)
 
 
 async def database_candidate(kernel, store, *, sid="test", rollback=None):
     """Synthetic completed evidence for storage tests, never a browser-proof test."""
-    draft = (await kernel.rollback_draft("example_permit", rollback) if rollback
-             else (await kernel.context("example_permit"))["editable"])
+    draft = (
+        await kernel.rollback_draft("example_permit", rollback)
+        if rollback
+        else (await kernel.context("example_permit"))["editable"]
+    )
     if not rollback:
         draft["version"] = "2.0"
-    record = SessionRecord(session_id=sid, snapshot=SNAPSHOT, draft=draft,
-                           activation_only=bool(rollback), baseline_digest=await kernel.baseline())
+    record = TaskRecord(
+        task_id=sid,
+        snapshot=SNAPSHOT,
+        draft=draft,
+        activation_only=bool(rollback),
+        baseline_digest=await kernel.baseline("example_permit"),
+    )
     await store.put(record)
-    record.report = {**(await kernel.validate(record)), "report_id": uuid4().hex,
-                     "revision": record.revision, "ok": True, "blockers": [], "replays": []}
-    record.pending = {"id": uuid4().hex, "kind": "confirmation", "confirmed": True,
-                      "candidate_digest": record.report["candidate_digest"]}
+    record.report = {
+        **(await kernel.validate(record)),
+        "report_id": uuid4().hex,
+        "revision": record.revision,
+        "ok": True,
+        "blockers": [],
+        "replays": [],
+    }
+    record.pending = {
+        "id": uuid4().hex,
+        "kind": "confirmation",
+        "confirmed": True,
+        "candidate_digest": record.report["candidate_digest"],
+    }
     await store.put(record)
     return record
 
@@ -150,8 +175,29 @@ class HappyModel:
 
     async def complete(self, messages, tools):
         self.step += 1
-        context = json.loads(messages[0]["content"].split("当前工作状态：", 1)[1])
+        context = json.loads(messages[0]["content"].split("当前任务：", 1)[1])
         if self.step == 1:
+            return call(
+                "manage_requirements",
+                {
+                    "message_id": context["pending_messages"][0]["message_id"],
+                    "action": "ACCEPT",
+                    "goals": [
+                        {
+                            "text": "更新 VIN 字段显示名称",
+                            "assertions": [
+                                {
+                                    "target_kind": "field",
+                                    "target_key": "permit.vin",
+                                    "property": "/label",
+                                    "expected": "Synthetic updated VIN",
+                                }
+                            ],
+                        }
+                    ],
+                },
+            )
+        if self.step == 2:
             return call(
                 "edit_draft",
                 {
@@ -165,7 +211,7 @@ class HappyModel:
                 },
                 "edit",
             )
-        if self.step == 2:
+        if self.step == 3:
             rid = context["requirements"][0]["requirement_id"]
             return call(
                 "record_decision",
@@ -177,11 +223,11 @@ class HappyModel:
                 },
                 "decision",
             )
-        if self.step == 3:
-            return call("request_collection_trial", call_id="browser")
         if self.step == 4:
-            return call("run_replay", {"case_set_id": "local/permit-v2"}, "replay")
+            return call("request_collection_trial", call_id="browser")
         if self.step == 5:
+            return call("run_replay", {"case_set_id": "local/permit-v2"}, "replay")
+        if self.step == 6:
             return call("submit_candidate", call_id="submit")
         raise AssertionError("unexpected extra model call")
 

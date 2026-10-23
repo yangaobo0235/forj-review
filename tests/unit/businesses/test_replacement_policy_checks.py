@@ -244,8 +244,6 @@ def test_qingdao_origin_is_displayed_with_full_original_image_evidence():
         comparisons=[],
         external_checks=[],
         business_checks=checks,
-        completeness=None,
-        limitations=[],
     )
     origin_step = next(step for step in steps if step.step_id == "BUSINESS-POLICY-NEW-ORIGIN")
     assert origin_step.values[0].image_id == "invoice-img"
@@ -327,8 +325,6 @@ def test_qingdao_origin_requires_readable_matching_evidence(
         comparisons=[],
         external_checks=[],
         business_checks=checks,
-        completeness=None,
-        limitations=[],
     )
     origin_step = next(step for step in steps if step.step_id == "BUSINESS-POLICY-NEW-ORIGIN")
     assert origin_step.result_status == expected

@@ -75,9 +75,12 @@ def test_runtime_readiness_excludes_retired_reference_tables_but_checks_current_
 
     # This database fixture owns a disposable schema, never the developer database.
     with database.connect() as connection:
-        connection.execute(sql.SQL("DROP TABLE ") + sql.SQL(",").join(
-            sql.Identifier(table) for table in sorted(RETIRED_REFERENCE_TABLES)))
+        connection.execute(
+            sql.SQL("DROP TABLE ")
+            + sql.SQL(",").join(sql.Identifier(table) for table in sorted(RETIRED_REFERENCE_TABLES))
+        )
         require_ready_sync(connection.orm, database.schema)
         connection.execute("DROP TABLE cfg_idempotency")
+        require_ready_sync(connection.orm, database.schema, consumer="review")
         with pytest.raises(ValueError, match="cfg_idempotency"):
-            require_ready_sync(connection.orm, database.schema)
+            require_ready_sync(connection.orm, database.schema, consumer="configuration")

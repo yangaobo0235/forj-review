@@ -91,18 +91,18 @@ def test_cancel_serializes_with_following_session_commands(settings):
 def test_local_access_without_pairing_and_creation_idempotency(settings):
     with TestClient(create_app(settings, model=FakeModel())) as client:
         assert client.get("/health").json()["service"] == "review-config-service"
-        assert client.get("/api/review-config/sessions").status_code == 200
+        assert client.get("/api/review-config/tasks").status_code == 200
         assert not (settings.state_dir / "access.json").exists()
         auth = headers()
         assert (
             client.get(
-                "/api/review-config/sessions", headers={**auth, "origin": "https://evil.test"}
+                "/api/review-config/tasks", headers={**auth, "origin": "https://evil.test"}
             ).status_code
             == 403
         )
         assert (
             client.get(
-                "/api/review-config/sessions", headers={**auth, "host": "evil.test"}
+                "/api/review-config/tasks", headers={**auth, "host": "evil.test"}
             ).status_code
             == 403
         )
@@ -111,11 +111,11 @@ def test_local_access_without_pairing_and_creation_idempotency(settings):
             "http://localhost:5173",
             "http://127.0.0.1:26102",
         ):
-            response = client.get("/api/review-config/sessions", headers={"origin": origin})
+            response = client.get("/api/review-config/tasks", headers={"origin": origin})
             assert response.status_code == 200
             assert response.headers["access-control-allow-origin"] == origin
             preflight = client.options(
-                "/api/review-config/sessions",
+                "/api/review-config/tasks",
                 headers={
                     "origin": origin,
                     "access-control-request-method": "POST",
@@ -132,15 +132,13 @@ def test_local_access_without_pairing_and_creation_idempotency(settings):
             "http://127.0.0.1:26102@evil.test",
         ):
             assert (
-                client.options(
-                    "/api/review-config/sessions", headers={"origin": origin}
-                ).status_code
+                client.options("/api/review-config/tasks", headers={"origin": origin}).status_code
                 == 403
             )
         first = create(client, auth)
         assert create(client, auth) == first
         response = client.post(
-            "/api/review-config/sessions",
+            "/api/review-config/tasks",
             headers=auth,
             json={"client_request_id": "create-1", "snapshot": {**SNAPSHOT, "title": "changed"}},
         )
@@ -155,13 +153,13 @@ def test_only_human_can_refresh_scope_and_old_browser_task_becomes_stale(setting
         auth = headers()
         sid = create(client, auth)
         client.post(
-            f"/api/review-config/sessions/{sid}/messages",
+            f"/api/review-config/tasks/{sid}/messages",
             headers=auth,
             json={"client_request_id": "message", "expected_revision": 0, "text": "核对配置"},
         )
         wait(client, sid, auth, "WAITING")
         response = client.post(
-            f"/api/review-config/sessions/{sid}/page",
+            f"/api/review-config/tasks/{sid}/page",
             headers=auth,
             json={
                 "client_request_id": "refresh",
@@ -171,7 +169,12 @@ def test_only_human_can_refresh_scope_and_old_browser_task_becomes_stale(setting
         )
         assert response.status_code == 200
         record = client.portal.call(client.app.state.service.store.get, sid)
-        assert record.revision == 1 and record.pending is None and (record.report is None)
+        assert (
+            record.revision == 0
+            and record.evidence_revision == 1
+            and record.pending is None
+            and (record.report is None)
+        )
         assert record.snapshot.snapshot_id == "new"
 
 
@@ -205,13 +208,13 @@ def test_capture_handoff_is_durable_idempotent_and_bound_to_session(settings):
         }
         mismatch = {**payload, "snapshot": {**SNAPSHOT, "snapshot_id": "different"}}
         assert (
-            client.post("/api/review-config/sessions", json=mismatch).json()["code"]
+            client.post("/api/review-config/tasks", json=mismatch).json()["code"]
             == "CAPTURE_MISMATCH"
         )
-        response = client.post("/api/review-config/sessions", json=payload)
+        response = client.post("/api/review-config/tasks", json=payload)
         assert response.status_code == 200
-        sid = response.json()["session_id"]
-        assert client.get(f"/api/review-config/sessions/{sid}").json()["capture_id"] == capture_id
+        sid = response.json()["task_id"]
+        assert client.get(f"/api/review-config/tasks/{sid}").json()["capture_id"] == capture_id
         assert client.delete(f"/api/review-config/captures/{capture_id}").status_code == 409
         new_capture = client.post(
             "/api/review-config/captures",
@@ -227,9 +230,7 @@ def test_capture_handoff_is_durable_idempotent_and_bound_to_session(settings):
             "capture_id": new_capture,
             "snapshot": {**SNAPSHOT, "snapshot_id": "snapshot2"},
         }
-        assert (
-            client.post(f"/api/review-config/sessions/{sid}/page", json=refresh).status_code == 200
-        )
-        assert client.get(f"/api/review-config/sessions/{sid}").json()["capture_id"] == new_capture
-        assert client.delete(f"/api/review-config/captures/{capture_id}").status_code == 200
-        assert client.get(f"/api/review-config/captures/{capture_id}").status_code == 404
+        assert client.post(f"/api/review-config/tasks/{sid}/page", json=refresh).status_code == 200
+        assert client.get(f"/api/review-config/tasks/{sid}").json()["capture_id"] == new_capture
+        assert client.delete(f"/api/review-config/captures/{capture_id}").status_code == 409
+        assert client.get(f"/api/review-config/captures/{capture_id}").status_code == 200

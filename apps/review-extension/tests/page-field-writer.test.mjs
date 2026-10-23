@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import { ReviewPageFieldWriter } from "../src/platform/browser/actions/page-field-writer.ts";
+import {
+  applyCollectManifest,
+  currentCollectManifest,
+} from "../src/platform/browser/catalog/collect-manifest.ts";
 import { calendarDate } from "../src/platform/browser/actions/date-picker.ts";
 
 function loadWriter(globalOverrides = {}) {
@@ -10,28 +14,46 @@ function loadWriter(globalOverrides = {}) {
 
 function invoiceTarget(buttonCount = 1) {
   let clicked = 0;
-  const buttons = Array.from({ length: buttonCount }, () => ({ textContent: "一键验真", isConnected: true,
-    getAttribute: () => null, click: () => clicked++ }));
+  const buttons = Array.from({ length: buttonCount }, () => ({
+    textContent: "一键验真",
+    isConnected: true,
+    getAttribute: () => null,
+    click: () => clicked++,
+  }));
   const item = { querySelectorAll: () => buttons };
-  const target = { tagName: "INPUT", value: "INV-001", isConnected: true,
-    getAttribute: () => null, closest: selector => selector.includes(".ant-form-item") ? item : null };
-  const root = { querySelectorAll: () => [], contains: node => node === item };
+  const target = {
+    tagName: "INPUT",
+    value: "INV-001",
+    isConnected: true,
+    getAttribute: () => null,
+    closest: (selector) => (selector.includes(".ant-form-item") ? item : null),
+  };
+  const root = { querySelectorAll: () => [], contains: (node) => node === item };
   return { root, target, clicked: () => clicked };
 }
 
 test("invoice verification binds to the collected control and its unchanged value", () => {
   const fixture = invoiceTarget();
-  assert.equal(loadWriter().triggerInvoiceVerification(fixture.root, fixture.target, "INV-001").ok, true);
+  assert.equal(
+    loadWriter().triggerInvoiceVerification(fixture.root, fixture.target, "INV-001").ok,
+    true,
+  );
   assert.equal(fixture.clicked(), 1);
   fixture.target.value = "INV-002";
-  assert.equal(loadWriter().triggerInvoiceVerification(fixture.root, fixture.target, "INV-001").ok, false);
+  assert.equal(
+    loadWriter().triggerInvoiceVerification(fixture.root, fixture.target, "INV-001").ok,
+    false,
+  );
   assert.equal(fixture.clicked(), 1);
 });
 
 test("missing or repeated invoice buttons do not trigger a global fallback", () => {
   for (const count of [0, 2]) {
     const fixture = invoiceTarget(count);
-    assert.equal(loadWriter().triggerInvoiceVerification(fixture.root, fixture.target, "INV-001").ok, false);
+    assert.equal(
+      loadWriter().triggerInvoiceVerification(fixture.root, fixture.target, "INV-001").ok,
+      false,
+    );
     assert.equal(fixture.clicked(), 0);
   }
 });
@@ -47,20 +69,28 @@ function valueInput(initial = "", tagName = "INPUT", type = null) {
 }
 
 test("generic dependent writes use the caller's fields and final focus target", async () => {
-  const controls = {"permit.number": valueInput("OLD"), "permit.date": valueInput("2026-01-01")};
-  const focused = [], highlighted = [];
+  const controls = { "permit.number": valueInput("OLD"), "permit.date": valueInput("2026-01-01") };
+  const focused = [],
+    highlighted = [];
   for (const [field, input] of Object.entries(controls)) {
     input.focus = () => focused.push(field);
     input.animate = () => highlighted.push(field);
   }
   const values = [
-    {field: "permit.number", label: "许可证号", value: "NEW"},
-    {field: "permit.date", label: "发证日期", value: "2026-10-17"},
+    { field: "permit.number", label: "许可证号", value: "NEW" },
+    { field: "permit.date", label: "发证日期", value: "2026-10-17" },
   ];
   const result = await ReviewPageFieldWriter.executeSequence(
-    {defaultView: {Event: class Event {}}}, values, field => controls[field], () => true,
-    {fields: new Set(Object.keys(controls)), label: "许可证信息", focusField: "permit.date",
-      settleAfter: {"permit.number": 1}},
+    { defaultView: { Event: class Event {} } },
+    values,
+    (field) => controls[field],
+    () => true,
+    {
+      fields: new Set(Object.keys(controls)),
+      label: "许可证信息",
+      focusField: "permit.date",
+      settleAfter: { "permit.number": 1 },
+    },
   );
   assert.equal(result.ok, true);
   assert.equal(result.message, "许可证信息已整块回填并逐项回读");
@@ -73,11 +103,15 @@ test("generic dependent writes use the caller's fields and final focus target", 
 test("manual values are read back before centering, focusing and highlighting the target", async () => {
   const input = valueInput("HS-OLD");
   const calls = [];
-  input.scrollIntoView = (options) => { assert.equal(input.value, "HS-MANUAL"); calls.push(options.block); };
+  input.scrollIntoView = (options) => {
+    assert.equal(input.value, "HS-MANUAL");
+    calls.push(options.block);
+  };
   input.focus = () => calls.push("focus");
   input.animate = () => calls.push("highlight");
   const result = await loadWriter({ setTimeout }).executeValue(
-    { defaultView: { Event: class Event {} } }, input,
+    { defaultView: { Event: class Event {} } },
+    input,
     { field: "scrap_certificate.certificate_no", value: "HS-MANUAL", expectedValue: "HS-OLD" },
   );
   assert.equal(result.ok, true);
@@ -85,17 +119,41 @@ test("manual values are read back before centering, focusing and highlighting th
   assert.equal(result.actions[0].value, "HS-MANUAL");
 });
 
-test("manual input supports phone fields and does not focus a failed or readonly write", async () => {
+test("manual input supports explicitly configured phone fields and does not focus a failed or readonly write", async () => {
+  const current = currentCollectManifest();
+  applyCollectManifest({
+    ...current,
+    writable_fields: [...current.writable_fields, "permit.phone"],
+    fields: [
+      ...current.fields,
+      {
+        key: "permit.phone",
+        label: "合成联系电话",
+        aliases: ["合成联系电话"],
+        section: "unknown",
+        reviewable: true,
+        writable: true,
+      },
+    ],
+  });
   const input = valueInput("13800000000");
   let focused = false;
-  input.focus = () => { focused = true; };
+  input.focus = () => {
+    focused = true;
+  };
   const writer = loadWriter({ setTimeout });
   const root = { defaultView: { Event: class Event {} } };
   input.readOnly = true;
-  assert.equal((await writer.executeValue(root, input, { field: "application.terminal_phone", value: "13900000000" })).ok, false);
+  assert.equal(
+    (await writer.executeValue(root, input, { field: "permit.phone", value: "13900000000" })).ok,
+    false,
+  );
   assert.equal(focused, false);
   input.readOnly = false;
-  assert.equal((await writer.executeValue(root, input, { field: "application.terminal_phone", value: "13900000000" })).ok, true);
+  assert.equal(
+    (await writer.executeValue(root, input, { field: "permit.phone", value: "13900000000" })).ok,
+    true,
+  );
   assert.equal(input.value, "13900000000");
   assert.equal(focused, true);
 });
@@ -105,11 +163,19 @@ test("single-field writer enforces the scrap field allowlist and collected value
   const input = valueInput("VIN-OLD");
   const root = { defaultView: { Event: class Event {} } };
 
-  const denied = await writer.executeValue(root, input, { field: "application.customer_name", value: "张三", expectedValue: "" });
+  const denied = await writer.executeValue(root, input, {
+    field: "application.customer_name",
+    value: "张三",
+    expectedValue: "",
+  });
   assert.equal(denied.ok, false);
   assert.equal(input.value, "VIN-OLD");
 
-  const stale = await writer.executeValue(root, input, { field: "new_vehicle.vin", value: "VIN-NEW", expectedValue: "VIN-OTHER" });
+  const stale = await writer.executeValue(root, input, {
+    field: "new_vehicle.vin",
+    value: "VIN-NEW",
+    expectedValue: "VIN-OTHER",
+  });
   assert.equal(stale.ok, false);
   assert.match(stale.message, /当前值与采集时不同/);
   assert.equal(input.value, "VIN-OLD");
@@ -126,7 +192,11 @@ test("写回策略由后端下发的白名单决定：字段与控件类型两�
 
   // 清单之外的字段一律拒绝，即使控件本身可写。
   const denied = await writer.executeValue(
-    root, text, { field: "application.customer_name", value: "张三" }, undefined, policy,
+    root,
+    text,
+    { field: "application.customer_name", value: "张三" },
+    undefined,
+    policy,
   );
   assert.equal(denied.ok, false);
   assert.match(denied.message, /不在允许回填范围内/);
@@ -134,13 +204,21 @@ test("写回策略由后端下发的白名单决定：字段与控件类型两�
 
   // 清单内的文本框正常写入。
   const written = await writer.executeValue(
-    root, text, { field: "new_vehicle.vin", value: "VIN-NEW", expectedValue: "旧值" }, undefined, policy,
+    root,
+    text,
+    { field: "new_vehicle.vin", value: "VIN-NEW", expectedValue: "旧值" },
+    undefined,
+    policy,
   );
   assert.equal(written.ok, true);
 
   // 下拉控件即使字段在清单里也不写：下拉和日期的写回还没有验证过。
   const rejected = await writer.executeValue(
-    root, valueInput("", "SELECT"), { field: "new_vehicle.vin", value: "VIN-NEW" }, undefined, policy,
+    root,
+    valueInput("", "SELECT"),
+    { field: "new_vehicle.vin", value: "VIN-NEW" },
+    undefined,
+    policy,
   );
   assert.equal(rejected.ok, false);
   assert.match(rejected.message, /控件类型暂不支持/);
@@ -148,8 +226,11 @@ test("写回策略由后端下发的白名单决定：字段与控件类型两�
   // 业务声明"不限制"（空集合）时按字段清单放行——历史口径不变。
   const unrestrictedPolicy = { fields: policy.fields, controlKinds: new Set() };
   const allowedField = await writer.executeValue(
-    root, valueInput("旧值"), { field: "new_vehicle.vin", value: "VIN-NEW", expectedValue: "旧值" },
-    undefined, unrestrictedPolicy,
+    root,
+    valueInput("旧值"),
+    { field: "new_vehicle.vin", value: "VIN-NEW", expectedValue: "旧值" },
+    undefined,
+    unrestrictedPolicy,
   );
   assert.equal(allowedField.ok, true);
 
@@ -201,13 +282,13 @@ test("composite fill reveals the first target once after every value is accepted
   const second = valueInput("SECOND");
   const calls = [];
   for (const [index, input] of [first, second].entries()) {
-    input.scrollIntoView = options => {
+    input.scrollIntoView = (options) => {
       assert.equal(first.value, "NEW");
       assert.equal(second.value, "NEW");
       assert.deepEqual(options, { behavior: "smooth", block: "center", inline: "nearest" });
       calls.push(`scroll:${index}`);
     };
-    input.focus = options => {
+    input.focus = (options) => {
       assert.deepEqual(options, { preventScroll: true });
       calls.push(`focus:${index}`);
     };
@@ -219,8 +300,15 @@ test("composite fill reveals the first target once after every value is accepted
   }
   const result = await ReviewPageFieldWriter.executeValueGroup(
     { defaultView: { Event: class Event {} } },
-    [{ field: "invoice.code", element: first }, { field: "invoice.invoice_no", element: second }],
-    { fields: ["invoice.code", "invoice.invoice_no"], value: "NEW", expectedValues: { "invoice.code": "FIRST", "invoice.invoice_no": "SECOND" } },
+    [
+      { field: "invoice.code", element: first },
+      { field: "invoice.invoice_no", element: second },
+    ],
+    {
+      fields: ["invoice.code", "invoice.invoice_no"],
+      value: "NEW",
+      expectedValues: { "invoice.code": "FIRST", "invoice.invoice_no": "SECOND" },
+    },
     () => true,
   );
   assert.equal(result.ok, true);
@@ -253,7 +341,15 @@ test("invoice amount accepts the page currency formatting during readback", asyn
   };
 
   const result = await loadWriter({ setTimeout }).executeValue(
-    { defaultView: { Event: class Event { constructor(type) { this.type = type; } } } },
+    {
+      defaultView: {
+        Event: class Event {
+          constructor(type) {
+            this.type = type;
+          }
+        },
+      },
+    },
     input,
     { field: "invoice.amount", value: "423000.00", expectedValue: "" },
   );
@@ -267,16 +363,33 @@ test("custom field writes only use their owned listbox and reject duplicate opti
   for (const ownedCount of [0, 1, 2]) {
     let foreignClicks = 0;
     const input = valueInput("OLD");
-    input.getAttribute = name => name === "role" ? "combobox" : name === "aria-controls" ? "owned-options" : null;
+    input.getAttribute = (name) =>
+      name === "role" ? "combobox" : name === "aria-controls" ? "owned-options" : null;
     input.click = () => {};
-    const option = () => ({ textContent: "NEW", isConnected: true, getAttribute: () => null,
-      click: () => { input.value = "NEW"; } });
-    const root = { defaultView: { Event: class Event {} },
-      getElementById: id => id === "owned-options" ? { querySelectorAll: () => Array.from({ length: ownedCount }, option) } : null,
-      querySelectorAll: () => [{ querySelectorAll: () => [{ ...option(), click: () => foreignClicks++ }] }],
+    const option = () => ({
+      textContent: "NEW",
+      isConnected: true,
+      getAttribute: () => null,
+      click: () => {
+        input.value = "NEW";
+      },
+    });
+    const root = {
+      defaultView: { Event: class Event {} },
+      getElementById: (id) =>
+        id === "owned-options"
+          ? { querySelectorAll: () => Array.from({ length: ownedCount }, option) }
+          : null,
+      querySelectorAll: () => [
+        { querySelectorAll: () => [{ ...option(), click: () => foreignClicks++ }] },
+      ],
     };
-    const result = await ReviewPageFieldWriter.executeValue(root, input,
-      { field: "new_vehicle.fuel_type", value: "NEW", expectedValue: "OLD" }, () => true);
+    const result = await ReviewPageFieldWriter.executeValue(
+      root,
+      input,
+      { field: "new_vehicle.fuel_type", value: "NEW", expectedValue: "OLD" },
+      () => true,
+    );
     assert.equal(result.ok, ownedCount === 1);
     assert.equal(input.value, ownedCount === 1 ? "NEW" : "OLD");
     assert.equal(foreignClicks, 0);
@@ -285,10 +398,15 @@ test("custom field writes only use their owned listbox and reject duplicate opti
 
 test("a rejected original-value restore is reported as a rollback failure", async () => {
   const input = valueInput("OLD");
-  input.dispatchEvent = () => { input.value = "FRAMEWORK-REJECTED"; };
+  input.dispatchEvent = () => {
+    input.value = "FRAMEWORK-REJECTED";
+  };
   const result = await ReviewPageFieldWriter.executeValue(
-    { defaultView: { Event: class Event {} } }, input,
-    { field: "new_vehicle.vin", value: "NEW", expectedValue: "OLD" }, () => true);
+    { defaultView: { Event: class Event {} } },
+    input,
+    { field: "new_vehicle.vin", value: "NEW", expectedValue: "OLD" },
+    () => true,
+  );
   assert.equal(result.ok, false);
   assert.match(result.message, /原值恢复失败/);
 });
@@ -302,12 +420,22 @@ test("composite rollback reads both restored values before reporting success", a
     input.focus = () => revealCalls.push("focus");
     input.animate = () => revealCalls.push("highlight");
   }
-  second.dispatchEvent = () => { second.value = "FRAMEWORK-REJECTED"; };
+  second.dispatchEvent = () => {
+    second.value = "FRAMEWORK-REJECTED";
+  };
   const result = await ReviewPageFieldWriter.executeValueGroup(
     { defaultView: { Event: class Event {} } },
-    [{ field: "invoice.code", element: first }, { field: "invoice.invoice_no", element: second }],
-    { fields: ["invoice.code", "invoice.invoice_no"], value: "NEW", expectedValues: { "invoice.code": "FIRST", "invoice.invoice_no": "SECOND" } },
-    () => true);
+    [
+      { field: "invoice.code", element: first },
+      { field: "invoice.invoice_no", element: second },
+    ],
+    {
+      fields: ["invoice.code", "invoice.invoice_no"],
+      value: "NEW",
+      expectedValues: { "invoice.code": "FIRST", "invoice.invoice_no": "SECOND" },
+    },
+    () => true,
+  );
   assert.equal(result.ok, false);
   assert.equal(first.value, "FIRST");
   assert.match(result.message, /自动回滚未完成/);
@@ -320,100 +448,184 @@ test("Ant virtual select clicks visible sibling options, never the accessibility
   let foreignClicks = 0;
   const input = valueInput("");
   input.readOnly = true;
-  input.getAttribute = name => ({ role: "combobox", "aria-controls": "truck_list" })[name] ?? null;
-  const selected = { get textContent() { return committed; } };
-  const actualOption = { textContent: "牵引车", getAttribute: () => null,
-    click() { committed = "牵引车"; } };
+  input.getAttribute = (name) =>
+    ({ role: "combobox", "aria-controls": "truck_list" })[name] ?? null;
+  const selected = {
+    get textContent() {
+      return committed;
+    },
+  };
+  const actualOption = {
+    textContent: "牵引车",
+    getAttribute: () => null,
+    click() {
+      committed = "牵引车";
+    },
+  };
   const dropdown = { querySelectorAll: () => [actualOption] };
   const accessibilityList = {
     closest: () => dropdown,
-    querySelectorAll: () => [{ getAttribute: name => name === "aria-label" ? "牵引车" : null,
-      click() { mirrorClicks++; } }],
+    querySelectorAll: () => [
+      {
+        getAttribute: (name) => (name === "aria-label" ? "牵引车" : null),
+        click() {
+          mirrorClicks++;
+        },
+      },
+    ],
   };
   const container = { querySelector: () => selected };
-  input.closest = selector => selector === ".ant-select, .el-select" ? container : null;
+  input.closest = (selector) => (selector === ".ant-select, .el-select" ? container : null);
   input.click = () => {};
   const root = {
-    getElementById: id => id === "truck_list" ? accessibilityList : null,
+    getElementById: (id) => (id === "truck_list" ? accessibilityList : null),
     querySelectorAll: () => [{ textContent: "牵引车", click: () => foreignClicks++ }],
   };
-  const result = await ReviewPageFieldWriter.executeValue(root, input,
-    { field: "old_vehicle.type", value: "牵引车", expectedValue: "载货车" }, () => true);
+  const result = await ReviewPageFieldWriter.executeValue(
+    root,
+    input,
+    { field: "old_vehicle.type", value: "牵引车", expectedValue: "载货车" },
+    () => true,
+  );
   assert.equal(result.ok, true);
   assert.equal(committed, "牵引车");
   assert.equal(mirrorClicks, 0);
   assert.equal(foreignClicks, 0);
 });
 
-const classes = (...names) => ({ contains: name => names.includes(name) });
+const classes = (...names) => ({ contains: (name) => names.includes(name) });
 
-function calendarFixture({ initial = "2026-10-12", disabledDate = "", blockedNavigation = false, closingDelay = 0, stickyFirstSelection = false } = {}) {
+function calendarFixture({
+  initial = "2026-10-12",
+  disabledDate = "",
+  blockedNavigation = false,
+  closingDelay = 0,
+  stickyFirstSelection = false,
+} = {}) {
   let committed = initial;
   let open = false;
   let closingUntil = 0;
-  const close = () => { if (open) closingUntil = Date.now() + closingDelay; open = false; };
-  const visible = () => (stickyFirstSelection && selectionClicks === 1) || open || Date.now() < closingUntil;
+  const close = () => {
+    if (open) closingUntil = Date.now() + closingDelay;
+    open = false;
+  };
+  const visible = () =>
+    (stickyFirstSelection && selectionClicks === 1) || open || Date.now() < closingUntil;
   let month = initial ? initial.slice(0, 7) : "2026-10";
   let navigations = 0;
   let selectionClicks = 0;
   const plain = { getAttribute: () => null, dispatchEvent() {} };
   const picker = {
-    ...plain, classList: classes("ant-picker", ...(stickyFirstSelection ? ["ant-picker-focused"] : [])),
+    ...plain,
+    classList: classes("ant-picker", ...(stickyFirstSelection ? ["ant-picker-focused"] : [])),
     querySelectorAll: () => [control],
-    querySelector: () => ({ ...plain, click() {}, dispatchEvent(event) { if (event.type === "mouseup") committed = ""; } }),
+    querySelector: () => ({
+      ...plain,
+      click() {},
+      dispatchEvent(event) {
+        if (event.type === "mouseup") committed = "";
+      },
+    }),
   };
   const control = {
-    ...plain, tagName: "INPUT", readOnly: true, isConnected: true,
-    get value() { return committed; },
-    set value(_) { throw new Error("readonly date must be committed by calendar events"); },
-    closest: selector => selector.includes(".ant-picker") ? picker : null,
-    focus() {}, blur() {}, click() {},
+    ...plain,
+    tagName: "INPUT",
+    readOnly: true,
+    isConnected: true,
+    get value() {
+      return committed;
+    },
+    set value(_) {
+      throw new Error("readonly date must be committed by calendar events");
+    },
+    closest: (selector) => (selector.includes(".ant-picker") ? picker : null),
+    focus() {},
+    blur() {},
+    click() {},
     dispatchEvent(event) {
       if (event.type === "mousedown") open = true;
       if (event.key === "Escape") close();
     },
   };
-  const cells = () => Array.from({ length: new Date(`${month}-01T00:00:00Z`).getUTCMonth() === 1 ? 28 : 30 }, (_, index) => {
-    const title = `${month}-${String(index + 1).padStart(2, "0")}`;
-    return { ...plain,
-      classList: classes("ant-picker-cell-in-view", ...(title === disabledDate ? ["ant-picker-cell-disabled"] : [])),
-      getAttribute: name => name === "title" ? title : null,
-      click() { selectionClicks++; committed = title; close(); },
-    };
-  });
+  const cells = () =>
+    Array.from(
+      { length: new Date(`${month}-01T00:00:00Z`).getUTCMonth() === 1 ? 28 : 30 },
+      (_, index) => {
+        const title = `${month}-${String(index + 1).padStart(2, "0")}`;
+        return {
+          ...plain,
+          classList: classes(
+            "ant-picker-cell-in-view",
+            ...(title === disabledDate ? ["ant-picker-cell-disabled"] : []),
+          ),
+          getAttribute: (name) => (name === "title" ? title : null),
+          click() {
+            selectionClicks++;
+            committed = title;
+            close();
+          },
+        };
+      },
+    );
   const panel = {
     ...plain,
     querySelectorAll: () => cells(),
-    querySelector: selector => ({ ...plain, click() {
-      navigations++;
-      if (blockedNavigation) return;
-      const delta = (selector.includes("super-") ? 12 : 1) * (selector.includes("prev") ? -1 : 1);
-      const date = new Date(`${month}-01T00:00:00Z`);
-      date.setUTCMonth(date.getUTCMonth() + delta);
-      month = date.toISOString().slice(0, 7);
-    } }),
+    querySelector: (selector) => ({
+      ...plain,
+      click() {
+        navigations++;
+        if (blockedNavigation) return;
+        const delta = (selector.includes("super-") ? 12 : 1) * (selector.includes("prev") ? -1 : 1);
+        const date = new Date(`${month}-01T00:00:00Z`);
+        date.setUTCMonth(date.getUTCMonth() + delta);
+        month = date.toISOString().slice(0, 7);
+      },
+    }),
   };
   const popup = {
     ...plain,
-    get style() { return { display: visible() ? "block" : "none" }; },
+    get style() {
+      return { display: visible() ? "block" : "none" };
+    },
     querySelectorAll: () => [panel],
-    querySelector: selector => selector.includes("ant-picker-time-panel") ? null : cells()[0],
+    querySelector: (selector) => (selector.includes("ant-picker-time-panel") ? null : cells()[0]),
   };
   const root = {
     defaultView: {
-      KeyboardEvent: class { constructor(type, init) { this.type = type; Object.assign(this, init); } },
-      MouseEvent: class { constructor(type, init) { this.type = type; Object.assign(this, init); } },
+      KeyboardEvent: class {
+        constructor(type, init) {
+          this.type = type;
+          Object.assign(this, init);
+        }
+      },
+      MouseEvent: class {
+        constructor(type, init) {
+          this.type = type;
+          Object.assign(this, init);
+        }
+      },
     },
-    querySelectorAll: () => visible() ? [popup] : [],
+    querySelectorAll: () => (visible() ? [popup] : []),
   };
   control.ownerDocument = root;
-  return { root, control, picker, value: () => committed, clicks: () => selectionClicks, navigations: () => navigations };
+  return {
+    root,
+    control,
+    picker,
+    value: () => committed,
+    clicks: () => selectionClicks,
+    navigations: () => navigations,
+  };
 }
 
 test("readonly Ant date input commits through its calendar and survives blur", async () => {
   const fixture = calendarFixture();
-  const result = await ReviewPageFieldWriter.executeValue(fixture.root, fixture.control,
-    { field: "old_vehicle.recycle_date", value: "2026-10-13", expectedValue: "2026-10-12" }, () => true);
+  const result = await ReviewPageFieldWriter.executeValue(
+    fixture.root,
+    fixture.control,
+    { field: "old_vehicle.recycle_date", value: "2026-10-13", expectedValue: "2026-10-12" },
+    () => true,
+  );
   assert.equal(result.ok, true);
   assert.equal(fixture.value(), "2026-10-13");
   assert.equal(fixture.clicks(), 1);
@@ -422,8 +634,12 @@ test("readonly Ant date input commits through its calendar and survives blur", a
 
 test("calendar selection navigates years and months before selecting the exact day", async () => {
   const fixture = calendarFixture();
-  const result = await ReviewPageFieldWriter.executeValue(fixture.root, fixture.control,
-    { field: "new_vehicle.registration_date", value: "2024-08-15", expectedValue: "2026-10-12" }, () => true);
+  const result = await ReviewPageFieldWriter.executeValue(
+    fixture.root,
+    fixture.control,
+    { field: "new_vehicle.registration_date", value: "2024-08-15", expectedValue: "2026-10-12" },
+    () => true,
+  );
   assert.equal(result.ok, true);
   assert.equal(fixture.value(), "2024-08-15");
   assert.equal(fixture.navigations(), 4);
@@ -433,13 +649,20 @@ test("vehicle license dates share calendar handling and reveal the visible picke
   for (const field of ["vehicle.registration_date", "vehicle.issue_date"]) {
     const fixture = calendarFixture();
     const presentation = [];
-    fixture.picker.scrollIntoView = options => presentation.push(options.block);
+    fixture.picker.scrollIntoView = (options) => presentation.push(options.block);
     fixture.picker.animate = () => presentation.push("highlight");
     let focusCount = 0;
-    fixture.control.focus = () => { focusCount++; assert.equal(fixture.value(), "2026-10-12"); };
-    const result = await ReviewPageFieldWriter.executeValue(fixture.root, fixture.control,
-      {field, value: "2024-08-15", expectedValue: "2026-10-12"}, () => true,
-      {fields: new Set([field]), controlKinds: new Set(["date"])});
+    fixture.control.focus = () => {
+      focusCount++;
+      assert.equal(fixture.value(), "2026-10-12");
+    };
+    const result = await ReviewPageFieldWriter.executeValue(
+      fixture.root,
+      fixture.control,
+      { field, value: "2024-08-15", expectedValue: "2026-10-12" },
+      () => true,
+      { fields: new Set([field]), controlKinds: new Set(["date"]) },
+    );
     assert.equal(result.ok, true, result.message);
     assert.equal(fixture.value(), "2024-08-15");
     assert.equal(fixture.clicks(), 1);
@@ -451,9 +674,16 @@ test("vehicle license dates share calendar handling and reveal the visible picke
 
 test("consecutive date writes wait for the reused calendar's closing animation", async () => {
   const fixture = calendarFixture({ closingDelay: 180 });
-  for (const [expectedValue, value] of [["2026-10-12", "2026-10-13"], ["2026-10-13", "2024-08-15"]]) {
-    const result = await ReviewPageFieldWriter.executeValue(fixture.root, fixture.control,
-      { field: "old_vehicle.recycle_date", value, expectedValue }, () => true);
+  for (const [expectedValue, value] of [
+    ["2026-10-12", "2026-10-13"],
+    ["2026-10-13", "2024-08-15"],
+  ]) {
+    const result = await ReviewPageFieldWriter.executeValue(
+      fixture.root,
+      fixture.control,
+      { field: "old_vehicle.recycle_date", value, expectedValue },
+      () => true,
+    );
     assert.equal(result.ok, true, result.message);
     assert.equal(fixture.value(), value);
   }
@@ -467,8 +697,12 @@ test("date validation, disabled cells, stale identity and blocked navigation nev
     ["2026-10-13", {}, () => false],
   ]) {
     const fixture = calendarFixture(options);
-    const result = await ReviewPageFieldWriter.executeValue(fixture.root, fixture.control,
-      { field: "old_vehicle.recycle_date", value, expectedValue: "2026-10-12" }, guard);
+    const result = await ReviewPageFieldWriter.executeValue(
+      fixture.root,
+      fixture.control,
+      { field: "old_vehicle.recycle_date", value, expectedValue: "2026-10-12" },
+      guard,
+    );
     assert.equal(result.ok, false);
     assert.equal(fixture.value(), "2026-10-12");
     assert.equal(fixture.clicks(), 0);
@@ -479,22 +713,41 @@ test("date validation, disabled cells, stale identity and blocked navigation nev
 });
 
 test("OCR日期原文在共用回填入口归一化，报废和过户均能写入并读回", async () => {
-  for (const field of ["old_vehicle.recycle_date", "invoice.invoice_date", "transfer_invoice.invoice_date", "transfer_new_invoice.invoice_date"]) {
+  for (const field of [
+    "old_vehicle.recycle_date",
+    "invoice.invoice_date",
+    "transfer_invoice.invoice_date",
+    "transfer_new_invoice.invoice_date",
+  ]) {
     for (const value of ["2026年09月03日", "2026/9/3", "2026.09.03", "２０２６年 ９月 ３日"]) {
       const fixture = calendarFixture();
-      const result = await ReviewPageFieldWriter.executeValue(fixture.root, fixture.control,
-        {field, value, expectedValue: "2026年10月12日"}, () => true,
-        {fields: new Set([field]), controlKinds: new Set(["date"])});
+      const result = await ReviewPageFieldWriter.executeValue(
+        fixture.root,
+        fixture.control,
+        { field, value, expectedValue: "2026年10月12日" },
+        () => true,
+        { fields: new Set([field]), controlKinds: new Set(["date"]) },
+      );
       assert.equal(result.ok, true, `${field} ${value}: ${result.message}`);
       assert.equal(fixture.value(), "2026-09-03");
       assert.equal(result.actions[0].value, "2026-09-03");
     }
   }
-  for (const value of ["2026年02月30日", "2026/13/03", "09/03/2026", "2026-09/03", "2026-09-03至2026-09-08"]) {
+  for (const value of [
+    "2026年02月30日",
+    "2026/13/03",
+    "09/03/2026",
+    "2026-09/03",
+    "2026-09-03至2026-09-08",
+  ]) {
     const fixture = calendarFixture();
-    const result = await ReviewPageFieldWriter.executeValue(fixture.root, fixture.control,
-      {field: "transfer_new_invoice.invoice_date", value}, () => true,
-      {fields: new Set(["transfer_new_invoice.invoice_date"])});
+    const result = await ReviewPageFieldWriter.executeValue(
+      fixture.root,
+      fixture.control,
+      { field: "transfer_new_invoice.invoice_date", value },
+      () => true,
+      { fields: new Set(["transfer_new_invoice.invoice_date"]) },
+    );
     assert.equal(result.ok, false, value);
     assert.equal(fixture.clicks(), 0, value);
     assert.equal(fixture.value(), "2026-10-12");
@@ -503,9 +756,13 @@ test("OCR日期原文在共用回填入口归一化，报废和过户均能写�
 
 test("date picker is still subject to the backend control type allowlist", async () => {
   const fixture = calendarFixture();
-  const result = await ReviewPageFieldWriter.executeValue(fixture.root, fixture.control,
-    { field: "old_vehicle.recycle_date", value: "2026-10-13", expectedValue: "2026-10-12" }, () => true,
-    { fields: new Set(["old_vehicle.recycle_date"]), controlKinds: new Set(["text"]) });
+  const result = await ReviewPageFieldWriter.executeValue(
+    fixture.root,
+    fixture.control,
+    { field: "old_vehicle.recycle_date", value: "2026-10-13", expectedValue: "2026-10-12" },
+    () => true,
+    { fields: new Set(["old_vehicle.recycle_date"]), controlKinds: new Set(["text"]) },
+  );
   assert.equal(result.ok, false);
   assert.match(result.message, /控件类型暂不支持/);
   assert.equal(fixture.clicks(), 0);
@@ -514,52 +771,95 @@ test("date picker is still subject to the backend control type allowlist", async
 test("composite rollback clears a formerly empty Ant date using its mouseup handler", async () => {
   const fixture = calendarFixture({ initial: "" });
   const rejected = valueInput("ORIGINAL");
-  rejected.dispatchEvent = () => { rejected.value = "FRAMEWORK-REJECTED"; };
-  const result = await ReviewPageFieldWriter.executeValueGroup(fixture.root,
-    [{ field: "old_vehicle.recycle_date", element: fixture.control }, { field: "new_vehicle.vin", element: rejected }],
-    { fields: ["old_vehicle.recycle_date", "new_vehicle.vin"], value: "2026-10-13", expectedValues: { "old_vehicle.recycle_date": "", "new_vehicle.vin": "ORIGINAL" } }, () => true);
+  rejected.dispatchEvent = () => {
+    rejected.value = "FRAMEWORK-REJECTED";
+  };
+  const result = await ReviewPageFieldWriter.executeValueGroup(
+    fixture.root,
+    [
+      { field: "old_vehicle.recycle_date", element: fixture.control },
+      { field: "new_vehicle.vin", element: rejected },
+    ],
+    {
+      fields: ["old_vehicle.recycle_date", "new_vehicle.vin"],
+      value: "2026-10-13",
+      expectedValues: { "old_vehicle.recycle_date": "", "new_vehicle.vin": "ORIGINAL" },
+    },
+    () => true,
+  );
   assert.equal(result.ok, false);
   assert.equal(fixture.value(), "");
 });
 
 test("a calendar committed before its close failure is included in composite rollback", async () => {
-  const fixture = calendarFixture({stickyFirstSelection: true});
+  const fixture = calendarFixture({ stickyFirstSelection: true });
   const other = valueInput("original");
-  const result = await ReviewPageFieldWriter.executeValueGroup(fixture.root,
-    [{field: "old_vehicle.recycle_date", element: fixture.control}, {field: "new_vehicle.vin", element: other}],
-    {fields: ["old_vehicle.recycle_date", "new_vehicle.vin"], value: "2026-10-13", expectedValues: {}}, () => true);
+  const result = await ReviewPageFieldWriter.executeValueGroup(
+    fixture.root,
+    [
+      { field: "old_vehicle.recycle_date", element: fixture.control },
+      { field: "new_vehicle.vin", element: other },
+    ],
+    {
+      fields: ["old_vehicle.recycle_date", "new_vehicle.vin"],
+      value: "2026-10-13",
+      expectedValues: {},
+    },
+    () => true,
+  );
   assert.equal(result.ok, false);
   assert.match(result.message, /日历未关闭.*已回滚/);
   assert.equal(fixture.value(), "2026-10-12");
   assert.equal(other.value, "original");
 });
 
-
 test("page writes serialize single and composite operations and release the lock", async () => {
-  const root = {defaultView: {Event: class Event {}}};
-  const first = valueInput("old-a"), second = valueInput("old-b");
-  const writer = loadWriter({setTimeout});
-  const pending = writer.executeValueGroup(root,
-    [{field: "old_vehicle.vin", element: first}, {field: "new_vehicle.vin", element: second}],
-    {fields: ["old_vehicle.vin", "new_vehicle.vin"], value: "new", expectedValues: {}},
+  const root = { defaultView: { Event: class Event {} } };
+  const first = valueInput("old-a"),
+    second = valueInput("old-b");
+  const writer = loadWriter({ setTimeout });
+  const pending = writer.executeValueGroup(
+    root,
+    [
+      { field: "old_vehicle.vin", element: first },
+      { field: "new_vehicle.vin", element: second },
+    ],
+    { fields: ["old_vehicle.vin", "new_vehicle.vin"], value: "new", expectedValues: {} },
   );
-  const blocked = await writer.executeValue(root, second, {field: "new_vehicle.vin", value: "interleaved"});
+  const blocked = await writer.executeValue(root, second, {
+    field: "new_vehicle.vin",
+    value: "interleaved",
+  });
   assert.equal(blocked.code, "WRITE_IN_PROGRESS");
   assert.equal((await pending).ok, true);
   assert.equal(first.value, "new");
   assert.equal(second.value, "new");
-  assert.equal((await writer.executeValue(root, second, {field: "new_vehicle.vin", value: "after"})).ok, true);
+  assert.equal(
+    (await writer.executeValue(root, second, { field: "new_vehicle.vin", value: "after" })).ok,
+    true,
+  );
   assert.equal(second.value, "after");
 });
 
 test("composite writes reject duplicated fields and aliased DOM controls before mutation", async () => {
-  const root = {defaultView: {Event: class Event {}}};
-  const first = valueInput("old-a"), second = valueInput("old-b");
-  const writer = loadWriter({setTimeout});
-  const action = {fields: ["old_vehicle.vin", "new_vehicle.vin"], value: "new", expectedValues: {}};
+  const root = { defaultView: { Event: class Event {} } };
+  const first = valueInput("old-a"),
+    second = valueInput("old-b");
+  const writer = loadWriter({ setTimeout });
+  const action = {
+    fields: ["old_vehicle.vin", "new_vehicle.vin"],
+    value: "new",
+    expectedValues: {},
+  };
   for (const entries of [
-    [{field: "old_vehicle.vin", element: first}, {field: "old_vehicle.vin", element: second}],
-    [{field: "old_vehicle.vin", element: first}, {field: "new_vehicle.vin", element: first}],
+    [
+      { field: "old_vehicle.vin", element: first },
+      { field: "old_vehicle.vin", element: second },
+    ],
+    [
+      { field: "old_vehicle.vin", element: first },
+      { field: "new_vehicle.vin", element: first },
+    ],
   ]) {
     assert.equal((await writer.executeValueGroup(root, entries, action)).ok, false);
     assert.equal(first.value, "old-a");

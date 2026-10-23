@@ -8,7 +8,6 @@ from forj_review_service.businesses.context import DEFAULT_BUSINESS, BusinessCon
 from forj_review_service.businesses.profiles import BusinessProfile
 from forj_review_service.businesses.rules.affiliation_controls import (
     check_affiliation_control,
-    check_owner_type_input,
 )
 from forj_review_service.contracts.checks import CheckResult
 from forj_review_service.contracts.review import (
@@ -17,29 +16,6 @@ from forj_review_service.contracts.review import (
     ReviewTask,
 )
 from forj_review_service.presentation.task_factory import make_task
-
-
-def _owner_type_system_step(
-    snapshot: ReviewFieldSnapshot,
-    checks: Sequence[CheckResult],
-    *,
-    business: BusinessContext = DEFAULT_BUSINESS,
-) -> ReviewTask:
-    """Treat the backend-provided owner type as input, not OCR evidence."""
-
-    check = check_owner_type_input(snapshot.field, snapshot.value, business=business)
-    return make_task(
-        step_id=check.check_id,
-        category="FIELD",
-        display_target=ReviewDisplayTarget.ASSISTANT,
-        label=snapshot.label,
-        result_status=check.status,
-        reason=check.reason,
-        page_value=snapshot.value,
-        control_type=snapshot.control_type,
-        writable=False,
-        values=check.values,
-    )
 
 
 def _affiliation_control_step(
@@ -74,7 +50,6 @@ def _affiliation_control_step(
 
 FIELD_TASK_PROJECTORS = MappingProxyType(
     {
-        "owner_type": _owner_type_system_step,
         "old_vehicle_affiliation": partial(_affiliation_control_step, type_source="旧车主体类型"),
         "new_vehicle_affiliation": partial(_affiliation_control_step, type_source="新车主体类型"),
     }

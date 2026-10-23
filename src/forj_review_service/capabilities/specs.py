@@ -1,4 +1,4 @@
-"""方案 C 的能力处理器共享契约。"""
+"""审核能力定义、执行上下文和处理器共享契约。"""
 
 from __future__ import annotations
 
@@ -73,9 +73,6 @@ class CapabilityBinding:
     required: bool | None = None
     parameters: tuple[tuple[str, str], ...] = ()
 
-    def parameter_dict(self) -> dict[str, str]:
-        return dict(self.parameters)
-
 
 STAGE_ORDER = {
     stage: index
@@ -141,6 +138,7 @@ class ReviewExecutionContext:
     qr_checks: tuple[QrCheck, ...] = ()
     checks: tuple[CheckResult, ...] = ()
     material_completeness: MaterialCompletenessReport | None = None
+    absolute_deadline: float | None = None
 
 
 @dataclass(frozen=True)
@@ -160,5 +158,6 @@ class ExternalCheckHandler(Protocol):
 
 class BusinessRuleHandler(Protocol):
     def __call__(
-        self, context: ReviewExecutionContext,
+        self,
+        context: ReviewExecutionContext,
     ) -> RuleExecutionResult | Awaitable[RuleExecutionResult]: ...

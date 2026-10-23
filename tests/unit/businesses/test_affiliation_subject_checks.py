@@ -216,7 +216,7 @@ def test_duplicate_matching_license_images_are_insufficient():
     assert result.check.status == "INSUFFICIENT"
 
 
-def test_page_owner_type_mismatch_is_reported_in_subject_check_without_false_requirements():
+def test_company_subject_type_comes_from_matching_materials():
     result = build_affiliation_subject_check(
         "甲运输有限公司",
         "甲运输有限公司",
@@ -224,13 +224,11 @@ def test_page_owner_type_mismatch_is_reported_in_subject_check_without_false_req
             item("business_license.company_name", "甲运输有限公司", "license-a"),
             item("business_license.legal_representative", "张三", "license-a"),
         ],
-        page_owner_type="个人",
         business=TEST_BUSINESS,
     )
 
-    assert result.check.status == "INSUFFICIENT"
-    assert "主体无法可靠对应" in result.check.reason
-    assert result.check.details["subject_requirements"] == []
+    assert result.check.status == "MATCH"
+    assert result.owner_types == ("COMPANY", "COMPANY")
 
 
 def test_subject_check_returns_exact_dynamic_identity_requirements():
@@ -241,7 +239,6 @@ def test_subject_check_returns_exact_dynamic_identity_requirements():
             item("identity_card.name", "张三", "id-front"),
             item("identity_card.side", "FRONT", "id-front"),
         ],
-        page_owner_type="个人",
         business=TEST_BUSINESS,
     )
 
@@ -255,7 +252,7 @@ def test_subject_check_returns_exact_dynamic_identity_requirements():
 
 def test_same_person_uses_one_shared_identity_requirement() -> None:
     result = build_affiliation_subject_check(
-        "张三", "张三", identity("张三", "id-a"), page_owner_type="个人", business=TEST_BUSINESS
+        "张三", "张三", identity("张三", "id-a"), business=TEST_BUSINESS
     )
 
     assert result.check.status == "MATCH"
@@ -273,7 +270,6 @@ def test_identity_back_cannot_be_reused_for_two_different_people() -> None:
             item("identity_card.side", "FRONT", "id-b-front"),
             item("identity_card.side", "BACK", "id-back"),
         ],
-        page_owner_type="个人",
         business=TEST_BUSINESS,
     )
 
@@ -288,32 +284,32 @@ def test_identity_back_cannot_be_reused_for_two_different_people() -> None:
         "UNCERTAIN",
     ]
     assert all("无法确认对应关系" in item["reason"] for item in back_requirements)
-@pytest.mark.parametrize(
-    "value,expected", [("个人", "MATCH"), ("企业", "MATCH"), ("", "INSUFFICIENT"),
-                       ("未知类型", "INSUFFICIENT")],
-)
-def test_owner_type_input_check_is_owned_by_business_rules(value, expected):
-    from forj_review_service.businesses.rules.affiliation_controls import check_owner_type_input
-
-    check = check_owner_type_input("application.owner_type", value)
-    assert check.status == expected
-    assert check.values[0].value == value
 
 
 @pytest.mark.parametrize(
     "actual,subject_status,expected_status",
-    [("", "MATCH", "MATCH"), ("个人", "MATCH", "MATCH"),
-     ("公司", "MATCH", "CONFLICT"), ("", "INSUFFICIENT", "INSUFFICIENT")],
+    [
+        ("", "MATCH", "MATCH"),
+        ("个人", "MATCH", "MATCH"),
+        ("公司", "MATCH", "CONFLICT"),
+        ("", "INSUFFICIENT", "INSUFFICIENT"),
+    ],
 )
-def test_affiliation_control_check_preserves_subject_gating(actual, subject_status, expected_status):
+def test_affiliation_control_check_preserves_subject_gating(
+    actual, subject_status, expected_status
+):
     from forj_review_service.businesses.rules.affiliation_controls import check_affiliation_control
     from forj_review_service.contracts.checks import CheckResult, CheckResultValue
 
     subject = CheckResult(
-        check_id="AFFILIATION-SUBJECT-001", label="主体关系", status=subject_status,
-        reason="合成主体检查", values=[CheckResultValue(source="旧车主体类型", value="PERSONAL")],
+        check_id="AFFILIATION-SUBJECT-001",
+        label="主体关系",
+        status=subject_status,
+        reason="合成主体检查",
+        values=[CheckResultValue(source="旧车主体类型", value="PERSONAL")],
     )
-    check = check_affiliation_control("old_vehicle.affiliation", actual, [subject],
-                                      type_source="旧车主体类型")
+    check = check_affiliation_control(
+        "old_vehicle.affiliation", actual, [subject], type_source="旧车主体类型"
+    )
     assert check.status == expected_status
     assert check.values[0].value == actual

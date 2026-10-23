@@ -28,6 +28,10 @@ class QrDecodeResult:
     elapsed_ms: int = 0
 
 
+class _ImageTooLarge(ValueError):
+    """The compressed image exceeds the bounded download budget."""
+
+
 class QrImageDecoder:
     """从单个图片 URL 读取二维码，且每张图片最多执行一次。"""
 
@@ -35,7 +39,7 @@ class QrImageDecoder:
         self,
         *,
         timeout_seconds: float = 4.0,
-        max_bytes: int = 8_000_000,
+        max_bytes: int = 20_000_000,
         max_redirects: int = 2,
         transport: httpx.AsyncBaseTransport | httpx.BaseTransport | None = None,
         private_hosts: tuple[str, ...] = (),
@@ -58,6 +62,8 @@ class QrImageDecoder:
             return self._result(started, error_code="http_status")
         except httpx.HTTPError:
             return self._result(started, error_code="download_error")
+        except _ImageTooLarge:
+            return self._result(started, error_code="image_too_large")
         except ValueError:
             return self._result(started, error_code="image_rejected")
         except (OSError, RuntimeError, TypeError):  # pragma: no cover - transport boundary
@@ -65,7 +71,13 @@ class QrImageDecoder:
 
         try:
             values = await asyncio.to_thread(self._decode_bytes, content)
-        except (ImportError, OSError, RuntimeError, TypeError, ValueError):  # pragma: no cover - native boundary
+        except (
+            ImportError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+        ):  # pragma: no cover - native boundary
             return self._result(started, error_code="decoder_error")
         if values:
             return self._result(started, values=values[0], decoder=values[1])
@@ -93,12 +105,12 @@ class QrImageDecoder:
                         response.raise_for_status()
                         content_length = response.headers.get("content-length")
                         if content_length and int(content_length) > self.max_bytes:
-                            raise ValueError("二维码图片超过大小限制")
+                            raise _ImageTooLarge
                         content = bytearray()
                         async for chunk in response.aiter_bytes():
                             content.extend(chunk)
                             if len(content) > self.max_bytes:
-                                raise ValueError("二维码图片超过大小限制")
+                                raise _ImageTooLarge
                         if not content:
                             raise ValueError("二维码图片为空")
                         return bytes(content)
@@ -113,8 +125,12 @@ class QrImageDecoder:
             _ = parsed.port
         except ValueError:
             return False
-        return (parsed.scheme in {"http", "https"} and bool(parsed.hostname)
-                and parsed.username is None and parsed.password is None)
+        return (
+            parsed.scheme in {"http", "https"}
+            and bool(parsed.hostname)
+            and parsed.username is None
+            and parsed.password is None
+        )
 
     @staticmethod
     def _decode_bytes(content: bytes) -> tuple[tuple[str, ...], str] | None:
@@ -144,7 +160,7 @@ class QrImageDecoder:
                 value
                 for value in (
                     str(item.text).strip()
-                    for item in zxingcpp.read_barcodes(image)
+                    for item in zxingcpp.read_barcodes(image, formats=zxingcpp.BarcodeFormat.QRCode)
                     if getattr(item, "text", None)
                 )
                 if value

@@ -13,29 +13,41 @@
   --review-font-meta: 13px;
   --review-font-caption: 12px;
   --review-control-height: 36px;
-  --review-text: #303133;
-  --review-secondary: #515d6c;
-  --review-muted: #7c8694;
+  --review-text: #182338;
+  --review-secondary: #475569;
+  --review-muted: #607088;
   --review-surface: #fff;
-  --review-subtle: #f5f7fa;
-  --review-border: #e4e7ed;
-  --review-accent: #1890ff;
-  --review-accent-surface: #e7f4ff;
-  --review-accent-border: #91d5ff;
-  --review-primary: #1890ff;
-  --review-primary-hover: #40a9ff;
-  --review-success: #389e0d;
-  --review-warning: #ad6800;
-  --review-danger: #cf1322;
+  --review-subtle: #f1f4f9;
+  --review-border: #e3e8f1;
+  --review-accent: #215bd7;
+  --review-accent-surface: #edf3ff;
+  --review-accent-border: #bdd0f5;
+  --review-primary: #215bd7;
+  --review-primary-hover: #194bb6;
+  --review-success: #217351;
+  --review-warning: #946018;
+  --review-danger: #bd3545;
   color: var(--review-text);
   background: var(--review-surface);
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 /* Field details vary in height; reserve the scrollbar gutter to keep their width stable. */
-html { scrollbar-gutter: stable; }
-body { margin: 0; min-width: 0; }
-button, input, select, textarea { font: inherit; }
+html {
+  scrollbar-gutter: stable;
+}
+body {
+  margin: 0;
+  min-width: 0;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
 :where(button) {
   display: inline-flex;
   align-items: center;
@@ -44,25 +56,42 @@ button, input, select, textarea { font: inherit; }
   min-height: var(--review-control-height);
   padding: 6px 10px;
   border: 1px solid var(--review-border);
-  border-radius: 4px;
+  border-radius: 7px;
   background: var(--review-surface);
   color: var(--review-text);
   font-size: var(--review-font-body);
   line-height: 1.5;
   cursor: pointer;
-  transition: background 160ms, border-color 160ms, box-shadow 160ms;
+  transition:
+    background 160ms,
+    border-color 160ms,
+    box-shadow 160ms;
 }
 :where(button:hover:not(:disabled)) {
   background: var(--review-accent-surface);
   border-color: var(--review-accent-border);
 }
-button:disabled { cursor: not-allowed; opacity: .5; }
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
 :where(button, a, input, select, textarea, summary):focus-visible {
   outline: 2px solid var(--review-accent);
   outline-offset: 3px;
 }
-svg { flex: none; vertical-align: middle; }
-a { color: var(--review-accent); }
+svg {
+  flex: none;
+  vertical-align: middle;
+}
+a {
+  color: var(--review-accent);
+}
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
 }

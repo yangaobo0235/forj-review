@@ -24,8 +24,11 @@ async def test_failed_compile_preserves_service_then_success_swaps_whole_snapsho
         async def scalar(self, query):
             return desired
 
-    app = SimpleNamespace(state=SimpleNamespace(review_service=original,
-                          review_jobs=SimpleNamespace(review_service=original)))
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            review_service=original, review_jobs=SimpleNamespace(review_service=original)
+        )
+    )
     loader = ConfigurationReloader(app, Database())
 
     async def invalid(database):
@@ -48,4 +51,3 @@ async def test_failed_compile_preserves_service_then_success_swaps_whole_snapsho
     assert loaded is app.state.review_jobs.review_service and loaded is not original
     assert loaded.registry is replacement and loaded.workflow is not original.workflow
     assert not await loader.refresh()
-

@@ -7,7 +7,7 @@ from types import MappingProxyType
 
 from forj_review_service.businesses.rules.affiliation import run_affiliation_subject
 from forj_review_service.businesses.rules.affiliation_action import run_set_affiliation
-from forj_review_service.businesses.rules.emission_standard import run_emission_standard_async
+from forj_review_service.businesses.rules.emission_standard import run_emission_standard
 from forj_review_service.businesses.rules.invoice_verification import run_verify_invoice
 from forj_review_service.businesses.rules.owner_consistency import (
     OWNER_CONSISTENCY_CHECK_ID,
@@ -36,6 +36,8 @@ class RuleDefinition:
 # verify_invoice reads the pack's invoice_verification_field, validated separately.
 RULE_DEFINITIONS = MappingProxyType(
     {
+        # Immutable historical versions retain this rule for explicit rollback.
+        # Current transfer fields use ordinary per-field comparisons.
         "transfer_documents": RuleDefinition(
             run_transfer_documents,
             ("transfer_invoice.vin", "transfer_registration.vin"),
@@ -47,7 +49,6 @@ RULE_DEFINITIONS = MappingProxyType(
                 "vehicle.brand_model",
                 "vehicle.announcement_model",
                 "vehicle.engine_model",
-                "vehicle.vin",
             ),
             ("VEHICLE-SOURCE-BRAND-MODEL", "VEHICLE-SOURCE-MODEL"),
         ),
@@ -64,7 +65,6 @@ RULE_DEFINITIONS = MappingProxyType(
             (
                 "old_vehicle.owner",
                 "new_vehicle.owner",
-                "application.owner_type",
                 "old_vehicle.affiliation",
                 "new_vehicle.affiliation",
             ),
@@ -78,7 +78,7 @@ RULE_DEFINITIONS = MappingProxyType(
             "FINAL_REVIEW",
         ),
         "emission_standard": RuleDefinition(
-            run_emission_standard_async,
+            run_emission_standard,
             ("old_vehicle.emission_standard", "old_vehicle.engine_model", "old_vehicle.fuel_type"),
             ("EMISSION-STANDARD-001",),
             "POST_COMPARE",
@@ -129,6 +129,6 @@ def build_rule_handlers(
 ) -> dict[str, BusinessRuleHandler]:
     return {
         **RULE_HANDLERS,
-        "emission_standard": partial(run_emission_standard_async, lookup=engine_emission_lookup),
+        "emission_standard": partial(run_emission_standard, lookup=engine_emission_lookup),
         **{rule_id: run_replacement_policy for rule_id in policy_rule_ids},
     }

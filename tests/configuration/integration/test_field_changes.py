@@ -51,7 +51,10 @@ async def test_field_replacement_reaches_collection_extraction_comparison_and_ta
     assert "vehicle.engine_no" not in keys and "vehicle.inspection_no" in keys
 
     class Extractor:
-        async def extract_fields(self, image, policy, *, retry_reason=None):
+        async def extract_document(
+            self, image, *, business=None, retry_reason=None, focus_boxes=None
+        ):
+            policy = business.document_policies["vehicle_license"]
             assert "vehicle.engine_no" not in policy.fields
             assert "printed.inspection_no" in policy.fields
             return QwenExtraction(
@@ -121,6 +124,6 @@ def test_empty_business_context_has_no_page_fields_materials_or_routes():
 
     context = BusinessContext()
     assert not context.field_policies and not context.document_policies and not context.labels
-    assert not context.composites and not context.slot_document_types
+    assert not context.composites and context.pack is None
     fields, issue = route_fields("vehicle", "vehicle_license", {"vehicle.vin": "TEST"})
     assert fields == {} and issue

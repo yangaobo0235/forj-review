@@ -42,7 +42,10 @@ def validate_qr_url(url: str, allowed_hosts: list[str]) -> bool:
     """只允许 HTTPS 且命中白名单主机，避免二维码触发任意外部跳转。"""
     try:
         parsed = urlparse(url)
-        return parsed.scheme == "https" and canonicalize_official_qr_url(url, allowed_hosts) is not None
+        return (
+            parsed.scheme == "https"
+            and canonicalize_official_qr_url(url, allowed_hosts) is not None
+        )
     except ValueError:
         return False
 
@@ -85,7 +88,13 @@ def extract_page_fields(html: str) -> dict[str, str]:
     # Some versions of the official page render values in JSON before hydration.
     # Parse JSON-looking script/text fragments first so labels need not be adjacent.
     json_keys = {
-        "certificate_no": ("certificate_no", "certificateNo", "recycleCertificateNo", "回收证明编号", "证明编号"),
+        "certificate_no": (
+            "certificate_no",
+            "certificateNo",
+            "recycleCertificateNo",
+            "回收证明编号",
+            "证明编号",
+        ),
         "vin": ("vin", "vehicleVin", "vehicleIdentificationNo", "车架号", "车辆识别代号"),
     }
     for candidate in re.findall(r"(?:\{|\[)[^<>]{0,20000}(?:\}|\])", raw, flags=re.DOTALL):
@@ -183,7 +192,11 @@ class QrWebVerifier:
                 response = await self._fetch(client, canonical_url, result)
             result.accessible = True
             result.page_fields = extract_page_fields(response)
-            result.status = "MATCH" if {"certificate_no", "vin"}.issubset(result.page_fields) else "REVIEW_REQUIRED"
+            result.status = (
+                "MATCH"
+                if {"certificate_no", "vin"}.issubset(result.page_fields)
+                else "REVIEW_REQUIRED"
+            )
             if result.status == "MATCH":
                 result.message = "二维码网页字段已提取"
             else:
@@ -209,14 +222,17 @@ class QrWebVerifier:
             for _ in range(8):
                 if current is None:
                     break
-                if isinstance(current, ssl.SSLCertVerificationError) or "CERTIFICATE_VERIFY_FAILED" in str(current):
+                if isinstance(
+                    current, ssl.SSLCertVerificationError
+                ) or "CERTIFICATE_VERIFY_FAILED" in str(current):
                     certificate_error = True
                     break
                 current = current.__cause__ or current.__context__
             result.error_code = "tls_certificate_error" if certificate_error else "connection_error"
             result.message = (
                 "官网 TLS 证书校验失败，未完成核验，请人工核验"
-                if certificate_error else "连接官网失败，未完成核验，请稍后重试或人工核验"
+                if certificate_error
+                else "连接官网失败，未完成核验，请稍后重试或人工核验"
             )
             result.retryable = not certificate_error
             result.accessible = False
@@ -235,16 +251,28 @@ class QrWebVerifier:
             result.accessible = False
         return result
 
-    async def verify_with_retry(self, url: str, image_index: int | None = None, *, retry_count: int = 1) -> tuple[QrCodeResult, list[RetryAttempt]]:
+    async def verify_with_retry(
+        self, url: str, image_index: int | None = None, *, retry_count: int = 1
+    ) -> tuple[QrCodeResult, list[RetryAttempt]]:
         attempts: list[RetryAttempt] = []
         if canonicalize_official_qr_url(url, self.allowed_hosts) is None:
             result = await self.verify(url, image_index)
-            logger.info("review qr web completed image_index=%s result=%s error_code=invalid_url attempt=1 duration_ms=0", image_index, result.status)
-            attempts.append(RetryAttempt(
-                target_id=str(image_index if image_index is not None else "qr"),
-                stage="qr_web", attempt_number=1, reason_code="invalid_url",
-                strategy="official_page", result="failed", duration_ms=0,
-            ))
+            logger.info(
+                "review qr web completed image_index=%s result=%s error_code=invalid_url attempt=1 duration_ms=0",
+                image_index,
+                result.status,
+            )
+            attempts.append(
+                RetryAttempt(
+                    target_id=str(image_index if image_index is not None else "qr"),
+                    stage="qr_web",
+                    attempt_number=1,
+                    reason_code="invalid_url",
+                    strategy="official_page",
+                    result="failed",
+                    duration_ms=0,
+                )
+            )
             return result, attempts
         async with AsyncExitStack() as stack:
             # Each review is independent: try normal TLS first and only fall
@@ -255,20 +283,30 @@ class QrWebVerifier:
                 started = time.monotonic()
                 result = await self._verify_once(client, url, image_index)
                 duration_ms = max(0, int((time.monotonic() - started) * 1000))
-                attempts.append(RetryAttempt(
-                    target_id=str(image_index if image_index is not None else "qr"),
-                    stage="qr_web", attempt_number=attempt_number,
-                    reason_code=result.error_code or "completed",
-                    strategy="official_page_tls12" if tls12_only else "official_page",
-                    result="succeeded" if result.status == "MATCH" else "failed",
-                    duration_ms=duration_ms,
-                ))
+                attempts.append(
+                    RetryAttempt(
+                        target_id=str(image_index if image_index is not None else "qr"),
+                        stage="qr_web",
+                        attempt_number=attempt_number,
+                        reason_code=result.error_code or "completed",
+                        strategy="official_page_tls12" if tls12_only else "official_page",
+                        result="succeeded" if result.status == "MATCH" else "failed",
+                        duration_ms=duration_ms,
+                    )
+                )
                 logger.info(
                     "review qr web completed image_index=%s host=%s tls=%s attempt=%d "
                     "accessible=%s result=%s error_code=%s http_status=%s retryable=%s duration_ms=%d",
-                    image_index, urlparse(result.url or "").hostname, "1.2" if tls12_only else "auto", attempt_number,
-                    result.accessible, result.status, result.error_code or "-",
-                    result.http_status or "-", result.retryable, duration_ms,
+                    image_index,
+                    urlparse(result.url or "").hostname,
+                    "1.2" if tls12_only else "auto",
+                    attempt_number,
+                    result.accessible,
+                    result.status,
+                    result.error_code or "-",
+                    result.http_status or "-",
+                    result.retryable,
+                    duration_ms,
                 )
                 if result.status == "MATCH" or not result.retryable:
                     return result, attempts
@@ -279,7 +317,9 @@ class QrWebVerifier:
                         client = await stack.enter_async_context(self._client(tls12_only=True))
         return result, attempts
 
-    async def _fetch(self, client: httpx.AsyncClient, url: str, result: QrCodeResult | None = None) -> str:
+    async def _fetch(
+        self, client: httpx.AsyncClient, url: str, result: QrCodeResult | None = None
+    ) -> str:
         current = url
         for _ in range(self.max_redirects + 1):
             if not validate_qr_url(current, self.allowed_hosts):

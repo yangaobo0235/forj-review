@@ -1,4 +1,9 @@
-import { effectivePageCatalog, explainPageIdentity, matchPageIdentity, reviewTabLabels } from "../catalog/page-catalog.ts";
+import {
+  effectivePageCatalog,
+  explainPageIdentity,
+  matchPageIdentity,
+  reviewTabLabels,
+} from "../catalog/page-catalog.ts";
 import type { ReviewTabState } from "../catalog/page-catalog.ts";
 import type { BusinessSelection } from "../../../shared/contracts/review";
 
@@ -13,7 +18,11 @@ import type { BusinessSelection } from "../../../shared/contracts/review";
  *
  * 在线目录与随包目录都执行相同的路径、页签及面板校验，不绕过步骤确认。
  */
-function detect(url: string, pageText = "", reviewTab?: ReviewTabState | null): BusinessSelection | null {
+function detect(
+  url: string,
+  pageText = "",
+  reviewTab?: ReviewTabState | null,
+): BusinessSelection | null {
   return matchPageIdentity(effectivePageCatalog(), url, pageText, reviewTab);
 }
 
@@ -26,7 +35,8 @@ function detectionHint(url: string, pageText: string, reviewTab?: ReviewTabState
   const labels = reviewTabLabels(effectivePageCatalog(), url);
   if (labels.length) {
     if (!reviewTab?.label) return "未找到唯一激活的审核页签，请打开审核表单后重新采集";
-    if (!labels.includes(reviewTab.label)) return `当前处于「${reviewTab.label}」，请切换到审核页签后重新采集`;
+    if (!labels.includes(reviewTab.label))
+      return `当前处于「${reviewTab.label}」，请切换到审核页签后重新采集`;
     return "审核页签对应的内容面板尚未显示或关联无效，请等待加载完成后重新采集";
   }
   const diagnostics = explainPageIdentity(effectivePageCatalog(), url, pageText);
@@ -64,17 +74,20 @@ function resolve(
   }
 
   if (
-    automatic
-    && (automatic.businessType !== manualSelection.businessType
-      || automatic.region !== manualSelection.region
-      || (automatic.pageId && manualSelection.pageId && automatic.pageId !== manualSelection.pageId))
+    automatic &&
+    (automatic.businessType !== manualSelection.businessType ||
+      automatic.region !== manualSelection.region ||
+      (automatic.pageId && manualSelection.pageId && automatic.pageId !== manualSelection.pageId))
   ) {
     return { business: null, error: "人工选择的审核业务与当前页面不一致，请重新确认" };
   }
 
-  const identity = effectivePageCatalog().identities.find(i =>
-    i.business_type === manualSelection.businessType && i.region === manualSelection.region
-    && (!manualSelection.pageId || i.page_id === manualSelection.pageId));
+  const identity = effectivePageCatalog().identities.find(
+    (i) =>
+      i.business_type === manualSelection.businessType &&
+      i.region === manualSelection.region &&
+      (!manualSelection.pageId || i.page_id === manualSelection.pageId),
+  );
   return {
     business: {
       ...manualSelection,

@@ -25,13 +25,14 @@ def run_verify_invoice(context: ReviewExecutionContext) -> RuleExecutionResult:
     if field is None:
         return RuleExecutionResult()
     matched = any(
-        item.field == field and item.status is FieldStatus.MATCH
-        for item in context.comparisons
+        item.field == field and item.status is FieldStatus.MATCH for item in context.comparisons
     )
     if not matched:
         return RuleExecutionResult()
     return RuleExecutionResult(
         page_action_intents=(
-            PageActionIntent(action_id="verify_invoice", payload={"field": field}, requires_authorization=False),
+            PageActionIntent(
+                action_id="verify_invoice", payload={"field": field}, requires_authorization=False
+            ),
         )
     )

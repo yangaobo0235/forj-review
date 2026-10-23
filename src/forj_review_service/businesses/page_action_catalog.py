@@ -14,7 +14,8 @@ PageActionId = Literal["fill_review_fields", "verify_invoice", "set_affiliation"
 PAGE_ACTION_SPECS = (
     PageActionSpec("verify_invoice", reversible=False, requires_authorization=False),
     PageActionSpec(
-        "set_affiliation", requires_authorization=False,
+        "set_affiliation",
+        requires_authorization=False,
         writable_fields=("old_vehicle.affiliation", "new_vehicle.affiliation"),
     ),
     PageActionSpec("fill_review_fields"),

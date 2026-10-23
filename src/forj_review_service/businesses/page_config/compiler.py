@@ -82,6 +82,9 @@ def _compile_fields(
                         group_order=source.group_order,
                     )
                 )
+        # Retired projection has no runtime behavior; historical JSON remains readable.
+        if changes.get("task_projector") == "owner_type":
+            changes["task_projector"] = ""
         fields[item.key] = FieldDeclaration(key=item.key, **changes)
         if "checks" in item.model_fields_set:
             bindings.extend((check_id, item.key) for check_id in item.checks)

@@ -181,7 +181,7 @@ def receipt_query(operation_id):
             Page.page_code,
             PageVersion.version_no,
             ValidationRun.candidate_digest,
-            ValidationRun.kernel_version,
+            ValidationRun.kernel_fingerprint,
             ValidationRun.report,
         )
         .select_from(Release)
@@ -401,9 +401,15 @@ def _publish_state(
                 ValidationRun.manifest_digest,
                 ValidationRun.base_release_id,
                 ValidationRun.kernel_version,
+                ValidationRun.kernel_fingerprint,
             ).where(ValidationRun.id == validation_id)
         ).all()
-        if not proof or tuple(proof[0]) != ("PASSED", manifest_digest, head[0][1], KERNEL_VERSION):
+        if (
+            not proof
+            or tuple(proof[0])[:3] != ("PASSED", manifest_digest, head[0][1])
+            or proof[0][3] not in {KERNEL_VERSION, KERNEL_CONTRACT_VERSION}
+            or proof[0][4] != KERNEL_VERSION
+        ):
             raise PublicationConflict("STALE_VALIDATION", "验证报告与发布候选、基线或内核不一致")
     inserted = session.execute(
         insert(Release)

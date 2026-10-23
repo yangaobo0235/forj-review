@@ -12,6 +12,8 @@ from forj_review_service.businesses.page_config.inspection import (
     profile_fingerprint,
 )
 from forj_review_service.businesses.page_config.kernel import KERNEL_VERSION
+from forj_review_service.businesses.page_config.row_contract import split_definition
+from forj_review_service.businesses.page_config.schema import PageDefinition
 from forj_review_service.businesses.page_config.state import ConfigurationState
 from forj_review_service.contracts.errors import ConfigurationInputError
 from forj_review_service.runtime.configuration.service import validated_snapshot
@@ -50,11 +52,21 @@ def preview_version(state, candidate, *, activation_only=False):
             {f["key"]: f for f in new_fields},
         ),
     }
+    old_source = state.source(current.page_id, current.version)
+    old_options, new_options = split_definition(old_source), split_definition(candidate)
+    old_options["materials"] = PageDefinition.model_validate(old_source).model_dump(mode="json")[
+        "materials"
+    ]
+    new_options["materials"] = definition.model_dump(mode="json")["materials"]
+    diff["page_options"] = mapping_diff(
+        old_options,
+        new_options,
+    )
     return {
         "candidate_digest": digest(
             {
                 "draft": candidate,
-                "baseline": configuration_baseline(state),
+                "baseline": state.page_baseline(definition.page_id, KERNEL_VERSION),
                 "effective": profile_fingerprint(profile),
             }
         ),

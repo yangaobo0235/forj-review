@@ -4,22 +4,46 @@ import { test } from "vitest";
 import { h } from "vue";
 import { renderToString } from "vue/server-renderer";
 
-
-
 function render(status, values, reason_codes = []) {
-  return renderToString(h(ReviewStepDetail, {
-    step: {step_id: "FIELD-vehicle.vin", category: "FIELD", label: "车架号",
-      result_status: status, requires_reviewer_action: status !== "MATCH", reason: "核验说明",
-      reason_codes, values, evidence: []},
-    qrChecks: [], disabled: false, onFocusImage: async () => {}, onFill: async () => {}, onChoose: () => {},
-  }));
+  return renderToString(
+    h(ReviewStepDetail, {
+      step: {
+        step_id: "FIELD-vehicle.vin",
+        category: "FIELD",
+        label: "车架号",
+        result_status: status,
+        requires_reviewer_action: status !== "MATCH",
+        reason: "核验说明",
+        reason_codes,
+        values,
+        evidence: [],
+      },
+      qrChecks: [],
+      disabled: false,
+      onFocusImage: async () => {},
+      onFill: async () => {},
+      onChoose: () => {},
+    }),
+  );
 }
-const diff = [{kind: "REPLACE", start: 0, end: 1, page_start: 0, page_end: 1, page_text: "A"}];
+const diff = [{ kind: "REPLACE", start: 0, end: 1, page_start: 0, page_end: 1, page_text: "A" }];
 
 test("uncertain candidate differences stay orange inside a confirmed conflict task", async () => {
-  const html = await render("CONFLICT", [{source: "材料", value: "B", differences: diff,
-    uncertain: true, conflicting: true, comparison_status: "INSUFFICIENT", check_reason: "疑似不一致"}],
-    ["VALUE_MISMATCH", "RECOGNITION_UNCERTAIN"]);
+  const html = await render(
+    "CONFLICT",
+    [
+      {
+        source: "材料",
+        value: "B",
+        differences: diff,
+        uncertain: true,
+        conflicting: true,
+        comparison_status: "INSUFFICIENT",
+        check_reason: "疑似不一致",
+      },
+    ],
+    ["VALUE_MISMATCH", "RECOGNITION_UNCERTAIN"],
+  );
   assert.match(html, /status-conflict/);
   assert.match(html, /class="value-diff-pending"/);
   assert.match(html, /class="mismatch-pending"/);
@@ -30,8 +54,15 @@ test("uncertain candidate differences stay orange inside a confirmed conflict ta
 });
 
 test("confirmed per-value conclusion controls red highlighting independently of task merges", async () => {
-  const html = await render("CONFLICT", [{source: "材料", value: "B", differences: diff,
-    conflicting: true, comparison_status: "CONFLICT"}]);
+  const html = await render("CONFLICT", [
+    {
+      source: "材料",
+      value: "B",
+      differences: diff,
+      conflicting: true,
+      comparison_status: "CONFLICT",
+    },
+  ]);
   assert.match(html, /class="value-diff"/);
   assert.match(html.replace(/<[^>]*>/g, ""), /与页面不一致/);
   assert.doesNotMatch(html, /value-diff-pending/);

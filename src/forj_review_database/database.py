@@ -85,11 +85,11 @@ class Database:
         finally:
             engine.dispose()
 
-    def require_ready(self):
+    def require_ready(self, *, consumer="review"):
         try:
             with self.connect() as db:
                 db.execute("SET TRANSACTION READ ONLY")
-                require_ready_sync(db.orm, self.schema)
+                require_ready_sync(db.orm, self.schema, consumer=consumer)
         except (SQLAlchemyError, psycopg.Error):
             raise ValueError("无法读取 PostgreSQL 存储，请检查数据库连接、权限及现有结构") from None
 
@@ -148,7 +148,7 @@ class AsyncDatabase:
                     )
                 yield session
 
-    async def require_ready(self):
+    async def require_ready(self, *, consumer="review"):
         if sys.platform == "win32" and isinstance(
             asyncio.get_running_loop(), asyncio.ProactorEventLoop
         ):
@@ -159,6 +159,6 @@ class AsyncDatabase:
             )
         try:
             async with self.session(readonly=True) as session:
-                await require_ready_async(session, self.schema)
+                await require_ready_async(session, self.schema, consumer=consumer)
         except SQLAlchemyError:
             raise ValueError("无法读取 PostgreSQL 存储，请检查数据库连接、权限及现有结构") from None

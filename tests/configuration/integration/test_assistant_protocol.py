@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from forj_review_config_service.bootstrap.application import create_app
-from forj_review_config_service.contracts.models import ConfigurationError, SessionRecord
+from forj_review_config_service.contracts.models import ConfigurationError, TaskRecord
 from tests.support.configuration import (
     FakeModel,
     call,
@@ -28,7 +28,7 @@ def test_question_survives_restart_and_uses_native_tool_result_protocol(settings
         command = {"client_request_id": "msg1", "expected_revision": 0, "text": "审核日期"}
         assert (
             client.post(
-                f"/api/review-config/sessions/{sid}/messages", headers=auth, json=command
+                f"/api/review-config/tasks/{sid}/messages", headers=auth, json=command
             ).status_code
             == 200
         )
@@ -39,7 +39,7 @@ def test_question_survives_restart_and_uses_native_tool_result_protocol(settings
         record = client.portal.call(client.app.state.service.store.get, sid)
         assert record.pending["id"] == question_id
         command = {"client_request_id": "answer1", "expected_revision": 0, "answer": "注册日期"}
-        path = f"/api/review-config/sessions/{sid}/interactions/{question_id}/answer"
+        path = f"/api/review-config/tasks/{sid}/interactions/{question_id}/answer"
         assert client.post(path, headers=auth, json=command).status_code == 200
         record = wait(client, sid, auth, "COMPLETED")
         assert record.pending is None
@@ -47,7 +47,7 @@ def test_question_survives_restart_and_uses_native_tool_result_protocol(settings
         assert record.messages[index + 1]["role"] == "tool"
         assert "注册日期" in record.messages[index + 1]["content"]
         assert client.post(path, headers=auth, json=command).status_code == 200
-        history = client.get(f"/api/review-config/sessions/{sid}").json()["chat_messages"]
+        history = client.get(f"/api/review-config/tasks/{sid}").json()["chat_messages"]
         assert [m["content"] for m in history] == [
             "审核日期",
             "注册日期还是发证日期？",
@@ -55,7 +55,7 @@ def test_question_survives_restart_and_uses_native_tool_result_protocol(settings
             "已读取要求，草稿待配置",
         ]
     with TestClient(create_app(settings, model=FakeModel())) as client:
-        assert client.get(f"/api/review-config/sessions/{sid}").json()["chat_messages"] == history
+        assert client.get(f"/api/review-config/tasks/{sid}").json()["chat_messages"] == history
 
 
 def test_model_budget_is_interrupted_and_cancelled_question_does_not_resurrect(settings):
@@ -65,7 +65,7 @@ def test_model_budget_is_interrupted_and_cancelled_question_does_not_resurrect(s
         auth = headers()
         sid = create(client, auth)
         client.post(
-            f"/api/review-config/sessions/{sid}/messages",
+            f"/api/review-config/tasks/{sid}/messages",
             headers=auth,
             json={"client_request_id": "message", "expected_revision": 0, "text": "检查配置"},
         )
@@ -110,7 +110,7 @@ def test_bad_question_returns_tool_error_then_model_can_correct_it(settings):
     with TestClient(create_app(settings, model=FakeModel(replies))) as client:
         sid = create(client, {})
         client.post(
-            f"/api/review-config/sessions/{sid}/messages",
+            f"/api/review-config/tasks/{sid}/messages",
             json={"client_request_id": "m", "expected_revision": 0, "text": "配置日期"},
         )
         record = wait(client, sid, {}, "WAITING")
@@ -145,7 +145,7 @@ def test_reused_provider_call_id_executes_distinct_operations_with_paired_respon
     with TestClient(create_app(settings, model=FakeModel(replies))) as client:
         sid = create(client, {})
         client.post(
-            f"/api/review-config/sessions/{sid}/messages",
+            f"/api/review-config/tasks/{sid}/messages",
             json={"client_request_id": "m", "expected_revision": 0, "text": "改标题"},
         )
         record = wait(client, sid, {}, "COMPLETED")
@@ -181,17 +181,17 @@ def test_crash_after_persisting_call_resumes_same_internal_identity_once(setting
         )
     ) as client:
         client.portal.call(client.app.state.service.store.put, record)
-        base = f"/api/review-config/sessions/{record.session_id}/resume"
+        base = f"/api/review-config/tasks/{record.task_id}/resume"
         client.post(base, json={"client_request_id": "resume1", "expected_revision": 0})
-        first = wait(client, record.session_id, {}, "COMPLETED")
+        first = wait(client, record.task_id, {}, "COMPLETED")
         assert first.revision == 1 and call_id in first.tool_results
         client.post(base, json={"client_request_id": "resume2", "expected_revision": 1})
-        second = wait(client, record.session_id, {}, "COMPLETED")
+        second = wait(client, record.task_id, {}, "COMPLETED")
         assert second.revision == 1
         assert sum((m.get("tool_call_id") == call_id for m in second.messages)) == 1
 
 
-def test_legacy_question_options_are_migrated_without_changing_the_answer_protocol(settings):
+def test_question_options_reject_scalar_instead_of_repairing_invalid_contract(settings):
     _, record = candidate(settings)
     old = record.model_dump(mode="json")
     old["pending"] = {
@@ -202,9 +202,10 @@ def test_legacy_question_options_are_migrated_without_changing_the_answer_protoc
         "question": "日期？",
         "options": "注册日期",
     }
-    migrated = SessionRecord.model_validate(old)
-    assert migrated.pending["options"] == []
-    assert migrated.pending["id"] == "legacy"
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        TaskRecord.model_validate(old)
 
 
 @pytest.mark.parametrize(

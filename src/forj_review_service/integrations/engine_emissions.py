@@ -1,41 +1,36 @@
-"""Resolve each complete engine model through the single-input business API."""
+"""Read exact engine models from the configured schema's reference table."""
 
 from collections.abc import Iterable
-from typing import Literal
 
-from pydantic import BaseModel, StrictInt
+from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
+from forj_review_database.database import AsyncDatabase
+from forj_review_database.models import EngineEmission
 from forj_review_service.contracts.engine_emissions import (
+    EMISSION_STANDARDS,
     EngineEmissionLookupUnavailable,
     engine_model_key,
 )
-from forj_review_service.integrations.vehicle_api import VehicleApi, VehicleApiUnavailable
-
-
-class EmissionValue(BaseModel):
-    # Required key: only an explicit null denotes a normal miss.
-    emissionStandard: Literal["国三", "国四", "国五", "国六"] | None
-
-
-class EmissionResponse(BaseModel):
-    code: StrictInt
-    data: EmissionValue | None = None
 
 
 async def lookup_engine_emissions_async(
-    models: Iterable[str], *, api: VehicleApi | None = None
+    models: Iterable[str], *, database: AsyncDatabase
 ) -> dict[str, str]:
-    client = api if api is not None else VehicleApi()
-    standards = {}
+    keys = sorted({engine_model_key(value) for value in models} - {""})
+    if not keys:
+        return {}
     try:
-        for model in sorted({engine_model_key(value) for value in models} - {""}):
-            result = await client.post(
-                "/vehicle-model/engine-emission/query", {"engineModel": model}, EmissionResponse
-            )
-            if result.code != 0 or result.data is None:
-                raise VehicleApiUnavailable("发动机排放业务查询失败或结果存在冲突，请人工复核")
-            if result.data.emissionStandard is not None:
-                standards[model] = result.data.emissionStandard
-        return standards
-    except VehicleApiUnavailable as exc:
-        raise EngineEmissionLookupUnavailable(str(exc)) from None
+        async with database.session(readonly=True) as session:
+            rows = (
+                await session.execute(
+                    select(EngineEmission.engine_model, EngineEmission.emission_standard).where(
+                        EngineEmission.engine_model.in_(keys)
+                    )
+                )
+            ).all()
+    except SQLAlchemyError:
+        raise EngineEmissionLookupUnavailable("发动机排放参考表不可读取，请检查数据库") from None
+    if any(standard not in EMISSION_STANDARDS for _, standard in rows):
+        raise EngineEmissionLookupUnavailable("发动机排放参考表存在无效标准，请人工复核")
+    return dict(rows)

@@ -11,7 +11,9 @@ from forj_review_service.capabilities.specs import (
 from forj_review_service.contracts.recognition import CheckResult, RecognitionBatchResult
 from forj_review_service.contracts.review import QrCheck, ReviewRequest
 
-QrCollector = Callable[[ReviewRequest, RecognitionBatchResult, BusinessProfile], Awaitable[list[QrCheck]]]
+QrCollector = Callable[
+    [ReviewRequest, RecognitionBatchResult, BusinessProfile], Awaitable[list[QrCheck]]
+]
 
 
 def build_external_check_handlers(collect_qr: QrCollector) -> dict[str, ExternalCheckHandler]:

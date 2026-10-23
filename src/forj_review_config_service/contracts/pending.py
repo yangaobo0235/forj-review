@@ -10,6 +10,7 @@ class ToolInteraction(TypedDict):
     id: str
     tool_call_id: str
     revision: int
+    intent_revision: NotRequired[int]
 
 
 class QuestionPending(ToolInteraction):
@@ -38,9 +39,13 @@ class BrowserPending(ToolInteraction):
 class ConfirmationPending(TypedDict):
     kind: Literal["confirmation"]
     id: str
+    intent_digest: NotRequired[str]
+    intent_revision: NotRequired[int]
     confirmed: NotRequired[bool]
     candidate_digest: NotRequired[str]
     operation_id: NotRequired[str]
 
 
-Pending = Annotated[QuestionPending | BrowserPending | ConfirmationPending, Field(discriminator="kind")]
+Pending = Annotated[
+    QuestionPending | BrowserPending | ConfirmationPending, Field(discriminator="kind")
+]

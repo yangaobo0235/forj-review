@@ -10,14 +10,14 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from forj_review_config_service.bootstrap.application import create_app as configuration_app
-from forj_review_config_service.contracts.models import ConfigurationError, SessionRecord
+from forj_review_config_service.contracts.models import ConfigurationError, TaskRecord
 from forj_review_config_service.integrations.async_database import (
     AsyncDatabase,
     ExecutorCheckpointer,
 )
 from forj_review_config_service.integrations.configuration_store.async_postgres import (
     AsyncConfigurationStore,
-    AsyncSessionStore,
+    AsyncTaskStore,
 )
 from forj_review_config_service.integrations.database import Database
 from forj_review_config_service.integrations.review_kernel.postgres import PostgresReviewKernel
@@ -35,9 +35,9 @@ from tests.support.configuration import (
 
 @pytest.mark.asyncio
 async def test_store_atomic_receipt_events_and_schema_isolation(async_database, settings):
-    store = AsyncSessionStore(async_database)
+    store = AsyncTaskStore(async_database)
     _, record = candidate(settings)
-    record.session_id = "session"
+    record.task_id = "session"
     record.report = None
     await store.put(record, "created", request=("session:create", "request", "digest", {}))
     record.messages.append({"role": "user", "content": "must roll back"})
@@ -58,7 +58,7 @@ def test_configuration_app_runs_real_postgres_graph_and_restarts(database, setti
     with TestClient(configuration_app(settings, model=FakeModel())) as client:
         sid = create(client, headers())
         result = client.post(
-            f"/api/review-config/sessions/{sid}/messages",
+            f"/api/review-config/tasks/{sid}/messages",
             json={"client_request_id": "message", "expected_revision": 0, "text": "核对配置"},
         )
         assert result.status_code == 200
@@ -93,7 +93,7 @@ async def test_publication_and_rollback_are_atomic_without_temporary_files(
     kernel = PostgresReviewKernel(
         async_database, settings.cases_dir, settings.review_url, settings.state_dir / "case-sets"
     )
-    store = AsyncSessionStore(async_database)
+    store = AsyncTaskStore(async_database)
     record = await database_candidate(kernel, store)
     receipt = await kernel.commit(record, "commit123")
     assert (
@@ -201,8 +201,8 @@ async def test_executor_monitor_stops_work_after_keeper_disconnect(async_databas
     await asyncio.wait_for(stopped.wait(), 4)
     assert async_database.lost.is_set()
     with pytest.raises(ConfigurationError):
-        await AsyncSessionStore(async_database).put(
-            SessionRecord(session_id="lost", snapshot=SNAPSHOT, baseline_digest="baseline")
+        await AsyncTaskStore(async_database).put(
+            TaskRecord(task_id="lost", snapshot=SNAPSHOT, baseline_digest="baseline")
         )
 
 
@@ -215,7 +215,7 @@ async def test_concurrent_publications_cannot_overwrite_one_another(
     kernel = PostgresReviewKernel(
         async_database, settings.cases_dir, settings.review_url, settings.state_dir / "case-sets"
     )
-    record = await database_candidate(kernel, AsyncSessionStore(async_database), sid="concurrent")
+    record = await database_candidate(kernel, AsyncTaskStore(async_database), sid="concurrent")
     ready = Barrier(2, timeout=5)
     original = SnapshotKernel.commit
 
@@ -233,3 +233,58 @@ async def test_concurrent_publications_cannot_overwrite_one_another(
     assert isinstance(rejected, ConfigurationError) and rejected.code == "BASELINE_CHANGED"
     receipts = [await kernel.commit_receipt(operation) for operation in ("race1", "race2")]
     assert sum(receipt is not None for receipt in receipts) == 1
+
+
+@pytest.mark.asyncio
+async def test_other_page_release_preserves_task_baseline_and_merges_latest_manifest(
+    async_database, database, settings
+):
+    from copy import deepcopy
+    from dataclasses import replace
+    from uuid import uuid4
+
+    from forj_review_service.integrations.storage.configuration import read_state
+    from tests.support.postgres import publish_validated_test_state
+
+    with database.connect() as db:
+        state = read_state(db)
+        other = deepcopy(state.source("example_permit", "1.0"))
+        other["page_id"] = "independent_permit"
+        staged = replace(
+            state,
+            definitions=(*state.definitions, other),
+            active={**state.active, other["page_id"]: "1.0"},
+        )
+        publish_validated_test_state(
+            db, staged, operation_id="secondpage", operation_type="PUBLISH"
+        )
+    kernel = PostgresReviewKernel(
+        async_database, settings.cases_dir, settings.review_url, settings.state_dir / "case-sets"
+    )
+    store = AsyncTaskStore(async_database)
+    record = await database_candidate(kernel, store, sid="isolatedpage")
+    baseline, candidate_digest = record.baseline_digest, record.report["candidate_digest"]
+    with database.connect() as db:
+        state = read_state(db)
+        other = deepcopy(state.source("independent_permit", "1.0"))
+        other["version"] = "2.0"
+        other["fields"][0]["label"] = "另一页面自己的修改"
+        _, staged = state.stage(other)
+        publish_validated_test_state(
+            db, staged, operation_id="otherchange", operation_type="PUBLISH"
+        )
+    assert await kernel.baseline("example_permit") == baseline
+    assert (await kernel.validate(record))["candidate_digest"] == candidate_digest
+    receipt = await kernel.commit(record, uuid4().hex)
+    with database.connect() as db:
+        current = read_state(db)
+        assert current.active == {"example_permit": "2.0", "independent_permit": "2.0"}
+        assert (
+            current.source("independent_permit", "2.0")["fields"][0]["label"]
+            == "另一页面自己的修改"
+        )
+        proof = db.execute(
+            "SELECT verification_context FROM cfg_validation_run WHERE id=(SELECT validation_run_id FROM cfg_release WHERE id=%s)",
+            (receipt["release_id"],),
+        ).fetchone()[0]
+        assert proof["merged_from_validation"] == record.report["report_id"]

@@ -1,42 +1,96 @@
-<!doctype html><html lang="zh"><meta charset="utf-8"><title>合成品牌型号核验页面</title>
-<body><main id="review" style="max-width:480px;margin:12px auto;padding:8px"></main>
-<script type="module">
-import {createApp, h, reactive} from "vue";
-import Detail from "../../src/features/review/ui/ReviewStepDetail.vue";
-import "../../src/app/theme.css";
-import "../../src/app/App.css";
-import "../../src/features/review/ui/EvidenceReviewWorkbench.css";
+<!doctype html>
+<html lang="zh">
+  <meta charset="utf-8" /><title>合成品牌型号核验页面</title>
+  <body>
+    <main
+      id="review"
+      style="max-width: 480px; margin: 12px auto; padding: 8px"
+    ></main>
+    <script type="module">
+      import { createApp, h, reactive } from "vue";
+      import Detail from "../../src/features/review/ui/ReviewStepDetail.vue";
+      import "../../src/app/theme.css";
+      import "../../src/app/App.css";
+      import "../../src/features/review/ui/ReviewWorkbench.css";
 
-const full = "陕汽牌SX4259MD4TLQ1", license = "陕汽牌SX4259MD4TL";
-const scenario = new URLSearchParams(location.search).get("scenario");
-const blocked = scenario === "blocked", matched = scenario === "match";
-const image = label => "data:image/svg+xml," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="240" height="160"><rect width="240" height="160" fill="#e5edf8"/><text x="120" y="85" text-anchor="middle" font-size="20">合成${label}</text></svg>`);
-const step = {
-  step_id: "FIELD-vehicle.brand_model", category: "FIELD", label: "品牌型号", page_target_field: "vehicle.brand_model",
-  result_status: blocked ? "INSUFFICIENT" : matched ? "MATCH" : "CONFLICT", writable: true,
-  reason: blocked ? "行驶证与辅助材料VIN不一致" : matched ? "品牌型号与材料一致" : `品牌型号应为${full}，请回填完整值`,
-  values: [
-    {source: "行驶证", document_type: "vehicle_license", value: license, image_id: "license"},
-    {source: "登记证书", document_type: "registration_certificate", value: "SX4259MD4TLQ1", image_id: "registration"},
-    ...(!blocked ? [{source: "完整品牌型号", value: full, derived_from: "行驶证品牌文字＋完整整车型号"}] : []),
-  ], evidence: [],
-  details: {permitted_fill_values: blocked ? [] : [full], brand_model_completion: {
-    license_value: license, brand_text: "陕汽牌", license_model: "SX4259MD4TL", auxiliary_model: "SX4259MD4TLQ1",
-    completed_value: full, status: blocked ? "BLOCKED" : "READY", basis: "行驶证品牌文字＋辅助材料完整整车型号",
-    issues: blocked ? ["行驶证与辅助材料VIN不一致"] : [],
-  }},
-};
-const pageData = reactive({collectionId: "synthetic-brand-model", pageFields: {"vehicle.brand_model": matched ? full : license},
-  images: [{index: 0, imageId: "license", src: image("行驶证"), alt: "合成行驶证"},
-    {index: 1, imageId: "registration", src: image("登记证书"), alt: "合成登记证书"}],
-});
-window.brandModelFixture = {fills: [], images: []};
-createApp({render: () => h(Detail, {
-  step, pageData, disabled: false, qrChecks: [],
-  onFill: async (task, value) => {
-    window.brandModelFixture.fills.push(value);
-    pageData.pageFields[task.page_target_field] = value;
-  },
-  onFocusImage: async id => {window.brandModelFixture.images.push(id);}, onChoose: () => {},
-})}).mount("#review");
-</script></body></html>
+      const full = "陕汽牌SX4259MD4TLQ1",
+        license = "陕汽牌SX4259MD4TL";
+      const scenario = new URLSearchParams(location.search).get("scenario");
+      const conflict = scenario === "conflict",
+        matched = scenario === "match";
+      const image = (label) =>
+        "data:image/svg+xml," +
+        encodeURIComponent(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="160"><rect width="240" height="160" fill="#e5edf8"/><text x="120" y="85" text-anchor="middle" font-size="20">合成${label}</text></svg>`,
+        );
+      const step = {
+        step_id: "FIELD-vehicle.brand_model",
+        category: "FIELD",
+        label: "品牌型号",
+        page_target_field: "vehicle.brand_model",
+        result_status: matched ? "MATCH" : "CONFLICT",
+        writable: true,
+        reason: conflict
+          ? "行驶证型号与辅助材料整车型号不一致，组合值供人工判断"
+          : matched
+            ? "品牌型号与材料一致"
+            : `品牌型号应为${full}，请回填完整值`,
+        values: [
+          {
+            source: "行驶证",
+            document_type: "vehicle_license",
+            value: license,
+            image_id: "license",
+          },
+          {
+            source: "登记证书",
+            document_type: "registration_certificate",
+            value: "SX4259MD4TLQ1",
+            image_id: "registration",
+          },
+          { source: "完整品牌型号", value: full, derived_from: "行驶证品牌文字＋完整整车型号" },
+        ],
+        evidence: [],
+        details: {
+          permitted_fill_values: [full],
+          brand_model_completion: {
+            license_value: license,
+            brand_text: "陕汽牌",
+            license_model: "SX4259MD4TL",
+            auxiliary_model: "SX4259MD4TLQ1",
+            completed_value: full,
+            status: "READY",
+            basis: "行驶证品牌文字＋辅助材料完整整车型号",
+            issues: conflict ? ["行驶证型号与辅助材料整车型号不一致"] : [],
+          },
+        },
+      };
+      const pageData = reactive({
+        collectionId: "synthetic-brand-model",
+        pageFields: { "vehicle.brand_model": matched ? full : license },
+        images: [
+          { index: 0, imageId: "license", src: image("行驶证"), alt: "合成行驶证" },
+          { index: 1, imageId: "registration", src: image("登记证书"), alt: "合成登记证书" },
+        ],
+      });
+      window.brandModelFixture = { fills: [], images: [] };
+      createApp({
+        render: () =>
+          h(Detail, {
+            step,
+            pageData,
+            disabled: false,
+            qrChecks: [],
+            onFill: async (task, value) => {
+              window.brandModelFixture.fills.push(value);
+              pageData.pageFields[task.page_target_field] = value;
+            },
+            onFocusImage: async (id) => {
+              window.brandModelFixture.images.push(id);
+            },
+            onChoose: () => {},
+          }),
+      }).mount("#review");
+    </script>
+  </body>
+</html>

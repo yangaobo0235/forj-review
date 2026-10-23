@@ -20,7 +20,7 @@ from forj_review_service.evidence.fields.normalize import normalize_value
 from forj_review_service.presentation.projectors import project_field_task
 from forj_review_service.presentation.task_factory import ResultStatus, make_task
 
-MISSING_PAGE_FIELD_REASON = "页面字段缺失或存在歧义，请人工核对该字段"
+MISSING_PAGE_FIELD_REASON = "页面字段缺失或存在歧义，请重新采集后人工核对该字段"
 SEVERITY = {"MATCH": 0, "INSUFFICIENT": 1, "CONFLICT": 2}
 
 
@@ -191,7 +191,7 @@ def _is_review_scope_field(profile: BusinessProfile, field: str | None) -> bool:
     默认所有页面控件都留在目录里（未配置来源时提示人工核对）；声明了
     `review_declared_fields_only` 的业务只保留自己声明过的字段。
     """
-    business = BusinessContext.from_profile(profile) if profile is not None else DEFAULT_BUSINESS
+    business = BusinessContext.from_profile(profile)
     if not profile.review_declared_fields_only:
         return True
     if profile.pack_declaration:
@@ -392,7 +392,7 @@ def _restore_missing_fields(
     request: ReviewRequest,
 ) -> list[ReviewTask]:
     """缺失控件也保留审核条目，按声明位置插入并禁止写回。"""
-    business = BusinessContext.from_profile(profile) if profile is not None else DEFAULT_BUSINESS
+    business = BusinessContext.from_profile(profile)
     if not profile.review_declared_fields_only or not profile.pack_declaration:
         return steps
     # 声明过的审核字段不能因 DOM 目录漏采而消失。保留已有控件的页面顺序，
@@ -494,7 +494,7 @@ def field_tasks(
     writable: bool,
 ) -> list[ReviewTask]:
     """字段优先工作台：按页面字段目录出条目，字段缺失时降级人工复核。"""
-    business = BusinessContext.from_profile(profile) if profile is not None else DEFAULT_BUSINESS
+    business = BusinessContext.from_profile(profile)
     comparisons_by_field = {item.field: item for item in comparisons}
     checks_by_id = {item.check_id: item for item in business_checks}
     # 页面字段 → 投影到它上面的规则结论。一个字段可以绑定多条检查，

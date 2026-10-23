@@ -9,6 +9,7 @@ from forj_review_service.capabilities.specs import (
     RuleExecutionResult,
 )
 from forj_review_service.contracts.checks import CheckResultValue
+from forj_review_service.contracts.evidence import EvidenceFact
 from forj_review_service.contracts.recognition import CheckResult
 from forj_review_service.contracts.review import FieldObservation
 from forj_review_service.evidence.comparison.evidence_values import (
@@ -25,7 +26,7 @@ def _image_value(
     business_scope: str,
     *,
     business: BusinessContext = DEFAULT_BUSINESS,
-) -> tuple[object | None, list[dict]]:
+) -> tuple[object | None, list[EvidenceFact]]:
     sources = [
         item
         for item in observations
@@ -66,7 +67,7 @@ def _date_check(
     raw_value: object | None,
     lower: date | None,
     upper: date,
-    evidence: list[dict],
+    evidence: list[EvidenceFact],
     *,
     business: BusinessContext = DEFAULT_BUSINESS,
 ) -> CheckResult:
@@ -78,7 +79,7 @@ def _date_check(
             label=label,
             status="INSUFFICIENT",
             reason_codes=["RECOGNITION_UNCERTAIN"]
-            if any(item.get("uncertain") for item in evidence)
+            if any(item.uncertain for item in evidence)
             else ["EVIDENCE_MISSING"],
             reason=f"未从指定图片材料取得唯一有效的{label}",
             values=values,
@@ -184,10 +185,10 @@ def build_replacement_policy_checks(
             status=status,
             reason=reason,
             reason_codes=["RECOGNITION_UNCERTAIN"]
-            if any(item.get("uncertain") for item in origin_evidence)
+            if any(item.uncertain for item in origin_evidence)
             else [],
             values=[
-                CheckResultValue.model_validate({**item, "source": "新车销售发票"})
+                CheckResultValue.model_validate({**item.model_dump(), "source": "新车销售发票"})
                 for item in origin_evidence
             ]
             or [CheckResultValue(source="新车销售发票", value=origin)],

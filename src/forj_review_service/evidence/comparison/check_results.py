@@ -49,8 +49,13 @@ def qr_review_checks(
             if check.status is FieldStatus.CONFLICT
             else "INSUFFICIENT",
             reason=check.message or "二维码核验未返回说明",
-            reason_codes=([] if check.status is FieldStatus.MATCH else ["VALUE_MISMATCH"]
-                          if check.status is FieldStatus.CONFLICT else ["EXTERNAL_UNAVAILABLE"]),
+            reason_codes=(
+                []
+                if check.status is FieldStatus.MATCH
+                else ["VALUE_MISMATCH"]
+                if check.status is FieldStatus.CONFLICT
+                else ["EXTERNAL_UNAVAILABLE"]
+            ),
             values=[
                 CheckResultValue(source="二维码内容", value=check.raw_value),
                 CheckResultValue(source="二维码官网", value=check.url),

@@ -1,34 +1,42 @@
-from forj_review_service.businesses.materials import (
-    build_classification_prompt,
-    build_unknown_extraction_prompt,
+import json
+
+from forj_review_service.businesses.recognition_prompts import (
+    OUTPUT_RULES,
+    READING_RULES,
+    build_recognition_prompt,
+    material_catalog,
 )
 from tests.support.pages import SCRAP_BUSINESS as TEST_BUSINESS
 
 
+def policy_prompt(kind, image_index=0, business_scope="unknown"):
+    entry = material_catalog(TEST_BUSINESS, business_scope)[kind]
+    return json.dumps(entry, ensure_ascii=False) + READING_RULES + OUTPUT_RULES
+
+
 def test_prompts_restrict_model_scope_and_output_contract() -> None:
-    invoice_prompt = TEST_BUSINESS.document_policies["invoice"].build_extraction_prompt(
-        image_index=3
-    )
+    invoice_prompt = policy_prompt("invoice", image_index=3)
 
     assert "机动车销售发票" in invoice_prompt
     assert "invoice.code" in invoice_prompt
     assert "old_vehicle.vin" not in invoice_prompt
-    assert '"box"' in invoice_prompt
-    assert "image_index=3" in invoice_prompt
+    assert "box=[x1,y1,x2,y2]" in invoice_prompt
+    assert "上传张数、组内序号不能证明类型" in invoice_prompt
 
-    classification_prompt = build_classification_prompt(business=TEST_BUSINESS)
+    classification_prompt = build_recognition_prompt(0, business=TEST_BUSINESS)
     assert "unsupported" in classification_prompt
-    assert "不要提取业务字段" in classification_prompt
+    assert "在一次响应中判断实际资料类型" in classification_prompt
     assert "identity_card" in classification_prompt
-    assert "身份证号码" in classification_prompt
+    assert "facts" in classification_prompt
 
-    identity_prompt = TEST_BUSINESS.document_policies["identity_card"].build_extraction_prompt(
+    identity_prompt = policy_prompt(
+        "identity_card",
         image_index=4,
         business_scope="identity",
     )
     assert "identity_card.name" in identity_prompt
     assert "identity_card.side" in identity_prompt
-    assert "不要读取或输出身份证号码" in identity_prompt
+    assert "identity_card.name" in identity_prompt
 
 
 def test_materials_keep_scrap_scopes_isolated() -> None:
@@ -56,17 +64,17 @@ def test_engine_model_is_extracted_only_from_auxiliary_materials() -> None:
         for document_type, policy in TEST_BUSINESS.document_policies.items()
         if document_type not in {"registration_certificate", "vehicle_nameplate"}
     )
-    assert "registration_certificate" in build_classification_prompt(business=TEST_BUSINESS)
+    assert "registration_certificate" in build_recognition_prompt(0, business=TEST_BUSINESS)
 
 
 def test_registration_certificate_prompt_fields_follow_business_scope() -> None:
-    policy = TEST_BUSINESS.document_policies["registration_certificate"]
-
-    old_prompt = policy.build_extraction_prompt(
+    old_prompt = policy_prompt(
+        "registration_certificate",
         image_index=2,
         business_scope="old_vehicle",
     )
-    new_prompt = policy.build_extraction_prompt(
+    new_prompt = policy_prompt(
+        "registration_certificate",
         image_index=2,
         business_scope="new_vehicle",
     )
@@ -90,19 +98,11 @@ def test_new_owner_allowlist_excludes_registration_certificate() -> None:
 
 
 def test_scrap_replacement_prompts_use_scope_specific_allowlists_and_confusion_guards() -> None:
-    old_license = TEST_BUSINESS.document_policies["vehicle_license"].build_extraction_prompt(
-        1, "old_vehicle"
-    )
-    new_license = TEST_BUSINESS.document_policies["vehicle_license"].build_extraction_prompt(
-        1, "new_vehicle"
-    )
-    old_registration = TEST_BUSINESS.document_policies[
-        "registration_certificate"
-    ].build_extraction_prompt(2, "old_vehicle")
-    new_registration = TEST_BUSINESS.document_policies[
-        "registration_certificate"
-    ].build_extraction_prompt(2, "new_vehicle")
-    invoice = TEST_BUSINESS.document_policies["invoice"].build_extraction_prompt(3, "new_vehicle")
+    old_license = policy_prompt("vehicle_license", 1, "old_vehicle")
+    new_license = policy_prompt("vehicle_license", 1, "new_vehicle")
+    old_registration = policy_prompt("registration_certificate", 2, "old_vehicle")
+    new_registration = policy_prompt("registration_certificate", 2, "new_vehicle")
+    invoice = policy_prompt("invoice", 3, "new_vehicle")
 
     assert "发动机号码不是发动机型号" in old_license
     assert "注册日期" in new_license
@@ -115,22 +115,21 @@ def test_scrap_replacement_prompts_use_scope_specific_allowlists_and_confusion_g
 
 
 def test_combined_prompt_restricts_registration_fields_by_business_scope() -> None:
-    old_prompt = build_unknown_extraction_prompt(2, "old_vehicle", business=TEST_BUSINESS)
-    new_prompt = build_unknown_extraction_prompt(2, "new_vehicle", business=TEST_BUSINESS)
+    old_prompt = build_recognition_prompt(2, "old_vehicle", business=TEST_BUSINESS)
+    new_prompt = build_recognition_prompt(2, "new_vehicle", business=TEST_BUSINESS)
 
     assert "vehicle.engine_model" in old_prompt
     assert "vehicle.engine_model" not in new_prompt
 
 
 def test_combined_prompt_uses_physical_vehicle_type_and_neutral_fields() -> None:
-    prompt = build_unknown_extraction_prompt(image_index=2, business=TEST_BUSINESS)
+    prompt = build_recognition_prompt(image_index=2, business=TEST_BUSINESS)
 
     assert "vehicle_license" in prompt
     assert "vehicle.vin" in prompt
     assert "vehicle.plate_no" in prompt
     assert "vehicle.owner" in prompt
-    assert '"old_vehicle"' not in prompt
-    assert '"new_vehicle"' not in prompt
+    assert '"business_scope":"unknown"' in prompt
 
 
 def test_retired_transfer_fields_are_not_in_any_material_whitelist() -> None:

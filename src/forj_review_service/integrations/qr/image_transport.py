@@ -23,10 +23,14 @@ class ImageTransport(httpx.AsyncBaseTransport):
         host = request.url.host.lower().rstrip(".")
         if request.url.scheme not in {"http", "https"} or request.url.userinfo:
             raise ValueError("图片地址无效")
-        addresses = await self.resolver(host, request.url.port or (443 if request.url.scheme == "https" else 80))
+        addresses = await self.resolver(
+            host, request.url.port or (443 if request.url.scheme == "https" else 80)
+        )
         if not addresses:
             raise ValueError("图片域名未解析到有效地址")
-        if host not in self.private_hosts and any(not ipaddress.ip_address(ip).is_global for ip in addresses):
+        if host not in self.private_hosts and any(
+            not ipaddress.ip_address(ip).is_global for ip in addresses
+        ):
             raise ValueError("图片地址指向未授权的本机或内部网络")
         # Connect to the checked IP rather than resolving the hostname again. Keep
         # the original Host header and TLS hostname verification for virtual hosts.
@@ -37,9 +41,13 @@ class ImageTransport(httpx.AsyncBaseTransport):
             self.transports[key] = self.transport or httpx.AsyncHTTPTransport()
         transport = self.transports[key]
         for index, address in enumerate(addresses):
-            pinned = httpx.Request(request.method, request.url.copy_with(host=address),
-                headers=request.headers, stream=request.stream,
-                extensions={**request.extensions, "sni_hostname": request.url.host})
+            pinned = httpx.Request(
+                request.method,
+                request.url.copy_with(host=address),
+                headers=request.headers,
+                stream=request.stream,
+                extensions={**request.extensions, "sni_hostname": request.url.host},
+            )
             try:
                 return await transport.handle_async_request(pinned)
             except httpx.ConnectError:

@@ -9,10 +9,12 @@ from forj_review_service.businesses.completeness import evaluate_extracted
 from forj_review_service.businesses.packs.model import build_collect_manifest
 from forj_review_service.businesses.routing import route_fields
 from forj_review_service.businesses.rules.transfer_contract import NEW_SCOPE, USED_SCOPE
-from forj_review_service.businesses.rules.transfer_documents import run_transfer_documents
-from forj_review_service.capabilities.specs import ReviewExecutionContext
 from forj_review_service.contracts.evidence import FieldObservation
-from forj_review_service.contracts.recognition import RecognitionBatchResult, RecognizedDocument
+from forj_review_service.contracts.recognition import (
+    DocumentClassification,
+    RecognitionBatchResult,
+    RecognizedDocument,
+)
 from forj_review_service.contracts.review import ReviewFieldSnapshot, ReviewRequest
 from forj_review_service.runtime.review_service import ReviewService
 from tests.support.business_values import (
@@ -144,6 +146,10 @@ def fixture():
         total_count=3,
         completed_count=3,
         observations=observations,
+        document_classifications=[
+            DocumentClassification(target_id=f"doc-{i}", document_type=kind, business_scope=scope)
+            for i, (kind, scope, _) in enumerate(documents)
+        ],
         recognized_documents=[
             RecognizedDocument(
                 target_id=f"doc-{i}",
@@ -156,17 +162,6 @@ def fixture():
         ],
     )
     return request, batch
-
-
-def special_checks(request, batch):
-    return run_transfer_documents(
-        ReviewExecutionContext(
-            request,
-            PROFILE,
-            batch,
-            tuple(batch.observations),
-        )
-    ).checks
 
 
 def test_manifest_and_material_prompts_keep_the_two_invoices_separate():
@@ -182,13 +177,24 @@ def test_manifest_and_material_prompts_keep_the_two_invoices_separate():
     assert TRANSFER_PACK.material("invoice").derived_field is None
     assert not TRANSFER_PACK.page_field_composites
     assert not PROFILE.invoice_verification_field  # 验真交给业务页面各自的按钮。
+    assert "transfer_documents" not in {spec.capability_id for spec in PROFILE.capabilities}
+    assert TRANSFER_PACK.field("transfer_registration.vin") is None
+    registration = TEST_BUSINESS.document_policies["registration_certificate"]
+    assert "transfer_registration.vin" not in registration.fields_for_scope(USED_SCOPE)
+    assert "transfer_registration.vin" not in registration.guidance_for_scope(USED_SCOPE)
+    used_guidance = TEST_BUSINESS.document_policies["used_car_invoice"].guidance_for_scope(
+        USED_SCOPE
+    )
+    assert "transfer_invoice.transfer_department" in used_guidance
+    assert "转入地车辆管理所名称" in used_guidance
+
     for kind, scope, prefix in (
         ("used_car_invoice", USED_SCOPE, USED_PREFIX),
         ("invoice", NEW_SCOPE, NEW_PREFIX),
     ):
         fields = TEST_BUSINESS.document_policies[kind].fields_for_scope(scope)
         assert all(field.startswith(prefix + ".") for field in fields)
-        prompt = TEST_BUSINESS.document_policies[kind].build_extraction_prompt(1, scope)
+        prompt = TEST_BUSINESS.document_policies[kind].guidance_for_scope(scope)
         assert "不得" in prompt or "不能" in prompt
         assert "code_layout" not in fields
         assert f"{prefix}.code" not in fields
@@ -204,63 +210,60 @@ def test_misplaced_invoice_never_routes_to_the_other_vehicle(kind, scope):
 def test_upload_presence_is_independent_of_ocr_and_missing_pages(missing):
     request, batch = fixture()
     request.images = [image for i, image in enumerate(request.images) if i != missing]
-    report = evaluate_extracted(request, PROFILE, RecognitionBatchResult(failed_count=3))
+    report = evaluate_extracted(
+        request,
+        PROFILE,
+        batch.model_copy(
+            update={"failed_count": 3, "observations": [], "recognized_documents": []}
+        ),
+    )
     assert report.presence.status == ("COMPLETE" if missing is None else "INCOMPLETE")
     assert len(report.presence.groups) == 3
 
 
-@pytest.mark.parametrize("problem", ["different", "uncertain", "missing", "short", "duplicate"])
-def test_registration_vin_problem_keeps_invoice_candidate_available_for_reviewer(problem):
+@pytest.mark.asyncio
+@pytest.mark.parametrize("registration_value", [None, "00000001", "LFV00000000000009"])
+async def test_invoice_vin_is_independent_of_registration_and_marks_character_differences(
+    monkeypatch, registration_value
+):
     request, batch = fixture()
-    item = next(o for o in batch.observations if o.field == "transfer_registration.vin")
-    if problem == "different":
-        item.value = "LFV00000000000009"
-    elif problem == "uncertain":
-        item.uncertain = True
-    elif problem == "missing":
-        batch.observations.remove(item)
-    elif problem == "short":
-        item.value = "00000001"
-    else:
-        batch.observations.append(item.model_copy(update={"value": "LFV00000000000009"}))
-    check = special_checks(request, batch)[0]
-    assert check.status != "MATCH"
-    assert "LFV00000000000001" in check.details["permitted_fill_values"]
-    if problem in {"different", "duplicate"}:
-        assert "LFV00000000000009" in check.details["permitted_fill_values"]
-    if problem == "short":
-        assert "00000001" not in check.details["permitted_fill_values"]
-    assert "不能按片段核对或回填" not in check.reason
+    # Even injected registration evidence cannot alter this independent invoice field.
+    if registration_value is not None:
+        batch.observations.append(
+            FieldObservation(
+                field="transfer_registration.vin",
+                value=registration_value,
+                source_type="image",
+                source_id="doc-0",
+                document_type="registration_certificate",
+                business_scope=USED_SCOPE,
+            )
+        )
+    field = f"{USED_PREFIX}.vin"
+    request.page_fields[field] = "LFV00000000000009"
+    next(s for s in request.review_fields if s.field == field).value = request.page_fields[field]
+    service = ReviewService(load_model=False, registry=business_registry())
 
+    async def extract(*_args, **_kwargs):
+        return batch
 
-def test_old_vin_agreed_candidates_remain_deduplicated():
-    request, batch = fixture()
-    request.page_fields[f"{USED_PREFIX}.vin"] = "LFV00000000000009"
-    check = special_checks(request, batch)[0]
-    assert check.status == "CONFLICT"
-    assert check.details["permitted_fill_values"] == ["LFV00000000000001"]
-    assert len(check.values) == 2
-
-
-def test_old_vin_material_conflict_keeps_each_values_actual_relation_to_page():
-    request, batch = fixture()
-    next(
-        o for o in batch.observations if o.field == "transfer_registration.vin"
-    ).value = "LFV00000000000009"
-    check = special_checks(request, batch)[0]
-    assert check.status == "CONFLICT"
-    assert set(check.details["permitted_fill_values"]) == {"LFV00000000000001", "LFV00000000000009"}
-    by_source = {value.source: value for value in check.values}
-    assert by_source["二手车发票"].comparison_status == "MATCH"
-    assert by_source["二手车发票"].conflicting is False
-    assert by_source["登记证书1、2页"].comparison_status == "CONFLICT"
+    monkeypatch.setattr(service, "_extract_documents", extract)
+    result = await service.assist_async(request)
+    task = next(t for t in result.review_tasks if t.page_target_field == field)
+    assert task.result_status == "CONFLICT"
+    assert task.writable
+    invoice = next(v for v in task.values if v.document_type == "used_car_invoice")
+    assert invoice.comparison_status == "CONFLICT"
+    assert invoice.differences
+    assert {v.document_type for v in task.values if v.document_type} == {"used_car_invoice"}
+    assert not any(c.check_id == "TRANSFER-OLD-VIN" for c in result.cross_checks)
 
 
 def test_invoice_codes_are_excluded_even_when_page_and_ocr_supply_them():
     for prefix in (USED_PREFIX, NEW_PREFIX):
         assert TRANSFER_PACK.field(f"{prefix}.code") is None
         assert f"{prefix}.code" not in TRANSFER_PACK.writable_field_keys()
-    assert len(PROFILE.field_check_bindings) == 1
+    assert len(PROFILE.field_check_bindings) == 0
 
 
 @pytest.mark.asyncio
@@ -278,9 +281,7 @@ async def test_full_workflow_preserves_sources_and_controls(monkeypatch, change)
         request.page_fields[changed_field] = "230088.50"
     elif change == "old_vin":
         changed_field = f"{USED_PREFIX}.vin"
-        next(
-            o for o in batch.observations if o.field == "transfer_registration.vin"
-        ).value = "LFV00000000000009"
+        next(o for o in batch.observations if o.field == changed_field).value = "LFV00000000000009"
     elif change == "new_vin":
         changed_field = f"{NEW_PREFIX}.vin"
         request.page_fields[changed_field] = request.page_fields[f"{USED_PREFIX}.vin"]
@@ -408,7 +409,11 @@ async def test_collected_empty_control_allows_fill_in_full_workflow(monkeypatch,
     assert task.writable
     assert task.result_status != "MATCH"
     if field == f"{USED_PREFIX}.vin":
-        assert task.details["permitted_fill_values"] == ["LFV00000000000001"]
+        assert any(
+            v.value == "LFV00000000000001"
+            for v in task.values
+            if v.document_type == "used_car_invoice"
+        )
 
 
 @pytest.mark.asyncio
@@ -437,11 +442,17 @@ async def test_reviewer_can_fill_invoice_vin_despite_registration_problem(
     monkeypatch, registration_value
 ):
     request, batch = fixture()
-    registration = next(o for o in batch.observations if o.field == "transfer_registration.vin")
-    if registration_value is None:
-        batch.observations.remove(registration)
-    else:
-        registration.value = registration_value
+    if registration_value is not None:
+        batch.observations.append(
+            FieldObservation(
+                field="transfer_registration.vin",
+                value=registration_value,
+                source_type="image",
+                source_id="doc-0",
+                document_type="registration_certificate",
+                business_scope=USED_SCOPE,
+            )
+        )
     field = f"{USED_PREFIX}.vin"
     # 页面漏了一位；完整发票值依然是独立的比对和回填候选。
     request.page_fields[field] = "LFV0000000000001"
@@ -455,14 +466,19 @@ async def test_reviewer_can_fill_invoice_vin_despite_registration_problem(
     result = await service.assist_async(request)
     task = next(t for t in result.review_tasks if t.page_target_field == field)
     assert task.writable
-    assert "LFV00000000000001" in task.details["permitted_fill_values"]
-    invoice = next(v for v in task.values if v.source == "二手车发票")
+    assert any(
+        v.value == "LFV00000000000001" for v in task.values if v.document_type == "used_car_invoice"
+    )
+    invoice = next(v for v in task.values if v.document_type == "used_car_invoice")
     assert invoice.comparison_status == "CONFLICT"
-    assert "不能按片段核对或回填" not in invoice.check_reason
-    # 回填页面不消除材料本身的问题，也不能因此变为一致。
+    assert invoice.differences
+    # 该字段只核对发票；页面修正后应一致，登记证不增加额外约束。
     request.page_fields[field] = "LFV00000000000001"
     next(s for s in request.review_fields if s.field == field).value = request.page_fields[field]
     result = await service.assist_async(request)
     task = next(t for t in result.review_tasks if t.page_target_field == field)
-    assert task.result_status != "MATCH"
-    assert next(v for v in task.values if v.source == "二手车发票").comparison_status == "MATCH"
+    assert task.result_status == "MATCH"
+    assert (
+        next(v for v in task.values if v.document_type == "used_car_invoice").comparison_status
+        == "MATCH"
+    )

@@ -148,7 +148,9 @@ def main():
                 )
             elif args.action == "restore":
                 if not args.release_id or not args.trial_json or not args.cases:
-                    parser.error("restore 需要 --release-id、--trial-json、--cases；每个变更页面须重新验证")
+                    parser.error(
+                        "restore 需要 --release-id、--trial-json、--cases；每个变更页面须重新验证"
+                    )
                 with database.connect() as db:
                     proposed = historical_selection(db, state, args.release_id)
                 evidence = read_json(args.trial_json)
@@ -158,12 +160,16 @@ def main():
                     if state.active.get(page) == version:
                         continue
                     plan = prepare_maintenance(state, page, rollback=version)
-                    reports.append(asyncio.run(verify_maintenance(
-                        state, plan, evidence[page], suite)))
+                    reports.append(
+                        asyncio.run(verify_maintenance(state, plan, evidence[page], suite))
+                    )
                 if not reports:
                     raise ValueError("目标发布与当前配置相同，无需回滚")
-                receipt = {"operation_id": args.operation_id, "rollback_target": args.release_id,
-                           "verification": reports}
+                receipt = {
+                    "operation_id": args.operation_id,
+                    "rollback_target": args.release_id,
+                    "verification": reports,
+                }
             else:
                 if not args.directory:
                     parser.error("import 需要 --directory")
@@ -191,8 +197,12 @@ def main():
                     validation_id = None
                     if args.action in {"publish", "restore"}:
                         validation_id = save_manual_validation(
-                            db, proposed, receipt, evidence,
-                            purpose="ROLLBACK" if args.action == "restore" else "PUBLISH")
+                            db,
+                            proposed,
+                            receipt,
+                            evidence,
+                            purpose="ROLLBACK" if args.action == "restore" else "PUBLISH",
+                        )
                     rid = publish_state(
                         db,
                         proposed,

@@ -29,8 +29,16 @@ class RequestLoggingMiddleware:
                 await self.app(scope, receive, capture)
             finally:
                 route = getattr(scope.get("route"), "path", "unmatched")
-                quiet = scope["method"] == "GET" and route in {"/health", "/api/review/jobs/{job_id}"}
+                quiet = scope["method"] == "GET" and route in {
+                    "/health",
+                    "/api/review/jobs/{job_id}",
+                }
                 if status >= 400 or not quiet:
-                    logger.log(logging.WARNING if status >= 400 else logging.INFO,
-                               "review http completed method=%s route=%s status=%d duration_ms=%d",
-                               scope["method"], route, status, int((perf_counter() - started) * 1000))
+                    logger.log(
+                        logging.WARNING if status >= 400 else logging.INFO,
+                        "review http completed method=%s route=%s status=%d duration_ms=%d",
+                        scope["method"],
+                        route,
+                        status,
+                        int((perf_counter() - started) * 1000),
+                    )

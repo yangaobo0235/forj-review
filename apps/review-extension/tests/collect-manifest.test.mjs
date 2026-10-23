@@ -86,13 +86,15 @@ test("清单覆盖了前端会采集的全部字段", () => {
   }
 });
 
-
 test("应用清单后前端走清单，结构不完整时停止使用业务字段", () => {
   assert.equal(applyCollectManifest(manifest), true);
   assert.ok(manifestFieldDefinitions());
 
   // 清单里的字段仍然解析到同一个字段。
-  assert.equal(ReviewPageFieldCollector.definitionForLabel("报废车辆类型")?.field, "old_vehicle.type");
+  assert.equal(
+    ReviewPageFieldCollector.definitionForLabel("报废车辆类型")?.field,
+    "old_vehicle.type",
+  );
   assert.equal(ReviewBusinessScope.scopeForLabel("报废车辆资料")?.scope, "old_vehicle");
 
   assert.equal(applyCollectManifest({ business_type: "x" }), false);
@@ -104,14 +106,87 @@ test("应用清单后前端走清单，结构不完整时停止使用业务字�
 test("应用清单后图片筛选与内置规则选出同一批图片", () => {
   // 生产页面上真实存在的图片：类型已知、分区明确。
   const candidates = [
-    { index: 0, src: "a", visible: true, businessScope: "old_vehicle", categoryHint: "vehicle_license", hint: "行驶证", naturalWidth: 800, naturalHeight: 600 },
-    { index: 1, src: "b", visible: true, businessScope: "old_vehicle", categoryHint: "registration_certificate", hint: "登记证书", naturalWidth: 700, naturalHeight: 900 },
-    { index: 2, src: "c", visible: true, businessScope: "old_vehicle", categoryHint: "scrap_certificate", hint: "报废证明", naturalWidth: 600, naturalHeight: 400 },
-    { index: 3, src: "d", visible: true, businessScope: "new_vehicle", categoryHint: "invoice", hint: "发票", naturalWidth: 900, naturalHeight: 500 },
-    { index: 4, src: "e", visible: true, businessScope: "new_vehicle", categoryHint: "vehicle_license", hint: "行驶证", naturalWidth: 800, naturalHeight: 600 },
-    { index: 5, src: "f", visible: true, businessScope: "business_license", categoryHint: "business_license", hint: "营业执照", naturalWidth: 500, naturalHeight: 700 },
-    { index: 6, src: "g", visible: true, businessScope: "other", categoryHint: "unknown", hint: "公司logo", naturalWidth: 100, naturalHeight: 100 },
-    { index: 7, src: "h", visible: true, businessScope: "other", categoryHint: "unknown", hint: "暂无图片", emptySlot: true, naturalWidth: 0, naturalHeight: 0 },
+    {
+      index: 0,
+      src: "a",
+      visible: true,
+      businessScope: "old_vehicle",
+      categoryHint: "vehicle_license",
+      hint: "行驶证",
+      naturalWidth: 800,
+      naturalHeight: 600,
+    },
+    {
+      index: 1,
+      src: "b",
+      visible: true,
+      businessScope: "old_vehicle",
+      categoryHint: "registration_certificate",
+      hint: "登记证书",
+      naturalWidth: 700,
+      naturalHeight: 900,
+    },
+    {
+      index: 2,
+      src: "c",
+      visible: true,
+      businessScope: "old_vehicle",
+      categoryHint: "scrap_certificate",
+      hint: "报废证明",
+      naturalWidth: 600,
+      naturalHeight: 400,
+    },
+    {
+      index: 3,
+      src: "d",
+      visible: true,
+      businessScope: "new_vehicle",
+      categoryHint: "invoice",
+      hint: "发票",
+      naturalWidth: 900,
+      naturalHeight: 500,
+    },
+    {
+      index: 4,
+      src: "e",
+      visible: true,
+      businessScope: "new_vehicle",
+      categoryHint: "vehicle_license",
+      hint: "行驶证",
+      naturalWidth: 800,
+      naturalHeight: 600,
+    },
+    {
+      index: 5,
+      src: "f",
+      visible: true,
+      businessScope: "business_license",
+      categoryHint: "business_license",
+      hint: "营业执照",
+      naturalWidth: 500,
+      naturalHeight: 700,
+    },
+    {
+      index: 6,
+      src: "g",
+      visible: true,
+      businessScope: "other",
+      categoryHint: "unknown",
+      hint: "公司logo",
+      naturalWidth: 100,
+      naturalHeight: 100,
+    },
+    {
+      index: 7,
+      src: "h",
+      visible: true,
+      businessScope: "other",
+      categoryHint: "unknown",
+      hint: "暂无图片",
+      emptySlot: true,
+      naturalWidth: 0,
+      naturalHeight: 0,
+    },
   ];
 
   const beforeManifest = ReviewImageCandidates.select(candidates);
@@ -122,7 +197,10 @@ test("应用清单后图片筛选与内置规则选出同一批图片", () => {
   assert.deepEqual(sorted(afterManifest), sorted(beforeManifest));
   assert.equal(afterManifest.eligibleCount, beforeManifest.eligibleCount);
   // 非材料图片（logo、空槽位）两边都不选。
-  assert.equal(afterManifest.selected.some((item) => item.index >= 6), false);
+  assert.equal(
+    afterManifest.selected.some((item) => item.index >= 6),
+    false,
+  );
 });
 
 test("清单补齐了内置类型表漏掉的行驶证，排序因此更准确", () => {
@@ -130,27 +208,87 @@ test("清单补齐了内置类型表漏掉的行驶证，排序因此更准确",
   // 清单里的材料类型表是完整的，所以“行驶证”不再只靠关键词命中。
   applyCollectManifest(null);
   const builtin = ReviewImageCandidates.select([
-    { index: 0, src: "a", visible: true, businessScope: "old_vehicle", categoryHint: "vehicle_license", hint: "行驶证", naturalWidth: 800, naturalHeight: 600 },
-    { index: 1, src: "b", visible: true, businessScope: "old_vehicle", categoryHint: "scrap_certificate", hint: "报废证明", naturalWidth: 800, naturalHeight: 600 },
+    {
+      index: 0,
+      src: "a",
+      visible: true,
+      businessScope: "old_vehicle",
+      categoryHint: "vehicle_license",
+      hint: "行驶证",
+      naturalWidth: 800,
+      naturalHeight: 600,
+    },
+    {
+      index: 1,
+      src: "b",
+      visible: true,
+      businessScope: "old_vehicle",
+      categoryHint: "scrap_certificate",
+      hint: "报废证明",
+      naturalWidth: 800,
+      naturalHeight: 600,
+    },
   ]);
 
   assert.equal(applyCollectManifest(manifest), true);
   const fromManifest = ReviewImageCandidates.select([
-    { index: 0, src: "a", visible: true, businessScope: "old_vehicle", categoryHint: "vehicle_license", hint: "行驶证", naturalWidth: 800, naturalHeight: 600 },
-    { index: 1, src: "b", visible: true, businessScope: "old_vehicle", categoryHint: "scrap_certificate", hint: "报废证明", naturalWidth: 800, naturalHeight: 600 },
+    {
+      index: 0,
+      src: "a",
+      visible: true,
+      businessScope: "old_vehicle",
+      categoryHint: "vehicle_license",
+      hint: "行驶证",
+      naturalWidth: 800,
+      naturalHeight: 600,
+    },
+    {
+      index: 1,
+      src: "b",
+      visible: true,
+      businessScope: "old_vehicle",
+      categoryHint: "scrap_certificate",
+      hint: "报废证明",
+      naturalWidth: 800,
+      naturalHeight: 600,
+    },
   ]);
 
   // 内置规则里行驶证排在后；清单规则把两者都认作已知类型。
-  assert.deepEqual(builtin.selected.map((item) => item.index), [0, 1]);
-  assert.deepEqual(fromManifest.selected.map((item) => item.index), [0, 1]);
+  assert.deepEqual(
+    builtin.selected.map((item) => item.index),
+    [0, 1],
+  );
+  assert.deepEqual(
+    fromManifest.selected.map((item) => item.index),
+    [0, 1],
+  );
 });
 
 test("清单里的材料关键词让本业务的图片排在前面", () => {
   // 候选不可按类型或分区区分时，材料关键词是唯一的排序依据。
   // 内置正则没有“行驶证”，清单里有；命中关键词的图应当被提到前面。
   const candidates = [
-    { index: 0, src: "a", visible: true, businessScope: "unknown", categoryHint: "unknown", hint: "其他", naturalWidth: 300, naturalHeight: 300 },
-    { index: 1, src: "b", visible: true, businessScope: "unknown", categoryHint: "unknown", hint: "行驶证", naturalWidth: 300, naturalHeight: 300 },
+    {
+      index: 0,
+      src: "a",
+      visible: true,
+      businessScope: "unknown",
+      categoryHint: "unknown",
+      hint: "其他",
+      naturalWidth: 300,
+      naturalHeight: 300,
+    },
+    {
+      index: 1,
+      src: "b",
+      visible: true,
+      businessScope: "unknown",
+      categoryHint: "unknown",
+      hint: "行驶证",
+      naturalWidth: 300,
+      naturalHeight: 300,
+    },
   ];
 
   applyCollectManifest(null);
@@ -172,10 +310,28 @@ test("小尺寸的材料图不再被面积兜底丢弃", () => {
   // 面积兜底只针对「类型未知且未命中材料关键词」的图。命中关键词的小图
   // （例如尺寸很小的车辆铭牌）必须保留，否则它连重读的机会都没有。
   const tiny = (hint) => [
-    { index: 0, src: "a", visible: true, businessScope: "unknown", categoryHint: "unknown", hint, naturalWidth: 100, naturalHeight: 100 },
+    {
+      index: 0,
+      src: "a",
+      visible: true,
+      businessScope: "unknown",
+      categoryHint: "unknown",
+      hint,
+      naturalWidth: 100,
+      naturalHeight: 100,
+    },
   ];
   const largeUnknown = [
-    { index: 0, src: "a", visible: true, businessScope: "unknown", categoryHint: "unknown", hint: "无关内容", naturalWidth: 300, naturalHeight: 300 },
+    {
+      index: 0,
+      src: "a",
+      visible: true,
+      businessScope: "unknown",
+      categoryHint: "unknown",
+      hint: "无关内容",
+      naturalWidth: 300,
+      naturalHeight: 300,
+    },
   ];
 
   for (const apply of [manifest]) {
@@ -185,7 +341,11 @@ test("小尺寸的材料图不再被面积兜底丢弃", () => {
       [0],
       "小尺寸材料图应入选",
     );
-    assert.equal(ReviewImageCandidates.select(tiny("无关内容")).eligibleCount, 0, "小尺寸无关图应丢弃");
+    assert.equal(
+      ReviewImageCandidates.select(tiny("无关内容")).eligibleCount,
+      0,
+      "小尺寸无关图应丢弃",
+    );
     assert.equal(ReviewImageCandidates.select(largeUnknown).eligibleCount, 1, "大图应放行");
   }
 
@@ -230,18 +390,21 @@ test("面板的中文字段名和材料名来自清单而不是内置表", () =>
   assert.equal(manifestMaterialLabels().invoice, "机动车销售发票");
 });
 
-test("应用清单后槽位表来自清单而不是内置表", () => {
-  // 清单不可用时保留未知，不能再猜报废置换的图片顺序。
-  applyCollectManifest(null);
-  assert.equal(ReviewBusinessScope.documentTypeFor("old_vehicle", 2, "unknown"), "unknown");
-
-  assert.equal(applyCollectManifest(manifest), true);
-  assert.equal(ReviewBusinessScope.documentTypeFor("old_vehicle", 2, "unknown"), "registration_certificate");
-  // 清单里的槽位在两边是同一份数据，解析结果必须一致。
-  const fromManifest = new Map(manifest.materials.flatMap((item) => (item.slots ?? []).map(([s, o]) => [`${s}:${o}`, item.document_type])));
-  for (const [key, expected] of fromManifest) {
-    const [scope, order] = key.split(":");
-    assert.equal(ReviewBusinessScope.documentTypeFor(scope, Number(order), "unknown"), expected, key);
+test("历史槽位表不再决定图片材料类型", () => {
+  applyCollectManifest(manifest);
+  for (const order of [1, 2, 3, 7]) {
+    assert.equal(
+      ReviewBusinessScope.documentTypeFor("old_vehicle", order, "old_vehicle"),
+      "unknown",
+    );
+    assert.equal(
+      ReviewBusinessScope.documentTypeFor("new_vehicle", order, "new_vehicle"),
+      "unknown",
+    );
+    assert.equal(
+      ReviewBusinessScope.documentTypeFor("old_vehicle", order, "vehicle_license"),
+      "vehicle_license",
+    );
   }
 });
 

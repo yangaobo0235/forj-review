@@ -6,10 +6,9 @@ from pathlib import Path
 import httpx
 from pydantic import ValidationError
 
-from forj_review_config_service.contracts.models import ConfigurationError, SessionRecord
+from forj_review_config_service.contracts.models import ConfigurationError, TaskRecord
 from forj_review_service.businesses.packs import build_collect_manifest
 from forj_review_service.businesses.page_config.inspection import (
-    configuration_snapshot,
     digest,
     effective_configuration,
 )
@@ -19,6 +18,7 @@ from forj_review_service.businesses.page_config.kernel import (
 from forj_review_service.businesses.page_config.maintenance import (
     edit_fields,
     field_dependencies,
+    maintenance_contract,
 )
 from forj_review_service.businesses.page_config.schema import PageDefinition
 from forj_review_service.businesses.page_config.state import ConfigurationState
@@ -47,7 +47,13 @@ class SnapshotKernel:
             raise ConfigurationError("FIELD_MAINTENANCE_ONLY", str(exc), 422) from exc
         except ValidationError as exc:
             raise ConfigurationError(
-                "INVALID_CONFIGURATION", "字段配置无效，请检查类型、必填项并保留审核字段", 422
+                "INVALID_CONFIGURATION",
+                "配置属性不符合契约："
+                + "; ".join(
+                    ".".join(map(str, error["loc"])) + ":" + error["type"]
+                    for error in exc.errors()[:10]
+                ),
+                422,
             ) from exc
 
     evaluate_collection = staticmethod(evaluate_collection)
@@ -64,6 +70,14 @@ class SnapshotKernel:
         return {
             item["key"]: field_dependencies(draft, item["key"]) for item in draft.get("fields", [])
         }
+
+    @staticmethod
+    def comparison_configurable_fields(draft):
+        return [
+            key
+            for key, field in maintenance_contract(draft)["fields"].items()
+            if field["comparison_configurable"]
+        ]
 
     def __init__(
         self,
@@ -82,14 +96,12 @@ class SnapshotKernel:
     def _configuration(self):
         return validated_snapshot(self.configuration)
 
-    def _inspect(self):
-        _, registry = self._configuration()
-        return configuration_snapshot(registry.profiles, registry.active_profiles)
-
-    def baseline(self) -> str:
-        from forj_review_service.runtime.configuration.publication import configuration_baseline
-
-        return configuration_baseline(self.configuration)
+    def baseline(self, page_id: str | None = None) -> str:
+        return (
+            self.configuration.page_baseline(page_id, KERNEL_VERSION)
+            if page_id
+            else self.configuration.baseline(KERNEL_VERSION)
+        )
 
     def context(self, page_id: str | None = None) -> dict:
         pages, registry = self._configuration()
@@ -131,6 +143,7 @@ class SnapshotKernel:
         return {
             "source": source,
             "editable": editable,
+            "maintenance": maintenance_contract(editable),
             "dependencies": {
                 field.key: field_dependencies(editable, field.key)
                 for field in profile.pack_declaration.fields
@@ -147,10 +160,30 @@ class SnapshotKernel:
         )
 
         return {
+            "maintenance": maintenance_contract(),
             "rule_binding_schema": RuleBinding.model_json_schema(),
             "action_binding_schema": ActionBinding.model_json_schema(),
             "schema": PageDefinition.model_json_schema(),
             "kernel_version": KERNEL_VERSION,
+            "operations": {
+                "field": [
+                    "upsert_field",
+                    "remove_field",
+                    "set_collection_binding",
+                    "set_field_comparison",
+                ],
+                "material": ["upsert_material", "remove_material", "set_material_policy"],
+                "policy": ["set_policy_dates"],
+                "presentation": ["set_presentation"],
+                "sensitive": ["set_field_permissions"],
+            },
+            "limits": {"new_pages": False, "code_execution": False, "rule_parameters": False},
+            "execution": {
+                "mode": "CONFIGURATION_SERVICE",
+                "code_tools": False,
+                "local_entrypoint": "forj-review-config-develop",
+                "notice": "本机网页仍是配置服务；开发者显式启动本地入口后才有代码工具。code_execution不表示配置表达能力。",
+            },
             "decision_policy": decision_policy(),
             "rules": {
                 key: {"fields": sorted(value.fields), "checks": list(value.checks)}
@@ -225,7 +258,12 @@ class SnapshotKernel:
             + case_set_id
         }
 
-    def stage(self, record: SessionRecord) -> tuple[PageDefinition, ConfigurationState]:
+    def read_cases(self, case_set_id: str):
+        return ReplaySuite.model_validate_json(
+            self._case_path(case_set_id).read_text(encoding="utf-8-sig")
+        ).model_dump(mode="json")
+
+    def stage(self, record: TaskRecord) -> tuple[PageDefinition, ConfigurationState]:
         from forj_review_service.runtime.configuration.publication import stage_version
 
         try:
@@ -237,8 +275,11 @@ class SnapshotKernel:
         except ValidationError as exc:
             raise ConfigurationError("INVALID_CONFIGURATION", "候选配置格式无效", 422) from exc
 
-    def validate(self, record: SessionRecord) -> dict:
-        if self.baseline() != record.baseline_digest:
+    def validate(self, record: TaskRecord) -> dict:
+        _, registry = self._configuration()
+        if record.draft["page_id"] not in {p.page_id for p in registry.active_profiles}:
+            raise ConfigurationError("INVALID_CONFIGURATION", "只能维护已接入页面的活动配置", 422)
+        if self.baseline(record.draft["page_id"]) != record.baseline_digest:
             raise ConfigurationError("BASELINE_CHANGED", "配置或模板已改变，请重新建立编辑基线")
         from forj_review_service.runtime.configuration.publication import preview_version
 
@@ -251,29 +292,34 @@ class SnapshotKernel:
         except ValidationError as exc:
             raise ConfigurationError("INVALID_CONFIGURATION", "候选配置格式无效", 422) from exc
 
-    def _prepare_replay(self, record: SessionRecord, case_set_id: str):
+    def _prepare_replay(self, record: TaskRecord, case_set_id: str):
         preview = self.validate(record)
         definition, files = self.stage(record)
         suite = ReplaySuite.model_validate_json(
             self._case_path(case_set_id).read_text(encoding="utf-8-sig")
         )
-        if not any(
-            c.request.page_id == definition.page_id
-            and c.request.profile_version == definition.version
-            for c in suite.cases
-        ):
-            raise ConfigurationError("MISSING_REPLAY", "样例必须包含目标页面和候选版本")
+        source_digest = digest(suite.model_dump(mode="json"))
+        cases = [
+            c.model_copy(deep=True) for c in suite.cases if c.request.page_id == definition.page_id
+        ]
+        if not cases:
+            raise ConfigurationError("MISSING_REPLAY", "样例必须包含目标页面")
+        for case in cases:
+            # Reuse trusted inputs and expectations. Only the execution target is rebound.
+            case.request.profile_version = definition.version
+        suite = suite.model_copy(update={"cases": tuple(cases)})
         _, registry = validated_snapshot(files)
-        return preview, registry, suite
+        return preview, registry, suite, source_digest
 
-    async def replay(self, record: SessionRecord, case_set_id: str) -> dict:
-        preview, registry, suite = await asyncio.to_thread(
+    async def replay(self, record: TaskRecord, case_set_id: str) -> dict:
+        preview, registry, suite, source_digest = await asyncio.to_thread(
             self._prepare_replay, record, case_set_id
         )
         result = await replay_suite(registry, suite)
         result.update(
             case_set_id=case_set_id,
-            case_digest=digest(suite.model_dump(mode="json")),
+            case_digest=source_digest,
+            execution_digest=digest(suite.model_dump(mode="json")),
             revision=record.revision,
             candidate_digest=preview["candidate_digest"],
         )
@@ -288,7 +334,7 @@ class SnapshotKernel:
         except (ConfigurationError, ValueError, OSError):
             return False
 
-    def commit(self, record: SessionRecord, operation_id: str) -> dict:
+    def commit(self, record: TaskRecord, operation_id: str) -> dict:
         previous = self.commit_receipt(operation_id)
         if previous is not None:
             if (previous["page_id"], previous["version"], previous["candidate_digest"]) != (
@@ -317,7 +363,7 @@ class SnapshotKernel:
             raise ConfigurationError("INVALID_OPERATION_ID", "保存操作标识无效", 422)
         return self.configuration.receipts.get(operation_id)
 
-    async def activation(self, record: SessionRecord) -> dict:
+    async def activation(self, record: TaskRecord) -> dict:
         if not record.receipt:
             return {"state": "DRAFTING"}
         try:

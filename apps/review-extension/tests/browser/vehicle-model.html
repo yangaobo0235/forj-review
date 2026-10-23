@@ -1,81 +1,189 @@
-<!doctype html><html lang="zh"><meta charset="utf-8"><title>合成车源审核页面</title>
-<body><form id="business"></form><div id="picker"></div>
-<script type="module">
-import {createApp, h, reactive} from "vue";
-import Picker from "../../src/features/review/ui/VehicleModelPicker.vue";
-import {useVehicleModelReview} from "../../src/features/review/model/use-vehicle-model-review.ts";
-import {createVehicleModelFiller} from "../../src/platform/browser/actions/vehicle-model-fill.ts";
-import {ReviewPageFieldWriter} from "../../src/platform/browser/actions/page-field-writer.ts";
-import {observeModelLinkage} from "../../src/platform/browser/actions/model-linkage.ts";
-import {readModelContext} from "../../src/platform/browser/collection/model-selection.ts";
-import manifest from "../fixtures/collect-manifest-vehicle-source.json";
+<!doctype html>
+<html lang="zh">
+  <meta charset="utf-8" /><title>合成车源审核页面</title>
+  <body>
+    <form id="business"></form>
+    <div id="picker"></div>
+    <script type="module">
+      import { createApp, h, reactive } from "vue";
+      import Picker from "../../src/features/review/ui/VehicleModelPicker.vue";
+      import { useVehicleModelReview } from "../../src/features/review/model/use-vehicle-model-review.ts";
+      import { createVehicleModelFiller } from "../../src/platform/browser/actions/vehicle-model-fill.ts";
+      import { ReviewPageFieldWriter } from "../../src/platform/browser/actions/page-field-writer.ts";
+      import { readModelContext } from "../../src/platform/browser/collection/model-selection.ts";
+      import manifest from "../fixtures/collect-manifest-vehicle-source.json";
 
-let candidate = {modelId: "10", modelName: "合成品牌 完整车型 MODEL100", brandId: "2", brandName: "合成品牌",
-  seriesId: "3", seriesName: "合成车系", typeLevel: "牵引车", sameNameCount: 1, warnings: [], config: {
-    driveForm: "6X4", fuelType: "柴油", emissionStandard: "国六", maxHp: "450", engineBrand: "合成发动机",
-    engineType: "ENGINE42-E6", packingCaseLength: null}};
-const values = {"vehicle.type": "牵引车", "spec.brand": "合成品牌", "spec.series": "合成车系",
-  "vehicle.model": "原车型", "spec.drive_form": "6X4", "spec.fuel_type": "柴油", "spec.emission_standard": "国六",
-  "spec.max_hp": "420", "spec.engine_brand": "合成发动机", "spec.engine_model": "WRONG42",
-  "spec.cargo_length": "", "vehicle.brand_model": "错误牌WRONG100"};
-const form = document.querySelector("#business"), nodes = new Map(), fields = new Map();
-const optionSets = {"spec.brand": [["2", "合成品牌"]], "spec.series": [["3", "合成车系"], ["4", "合成车系"]],
-  "vehicle.model": [["1", "原车型"], ["10", candidate.modelName]]};
-for (const [field, value] of Object.entries(values)) {
-  const label = document.createElement("label"); label.textContent = field;
-  const node = document.createElement(optionSets[field] ? "select" : "input"); node.id = field;
-  for (const [id, text] of optionSets[field] || []) node.add(new Option(text, id));
-  node.value = optionSets[field]?.[0][0] || value;
-  label.append(node); form.append(label); nodes.set(field, node);
-  const controlSnapshot = ReviewPageFieldWriter.captureValue(node);
-  fields.set(field, {element: node, collectionId: "collection", collectedValue: value, controlSnapshot});
-}
-const fixture = window.vehicleModelFixture = {queries: [], parentChanges: [], result: null};
-nodes.get("vehicle.model").addEventListener("change", async () => {
-  await fetch("/api/admin/vehicle-model/config/detail", {method: "POST", body: JSON.stringify({modelId: nodes.get("vehicle.model").value})});
-  // The real page replaces its spec object after this request, clearing fields with different API keys.
-  nodes.get("spec.drive_form").value = "";
-  nodes.get("spec.max_hp").value = "";
-  nodes.get("spec.engine_model").value = "";
-});
-// Same-label series IDs have different dependent model options.
-nodes.get("spec.brand").addEventListener("change", () => {
-  fixture.parentChanges.push("spec.brand"); nodes.get("vehicle.model").replaceChildren();
-});
-nodes.get("spec.series").addEventListener("change", () => {
-  fixture.parentChanges.push("spec.series");
-  nodes.get("vehicle.model").replaceChildren();
-  const seriesId = nodes.get("spec.series").value;
-  setTimeout(() => nodes.get("vehicle.model").add(new Option(candidate.modelName, seriesId === "4" ? "20" : "10")), 1100);
-});
-const collect = keys => ({pageFields: Object.fromEntries(keys.map(field => [field,
-  ReviewPageFieldWriter.captureValue(nodes.get(field))?.value || ""])),
-  fieldTargets: keys.map(field => ({field, element: nodes.get(field)}))});
-const captured = await readModelContext(collect([...nodes.keys()]));
-const pageData = {sourceTabId: 12, pageUrl: "https://test.forjtruck.com/consistency-qingdao",
-  pageInstanceId: "instance", pageFingerprint: "record", collectionId: "collection", images: [],
-  pageFields: values, pageSelection: captured.pageSelection, pageModelScope: captured.pageModelScope,
-  actions: manifest.actions, fieldLabels: Object.fromEntries(manifest.fields.map(field => [field.key, field.label]))};
-const mappings = manifest.actions.find(action => action.handler_id === "vehicle_model_fill").mappings;
-let trustedInput;
-window.chrome = {runtime: {sendMessage: async () => ({ok: true, candidates: [candidate]})}};
-const filler = createVehicleModelFiller({root: document, isCurrent: () => true, collectionId: () => "collection",
-  selectionSnapshot: () => pageData.pageSelection, fields, collect,
-  writableFields: () => new Set(manifest.writable_fields), controlKinds: () => new Set(manifest.writable_control_kinds),
-  mappings: () => mappings, observeModelChange: (_control, guard) => observeModelLinkage(document, guard),
-  resolveSearch: async () => ({ok: true, candidate, input: trustedInput})});
-createApp({setup() {
-  const state = reactive({business_type: "vehicle_source", cross_checks: [{
-    check_id: "VEHICLE-SOURCE-MODEL", details: {model_search: {
-      announcement_model: "MODEL100", engine_model: "ENGINE42-E6", issues: []}},
-  }]});
-  const model = useVehicleModelReview({review: () => state, pageData: () => pageData, disabled: () => false,
-    onBusy: () => {}, onResult: result => {fixture.result = result;},
-    onFill: () => (searchId, modelId) => filler.fill({searchId, modelId, expectedPageUrl: pageData.pageUrl})},
-    async (_page, input) => {
-      trustedInput = structuredClone(input); fixture.queries.push(trustedInput);
-      return {ok: true, candidates: [candidate], searchId: "search"};
-    });
-  return () => h(Picker, {model, pageData, disabled: false});
-}}).mount("#picker");
-</script></body></html>
+      const candidate = { modelId: "10", modelName: "合成品牌 完整车型 MODEL100" };
+      const values = {
+        "vehicle.type": "牵引车",
+        "spec.brand": "合成品牌",
+        "spec.series": "合成车系",
+        "vehicle.model": "原车型",
+        "spec.drive_form": "6X4",
+        "spec.fuel_type": "柴油",
+        "spec.emission_standard": "国六",
+        "spec.max_hp": "420",
+        "spec.engine_brand": "合成发动机",
+        "spec.engine_model": "WRONG42",
+        "spec.cargo_length": "",
+        "vehicle.brand_model": "错误牌WRONG100",
+      };
+      const form = document.querySelector("#business"),
+        nodes = new Map(),
+        fields = new Map();
+      const optionSets = {
+        "spec.brand": [["2", "合成品牌"]],
+        "spec.series": [
+          ["3", "合成车系"],
+          ["4", "合成车系"],
+        ],
+        "vehicle.model": [
+          ["1", "原车型"],
+          ["10", candidate.modelName],
+        ],
+      };
+      for (const [field, value] of Object.entries(values)) {
+        const label = document.createElement("label");
+        label.textContent = field;
+        const node = document.createElement(optionSets[field] ? "select" : "input");
+        node.id = field;
+        for (const [id, text] of optionSets[field] || []) node.add(new Option(text, id));
+        node.value = optionSets[field]?.[0][0] || value;
+        label.append(node);
+        form.append(label);
+        nodes.set(field, node);
+        const controlSnapshot = ReviewPageFieldWriter.captureValue(node);
+        fields.set(field, {
+          element: node,
+          collectionId: "collection",
+          collectedValue: value,
+          controlSnapshot,
+        });
+      }
+      const fixture = (window.vehicleModelFixture = {
+        queries: [],
+        parentChanges: [],
+        result: null,
+        autoFill: true,
+        linkageFailed: false,
+      });
+      nodes.get("vehicle.model").addEventListener("change", async () => {
+        if (!fixture.autoFill) return;
+        try {
+          const response = await fetch("/api/admin/vehicle-model/config/detail", {
+            method: "POST",
+            body: JSON.stringify({ modelId: nodes.get("vehicle.model").value }),
+          });
+          if (!response.ok) {
+            fixture.linkageFailed = true;
+            return;
+          }
+          const config = await response.json();
+          // Only the host application's own handler supplies specifications.
+          nodes.get("spec.drive_form").value = config.driveForm;
+          nodes.get("spec.max_hp").value = config.maxHp;
+          nodes.get("spec.engine_model").value = config.engineType;
+        } catch {
+          fixture.linkageFailed = true;
+        }
+      });
+      // Same-label series IDs have different dependent model options.
+      nodes.get("spec.brand").addEventListener("change", () => {
+        fixture.parentChanges.push("spec.brand");
+        nodes.get("vehicle.model").replaceChildren();
+      });
+      nodes.get("spec.series").addEventListener("change", () => {
+        fixture.parentChanges.push("spec.series");
+        nodes.get("vehicle.model").replaceChildren();
+        const seriesId = nodes.get("spec.series").value;
+        setTimeout(
+          () =>
+            nodes
+              .get("vehicle.model")
+              .add(new Option(candidate.modelName, seriesId === "4" ? "20" : "10")),
+          1100,
+        );
+      });
+      const collect = (keys) => ({
+        pageFields: Object.fromEntries(
+          keys.map((field) => [
+            field,
+            ReviewPageFieldWriter.captureValue(nodes.get(field))?.value || "",
+          ]),
+        ),
+        fieldTargets: keys.map((field) => ({ field, element: nodes.get(field) })),
+      });
+      const captured = await readModelContext(collect([...nodes.keys()]));
+      const pageData = {
+        sourceTabId: 12,
+        pageUrl: "https://test.forjtruck.com/consistency-qingdao",
+        pageInstanceId: "instance",
+        pageFingerprint: "record",
+        collectionId: "collection",
+        images: [],
+        pageFields: values,
+        pageSelection: captured.pageSelection,
+        pageModelScope: captured.pageModelScope,
+        actions: manifest.actions,
+        fieldLabels: Object.fromEntries(manifest.fields.map((field) => [field.key, field.label])),
+      };
+      const mappings = manifest.actions.find(
+        (action) => action.handler_id === "vehicle_model_fill",
+      ).mappings;
+      let trustedInput;
+      window.chrome = {
+        runtime: { sendMessage: async () => ({ ok: true, candidates: [candidate] }) },
+      };
+      const filler = createVehicleModelFiller({
+        root: document,
+        isCurrent: () => true,
+        collectionId: () => "collection",
+        selectionSnapshot: () => pageData.pageSelection,
+        fields,
+        collect,
+        writableFields: () => new Set(manifest.writable_fields),
+        controlKinds: () => new Set(manifest.writable_control_kinds),
+        mappings: () => mappings,
+        resolveSearch: async () => ({ ok: true, candidate, input: trustedInput }),
+      });
+      createApp({
+        setup() {
+          const state = reactive({
+            business_type: "vehicle_source",
+            cross_checks: [
+              {
+                check_id: "VEHICLE-SOURCE-MODEL",
+                details: {
+                  model_search: {
+                    announcement_model: "MODEL100",
+                    engine_model: "ENGINE42-E6",
+                    issues: [],
+                  },
+                },
+              },
+            ],
+          });
+          const model = useVehicleModelReview(
+            {
+              review: () => state,
+              pageData: () => pageData,
+              disabled: () => false,
+              onBusy: () => {},
+              onResult: (result) => {
+                fixture.result = result;
+              },
+              onFill: () => (searchId, modelId) =>
+                filler.fill({ searchId, modelId, expectedPageUrl: pageData.pageUrl }),
+            },
+            async (_page, input) => {
+              trustedInput = structuredClone(input);
+              fixture.queries.push(trustedInput);
+              return { ok: true, candidates: [candidate], searchId: "search" };
+            },
+          );
+          return () => h(Picker, { model, pageData, disabled: false });
+        },
+      }).mount("#picker");
+    </script>
+  </body>
+</html>

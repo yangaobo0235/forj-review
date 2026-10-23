@@ -161,7 +161,7 @@ async def test_full_graph_marks_uncertain_representative_insufficient_and_keeps_
     )
     service = ReviewService(registry=BusinessRegistry((profile,)))
 
-    async def extract(request, callback, *args):
+    async def extract(request, callback, *args, absolute_deadline=None):
         await callback(batch)
         return batch
 

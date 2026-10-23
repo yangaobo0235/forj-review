@@ -50,9 +50,6 @@ class PageActionRegistry:
         if unknown:
             raise ValueError(f"未注册页面动作：{', '.join(sorted(unknown))}")
 
-    def describe(self) -> tuple[PageActionSpec, ...]:
-        return tuple(self.specs[key] for key in sorted(self.specs))
-
     def permitted_intents(
         self,
         intents: Sequence[PageActionIntent],
@@ -66,12 +63,20 @@ class PageActionRegistry:
         permitted = []
         for intent in intents:
             spec = self.specs.get(intent.action_id)
-            if spec is None or not self.contains(intent.action_id) or intent.action_id not in enabled:
+            if (
+                spec is None
+                or not self.contains(intent.action_id)
+                or intent.action_id not in enabled
+            ):
                 continue
             if not set(spec.writable_fields) <= writable:
                 continue
-            permitted.append(intent.model_copy(update={
-                "requires_authorization": spec.requires_authorization
-                or intent.requires_authorization,
-            }))
+            permitted.append(
+                intent.model_copy(
+                    update={
+                        "requires_authorization": spec.requires_authorization
+                        or intent.requires_authorization,
+                    }
+                )
+            )
         return permitted

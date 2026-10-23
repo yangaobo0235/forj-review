@@ -1,6 +1,6 @@
 """Deterministic field comparison, independent of API response rendering."""
 
-from forj_review_service.businesses.context import DEFAULT_BUSINESS, BusinessContext
+from forj_review_service.businesses.context import BusinessContext
 from forj_review_service.businesses.field_policies import (
     date_window_problem,
     field_policy,
@@ -25,7 +25,7 @@ def build_field_comparisons(
     profile: BusinessProfile,
     observations: list[FieldObservation],
 ) -> list[FieldComparison]:
-    business = BusinessContext.from_profile(profile) if profile is not None else DEFAULT_BUSINESS
+    business = BusinessContext.from_profile(profile)
     fields = list(profile.required_fields)
     collected_fields = set(request.page_fields) | {item.field for item in request.review_fields}
     fields.extend(
@@ -69,7 +69,6 @@ def build_field_comparisons(
             ),
             business=business,
         )
-        uncertain_requires_review = policy.uncertain_requires_review if policy else True
         page_evidence_required = policy.page_evidence_required if policy else True
         # 声明了权威链的字段走声明式裁决：比较基准由业务指定，不靠票数推断。
         # 新增需要权威关系的字段只需在 field_evidence_policies 里声明，
@@ -80,7 +79,6 @@ def build_field_comparisons(
                     field_name,
                     observations_for_field,
                     policy.authority,
-                    uncertain_requires_review=uncertain_requires_review,
                     page_evidence_required=page_evidence_required,
                     business=business,
                 )
@@ -90,7 +88,6 @@ def build_field_comparisons(
             comparison = aggregate_field(
                 field_name,
                 [item for item in observations_for_field if item.source_type == "page"],
-                uncertain_requires_review=False,
                 single_evidence_requires_review=False,
                 business=business,
             )
@@ -117,7 +114,6 @@ def build_field_comparisons(
             aggregate_field(
                 field_name,
                 observations_for_field,
-                uncertain_requires_review=uncertain_requires_review,
                 single_evidence_requires_review=(
                     policy.allow_single_evidence is False if policy else True
                 ),

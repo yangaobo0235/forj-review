@@ -28,10 +28,7 @@ def readable_value(value: object | None) -> bool:
     return bool(
         text
         and text.upper() not in UNREADABLE_VALUES
-        and not any(
-            word in text for word in ("无法识别", "无法确认", "未知", "不详", "看不清")
-        )
+        and not any(word in text for word in ("无法识别", "无法确认", "未知", "不详", "看不清"))
         and not re.search(r"[?？*＊�]", text)
         and re.search(r"[\w\u3400-\u9fff]", text)
     )
-

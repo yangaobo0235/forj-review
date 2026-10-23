@@ -24,8 +24,7 @@ def run_set_affiliation(context: ReviewExecutionContext) -> RuleExecutionResult:
             for item in (image.document_type_hint, image.category_hint)
         ),
         recognized_document_types=(
-            document.document_type
-            for document in context.batch.recognized_documents
+            document.document_type for document in context.batch.recognized_documents
         ),
     )
     if value is None:

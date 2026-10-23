@@ -37,6 +37,7 @@ from forj_review_service.runtime.review_service import ReviewService
 from forj_review_service.runtime.scheduling.fair_scheduler import FairAsyncScheduler
 from tests.support.pages import SCRAP_BUSINESS as TEST_BUSINESS
 from tests.support.pages import SCRAP_REPLACEMENT_QINGDAO, business_registry
+from tests.support.qr import qr_image_decoder
 
 
 @pytest.fixture
@@ -141,7 +142,6 @@ def test_equal_value_deduplication_retains_uncertainty():
             evidence("2026-10-01", uncertain=True, confidence=0.4),
             evidence("2026-10-01", source="page"),
         ],
-        uncertain_requires_review=True,
         business=TEST_BUSINESS,
     )
     assert comparison.status is FieldStatus.REVIEW_REQUIRED
@@ -259,6 +259,9 @@ async def test_failed_preferred_qr_classification_still_scans_old_vehicle_fallba
         ],
     )
     service = ReviewService(registry=business_registry())
+    service.qr_decoder = qr_image_decoder(
+        {"https://example.test/actual.jpg": "https://qclt.mofcom.gov.cn/proof"}
+    )
     from forj_review_service.contracts.recognition import RecognizedDocument
 
     batch = RecognitionBatchResult(
@@ -268,7 +271,6 @@ async def test_failed_preferred_qr_classification_still_scans_old_vehicle_fallba
                 target_id="1",
                 image_index=1,
                 document_type="scrap_certificate",
-                qr_codes=["https://qclt.mofcom.gov.cn/proof"],
             ),
         ]
     )

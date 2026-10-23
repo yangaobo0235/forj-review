@@ -21,7 +21,7 @@ export interface ManifestMaterial {
   document_type: string;
   label: string;
   hints: string[];
-  /** 上传槽位 [业务分区, 组内序号]，用于类型不确定时兜底。 */
+  /** 历史槽位属性，仅为版本兼容保留，不用于识别材料。 */
   slots: [string, number][];
 }
 
@@ -38,16 +38,22 @@ export interface ActionMapping {
   wait_condition_id: "none" | "options_ready";
 }
 export interface ActionBinding {
-  action_id: string; handler_id: string; contract_version: "1.0";
-  enabled: boolean; label: string; mappings: ActionMapping[];
+  action_id: string;
+  handler_id: string;
+  contract_version: "1.0";
+  enabled: boolean;
+  label: string;
+  mappings: ActionMapping[];
 }
 export interface CollectManifest {
   actions?: ActionBinding[];
   ignored_image_labels?: string[];
   page_id?: string;
   business_type: string;
+  review_declared_fields_only?: boolean;
   region?: string;
   profile_version?: string;
+  effective_digest?: string;
   /** 该业务认定的材料分区，如旧车 / 新车。 */
   scopes: string[];
   /** 页面控件区域，与材料业务分区独立；旧清单缺省时沿用历史识别。 */
@@ -64,4 +70,3 @@ export interface CollectManifest {
   /** Explicit record identifiers; an empty list intentionally disables identity-dependent actions. */
   record_identity_fields?: string[];
 }
-

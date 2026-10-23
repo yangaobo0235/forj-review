@@ -20,21 +20,27 @@ const candidate = (index, overrides = {}) => ({
   emptySlot: false,
   hint: "旧车资料",
   categoryHint: "old_vehicle",
-  ...overrides
+  ...overrides,
 });
 
 test("excludes decorations and hidden images but keeps identity cards", () => {
   const select = loadSelector();
-  const result = select([
-    candidate(0, { visible: false }),
-    candidate(1, { className: "company-logo", hint: "", categoryHint: "unknown" }),
-    candidate(2, { role: "presentation", hint: "", categoryHint: "unknown" }),
-    candidate(5, { emptySlot: true, hint: "新车资料 暂无图片", categoryHint: "new_vehicle" }),
-    candidate(3, { hint: "身份证", categoryHint: "identity_card" }),
-    candidate(4),
-  ], 6);
+  const result = select(
+    [
+      candidate(0, { visible: false }),
+      candidate(1, { className: "company-logo", hint: "", categoryHint: "unknown" }),
+      candidate(2, { role: "presentation", hint: "", categoryHint: "unknown" }),
+      candidate(5, { emptySlot: true, hint: "新车资料 暂无图片", categoryHint: "new_vehicle" }),
+      candidate(3, { hint: "身份证", categoryHint: "identity_card" }),
+      candidate(4),
+    ],
+    6,
+  );
 
-  assert.deepEqual(Array.from(result.selected, (item) => item.index), [3, 4]);
+  assert.deepEqual(
+    Array.from(result.selected, (item) => item.index),
+    [3, 4],
+  );
   assert.equal(result.overflow, false);
 });
 
@@ -48,7 +54,10 @@ test("does not discard a real image only because its broader hint mentions an em
     }),
   ]);
 
-  assert.deepEqual(Array.from(result.selected, (item) => item.index), [1]);
+  assert.deepEqual(
+    Array.from(result.selected, (item) => item.index),
+    [1],
+  );
 });
 
 test("keeps at most six original indices while covering available document types", () => {
@@ -60,7 +69,10 @@ test("keeps at most six original indices while covering available document types
 
   const result = select(input, 6);
 
-  assert.deepEqual(Array.from(result.selected, (item) => item.index), [20, 21, 22, 23, 24, 9]);
+  assert.deepEqual(
+    Array.from(result.selected, (item) => item.index),
+    [20, 21, 22, 23, 24, 9],
+  );
   assert.equal(result.overflow, true);
   assert.equal(result.scannedCount, 8);
 });
@@ -76,7 +88,10 @@ test("keeps a registration certificate as a known business document", () => {
     }),
   ]);
 
-  assert.deepEqual(Array.from(result.selected, (item) => item.index), [1]);
+  assert.deepEqual(
+    Array.from(result.selected, (item) => item.index),
+    [1],
+  );
 });
 
 test("keeps business licenses but excludes unrelated large images", () => {
@@ -100,12 +115,14 @@ test("keeps business licenses but excludes unrelated large images", () => {
 test("reserves one image for each business scope and document type", () => {
   const select = loadSelector();
   const input = [
-    ...Array.from({ length: 10 }, (_, index) => candidate(index, {
-      businessScope: "old_vehicle",
-      categoryHint: "registration_certificate",
-      hint: "机动车登记证书",
-      naturalWidth: 2000 - index,
-    })),
+    ...Array.from({ length: 10 }, (_, index) =>
+      candidate(index, {
+        businessScope: "old_vehicle",
+        categoryHint: "registration_certificate",
+        hint: "机动车登记证书",
+        naturalWidth: 2000 - index,
+      }),
+    ),
     candidate(20, {
       businessScope: "new_vehicle",
       categoryHint: "invoice",
@@ -154,7 +171,10 @@ test("fills remaining slots with the highest-ranked extra pages", () => {
 
   const result = select(input, 3);
 
-  assert.deepEqual(Array.from(result.selected, (item) => item.index), [1, 2, 4]);
+  assert.deepEqual(
+    Array.from(result.selected, (item) => item.index),
+    [1, 2, 4],
+  );
 });
 
 test("content collector reserves enough capacity for fixed and conditional materials", () => {

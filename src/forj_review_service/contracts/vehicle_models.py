@@ -1,4 +1,4 @@
-"""Page-bound, unpaginated model search and six specification values."""
+"""Page-bound, unpaginated model search; the business page owns specifications."""
 
 import re
 import unicodedata
@@ -50,19 +50,14 @@ class VehicleModelSearch(BaseModel):
         return code
 
 
-class VehicleModelConfig(BaseModel):
-    driveForm: str | None
-    fuelType: str | None
-    emissionStandard: str | None
-    maxHp: str | None
-    engineBrand: str | None
-    engineType: str | None
-
-
 class VehicleModelCandidate(BaseModel):
     modelId: str = Field(pattern=r"^[0-9]{1,19}$")
     modelName: str = Field(min_length=1, max_length=500)
-    config: VehicleModelConfig
+
+    @field_validator("modelName", mode="before")
+    @classmethod
+    def trim_name(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
     @field_validator("modelId")
     @classmethod

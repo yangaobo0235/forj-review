@@ -65,15 +65,22 @@ test("后端没有下发任何动作时不产生提示", async () => {
 test("需要授权的动作不得自动执行，重复自动动作只执行一次", async () => {
   const registry = new PageActionRegistry();
   let calls = 0;
-  registry.register("known", async () => { calls++; return "已执行"; });
-  const messages = await registry.executeAll([{ ...intent("known"), requires_authorization: true },
-    intent("known"), intent("known")], {});
+  registry.register("known", async () => {
+    calls++;
+    return "已执行";
+  });
+  const messages = await registry.executeAll(
+    [{ ...intent("known"), requires_authorization: true }, intent("known"), intent("known")],
+    {},
+  );
   assert.match(messages[0], /需要操作人员确认/);
   assert.equal(calls, 1);
 });
 
 test("页面动作失败不会把已完成的审核变成失败", async () => {
   const registry = new PageActionRegistry();
-  registry.register("known", async () => { throw new Error("browser unavailable"); });
+  registry.register("known", async () => {
+    throw new Error("browser unavailable");
+  });
   assert.match((await registry.executeAll([intent("known")], {}))[0], /原页面人工操作/);
 });
