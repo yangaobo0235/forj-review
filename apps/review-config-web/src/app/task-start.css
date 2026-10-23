@@ -1,0 +1,233 @@
+.task-start {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 24px 28px 28px;
+  gap: 22px;
+}
+.start-heading {
+  flex: none;
+}
+.start-heading .eyebrow {
+  color: var(--accent);
+}
+.start-heading h1 {
+  font-size: 25px;
+  font-weight: 600;
+  line-height: 1.45;
+  margin: 4px 0 8px;
+}
+.start-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  flex: 1;
+  min-height: 0;
+}
+.start-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.start-panel-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+.start-panel-heading > div {
+  flex: 1;
+}
+.start-panel-heading h2 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.start-panel-heading p {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 3px;
+}
+.start-step {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--tint);
+  color: var(--accent);
+  flex: none;
+}
+.start-panel-scroll {
+  flex: 1;
+  min-height: 0;
+  padding: 20px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.start-panel-scroll label:first-child {
+  margin-top: 0;
+}
+.start-intent textarea {
+  width: 100%;
+  min-height: 136px;
+  max-height: 300px;
+  line-height: 1.8;
+}
+.start-panel-note,
+.start-submit {
+  flex: none;
+  display: flex;
+  align-items: center;
+  min-height: 74px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--sidebar);
+}
+.start-panel-note {
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.start-panel-note svg {
+  margin-top: 2px;
+  color: var(--accent);
+}
+.start-submit .action-row {
+  width: 100%;
+  margin: 0;
+}
+.start-submit .primary {
+  min-width: 112px;
+}
+.example-heading {
+  margin: 18px 0 8px;
+}
+.example-list {
+  display: grid;
+  gap: 8px;
+}
+.example-list button {
+  font-size: 12px;
+  line-height: 1.7;
+  padding: 9px 12px;
+  text-align: left;
+  justify-content: flex-start;
+  background: var(--sidebar);
+}
+.capture-picker > .panel-heading {
+  margin-bottom: 14px;
+}
+.capture-guide {
+  padding: 14px 16px;
+  border: 1px solid #d8e8fc;
+  border-radius: 8px;
+  background: var(--tint);
+}
+.capture-guide strong {
+  color: var(--accent);
+  font-size: 13px;
+}
+.capture-guide p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.85;
+}
+.capture-empty {
+  padding: 18px 16px;
+  margin: 16px 0 8px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  text-align: center;
+}
+.capture-empty strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.capture-empty p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+@media (max-width: 1250px) {
+  .task-start {
+    padding: 20px;
+    gap: 18px;
+  }
+  .start-grid {
+    gap: 16px;
+  }
+  .start-panel-heading,
+  .start-panel-scroll {
+    padding: 16px;
+  }
+  .start-panel-note,
+  .start-submit {
+    padding: 14px 16px;
+  }
+}
+@media (max-width: 900px) {
+  .task-start {
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 20px 16px;
+  }
+  .start-grid {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+  }
+  .start-panel {
+    flex: none;
+    overflow: clip;
+  }
+  .start-panel-scroll {
+    flex: none;
+    overflow: visible;
+  }
+  .start-heading h1 {
+    font-size: 22px;
+  }
+}
+@media (max-height: 650px) and (min-width: 901px) {
+  .task-start {
+    padding: 12px 18px;
+    gap: 12px;
+  }
+  .start-heading h1 {
+    font-size: 21px;
+    margin: 0 0 4px;
+  }
+  .start-heading .eyebrow {
+    display: none;
+  }
+  .start-heading > p {
+    font-size: 12px;
+  }
+  .start-panel-heading {
+    padding: 10px 16px;
+  }
+  .start-panel-heading p {
+    display: none;
+  }
+  .start-step {
+    width: 32px;
+    height: 32px;
+  }
+  .start-panel-note,
+  .start-submit {
+    padding: 10px 16px;
+    min-height: 56px;
+  }
+}

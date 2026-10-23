@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh">
+  <meta charset="utf-8" /><title>审核工作台布局验证 · 合成数据</title>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      // Exercise the real App and workflow with synthetic service/extension boundaries only.
+      import { createApp } from "vue";
+      import App from "../../src/app/App.vue";
+      import "../../src/app/theme.css";
+      const params = new URLSearchParams(location.search);
+      const business = params.get("business") || "transfer",
+        region = business === "scrap_replacement" ? "qingdao" : "default";
+      const title = {
+        vehicle_source: "车源审核",
+        transfer: "过户审核",
+        scrap_replacement: "报废置换审核",
+      }[business];
+      const count = params.has("short") ? 2 : 7;
+      const firstField = {
+        vehicle_source: "vehicle.engine_no",
+        transfer: "transfer_invoice.vin",
+        scrap_replacement: "old_vehicle.vin",
+      }[business];
+      const labels = [
+        business === "vehicle_source" ? "发动机号码" : "识别车架号",
+        "机动车所有人",
+        "品牌型号",
+        "注册日期",
+        "使用性质",
+        "转入地车管所",
+        "开票日期",
+      ];
+      const image =
+        "data:image/svg+xml," +
+        encodeURIComponent(
+          '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="160"><rect width="240" height="160" fill="#e5edf8"/><text x="120" y="85" text-anchor="middle" font-size="20">合成材料原图</text></svg>',
+        );
+      const fields = Array.from({ length: count }, (_, index) => ({
+        key: index ? `fixture.field_${index}` : firstField,
+        label: labels[index],
+        aliases: [],
+        reviewable: true,
+        writable: true,
+      }));
+      const pageData = {
+        businessType: business,
+        region,
+        profileVersion: "layout-fixture",
+        pageTitle: `${title}详情 · 合成记录`,
+        pageUrl: "https://example.invalid/review/fixture",
+        pageInstanceId: "layout",
+        pageFingerprint: "layout",
+        collectionId: "layout:1",
+        selectionMode: "AUTO",
+        pageFields: Object.fromEntries(fields.map((field) => [field.key, "页面原值1234567890"])),
+        images: [{ index: 0, imageId: "fixture-material", src: image, alt: "合成材料" }],
+        actions: [],
+      };
+      const presence = (complete) => ({
+        status: complete ? "COMPLETE" : "UNCERTAIN",
+        notices: [],
+        groups: [
+          {
+            key: "fixture",
+            display_name: "合成材料组",
+            status: complete ? "PRESENT" : "UNCERTAIN",
+            alternatives: [
+              [
+                {
+                  key: "fixture",
+                  display_name: "合成材料",
+                  status: complete ? "PRESENT" : "UNCERTAIN",
+                  reason: "正在识别材料内容",
+                  image_ids: ["fixture-material"],
+                },
+              ],
+            ],
+          },
+        ],
+      });
+      const review = {
+        business_type: business,
+        region,
+        profile_version: "layout-fixture",
+        qr_checks: [],
+        page_actions: [],
+        review_tasks: fields.map((field, index) => ({
+          step_id: `FIELD-${field.key}`,
+          sequence: index + 1,
+          category: "FIELD",
+          page_field: field.key,
+          display_target: "PAGE_FIELD",
+          label: field.label,
+          writable: true,
+          result_status: "CONFLICT",
+          requires_reviewer_action: true,
+          reason: "材料读值与页面原值不一致，请对照原图后决定是否回填。",
+          reason_codes: ["VALUE_MISMATCH"],
+          values: [
+            {
+              source: "合成材料",
+              value: index ? "合成读值1234567890" : "DEMO1234567890123456789012345678901234567890",
+              image_id: "fixture-material",
+              comparison_status: "CONFLICT",
+              conflicting: true,
+            },
+          ],
+          evidence: [],
+          details: {},
+        })),
+        material_completeness: { status: "COMPLETE", issues: [], presence: presence(true) },
+      };
+      const fixture = (window.reviewLayoutFixture = {
+        actions: [],
+        finish: !params.has("progress"),
+        blocking: false,
+      });
+      window.chrome = {
+        tabs: {
+          query: async () => [{ id: 7 }],
+          sendMessage: async (_tab, message) => {
+            fixture.actions.push(message);
+            if (message.type === "COLLECT_PAGE_MANIFEST") return structuredClone(pageData);
+            if (message.type === "FOCUS_REVIEW_IMAGE") return { ok: true };
+            if (message.type === "APPLY_PAGE_FIELD_VALUE") {
+              if (fixture.blocking)
+                return {
+                  ok: false,
+                  code: "PAGE_IDENTITY_CHANGED",
+                  message: "页面记录已变化，请重新采集",
+                };
+              pageData.pageFields[message.action.field] = message.action.value;
+              return { ok: true, message: "已回填并回读", actions: [message.action] };
+            }
+            throw new Error(`Unexpected fixture action: ${message.type}`);
+          },
+        },
+      };
+      window.fetch = async (input) => {
+        const url = String(input);
+        const respond = (value) =>
+          new Response(JSON.stringify(value), { headers: { "Content-Type": "application/json" } });
+        if (url.includes("/page-catalog"))
+          return respond({
+            version: "fixture",
+            identities: [
+              { business_type: business, region, title, paths: ["/review"], anchors: [] },
+            ],
+          });
+        if (url.includes("/collect-manifest"))
+          return respond({
+            business_type: business,
+            region,
+            fields,
+            scopes: [],
+            page_groups: [],
+            materials: [],
+            actions: [],
+          });
+        if (url.endsWith("/jobs/urls")) return respond({ job_id: "layout-job" });
+        if (url.endsWith("/jobs/layout-job")) {
+          const partial = params.has("partial"),
+            finished = fixture.finish;
+          return respond({
+            job_id: "layout-job",
+            phase: finished ? "COMPLETED" : "RECOGNIZING",
+            status: finished ? (partial ? "PARTIAL" : "COMPLETED") : "RUNNING",
+            progress: {
+              total_count: partial ? 2 : 1,
+              completed_count: finished ? 1 : 0,
+              failed_count: 0,
+              timed_out_count: partial ? 1 : 0,
+            },
+            result: finished ? review : null,
+            material_completeness: { presence: presence(finished) },
+            failed_image_ids: [],
+            timed_out_image_ids: partial ? ["fixture-material"] : [],
+          });
+        }
+        throw new Error(`Unexpected fixture URL: ${url}`);
+      };
+      createApp(App).mount("#app");
+    </script>
+  </body>
+</html>
