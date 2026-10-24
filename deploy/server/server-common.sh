@@ -5,8 +5,8 @@ umask 0027
 deploy_dir="${REVIEW_DEPLOY_DIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)}"
 runtime_dir="${REVIEW_RUNTIME_DIR:-${deploy_dir}/.runtime}"
 compose_file="${runtime_dir}/docker-compose.server.yml"
-image_name="forj-review-service:main"
-rollback_image="forj-review-service:rollback"
+image_name="forj-review-audit:master"
+rollback_image="forj-review-audit:rollback"
 service_name="review-service"
 health_url="${REVIEW_HEALTH_URL:-http://127.0.0.1:26101/health}"
 export REVIEW_DEPLOY_DIR="${deploy_dir}"
@@ -16,7 +16,7 @@ for command in docker curl flock; do command -v "${command}" >/dev/null || die "
 docker info >/dev/null 2>&1 || die "Docker is not available."
 docker compose version >/dev/null 2>&1 || die "Docker Compose v2 is required."
 [[ -d "${runtime_dir}" && -w "${runtime_dir}" ]] || die "Create ${runtime_dir} and give the deployment user write access first."
-[[ -s "${deploy_dir}/.env" && -s "${deploy_dir}/.env.database" ]] || die "Run bash setup-server.sh, then fill in .env and .env.database on the server."
+[[ -s "${deploy_dir}/.env" ]] || die "Run bash setup-server.sh, then fill in .env on the server."
 exec 9>"${runtime_dir}/.deploy.lock"
 flock -n 9 || die "Another deployment operation is running."
 # Small operator log, separate from application logs and bounded to two files.
@@ -26,7 +26,7 @@ fi
 exec > >(tee -a "${deploy_dir}/deploy.log" 9>&-) 2>&1
 echo "$(date -Iseconds) deployment operation=${operation}"
 
-compose() { docker compose --project-name forj-review --project-directory "${deploy_dir}" --env-file "${deploy_dir}/.env" -f "${compose_file}" "$@"; }
+compose() { docker compose --project-name forj-review-audit --project-directory "${deploy_dir}" --env-file "${deploy_dir}/.env" -f "${compose_file}" "$@"; }
 
 prepare_logs() {
   local log_dir="${deploy_dir}/logs"

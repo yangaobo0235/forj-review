@@ -67,7 +67,7 @@ export function validatedModelInput(input: ModelSearchInput): ModelSearchInput {
  */
 export function modelFillPlan(
   candidate: VehicleModelCandidate,
-  mappings: readonly import("@forj/configuration-contracts").ActionMapping[] = [],
+  mappings: readonly import("./contracts/collection").ActionMapping[] = [],
   labels: Record<string, string> = {},
   selection?: ModelPageSelection,
 ): { values: ModelFillValue[]; missing: string[] } {

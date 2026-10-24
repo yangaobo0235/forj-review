@@ -1,12 +1,10 @@
-"""Read exact engine models from the configured schema's reference table."""
+"""Immutable, exact engine reference lookup; unavailable data is never a no-match."""
 
-from collections.abc import Iterable
+import json
+from collections.abc import Iterable, Mapping
+from pathlib import Path
+from types import MappingProxyType
 
-from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
-
-from forj_review_database.database import AsyncDatabase
-from forj_review_database.models import EngineEmission
 from forj_review_service.contracts.engine_emissions import (
     EMISSION_STANDARDS,
     EngineEmissionLookupUnavailable,
@@ -14,23 +12,28 @@ from forj_review_service.contracts.engine_emissions import (
 )
 
 
-async def lookup_engine_emissions_async(
-    models: Iterable[str], *, database: AsyncDatabase
-) -> dict[str, str]:
-    keys = sorted({engine_model_key(value) for value in models} - {""})
-    if not keys:
-        return {}
+def _reference(pairs):
+    result = {}
+    for model, standard in pairs:
+        key = engine_model_key(model)
+        if not key or key in result or standard not in EMISSION_STANDARDS:
+            raise ValueError("Invalid engine reference entry")
+        result[key] = standard
+    return result
+
+
+def load_engine_emissions(path: Path) -> Mapping[str, str]:
     try:
-        async with database.session(readonly=True) as session:
-            rows = (
-                await session.execute(
-                    select(EngineEmission.engine_model, EngineEmission.emission_standard).where(
-                        EngineEmission.engine_model.in_(keys)
-                    )
-                )
-            ).all()
-    except SQLAlchemyError:
-        raise EngineEmissionLookupUnavailable("发动机排放参考表不可读取，请检查数据库") from None
-    if any(standard not in EMISSION_STANDARDS for _, standard in rows):
-        raise EngineEmissionLookupUnavailable("发动机排放参考表存在无效标准，请人工复核")
-    return dict(rows)
+        values = json.loads(path.read_text(encoding="utf-8-sig"), object_pairs_hook=_reference)
+        if not isinstance(values, dict) or not values:
+            raise ValueError("Empty or invalid engine reference")
+    except (OSError, ValueError, TypeError) as exc:
+        raise EngineEmissionLookupUnavailable(
+            "发动机排放参考文件不可用，请检查服务数据文件"
+        ) from exc
+    return MappingProxyType(values)
+
+
+def lookup_engine_emissions(models: Iterable[str], reference: Mapping[str, str]) -> dict[str, str]:
+    keys = {engine_model_key(model) for model in models}
+    return {key: reference[key] for key in keys if key in reference}

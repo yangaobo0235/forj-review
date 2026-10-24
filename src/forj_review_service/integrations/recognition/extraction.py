@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 
 
 def declared_material_types(business: BusinessContext) -> frozenset[str]:
-    """Material candidates belong to the explicitly selected database page."""
+    """Material candidates belong to the explicitly selected audit page."""
     return frozenset(business.document_policies)
 
 

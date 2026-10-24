@@ -1,11 +1,10 @@
 services:
   review-service:
-    container_name: forj-review-service
-    image: forj-review-service:main
+    container_name: forj-review-audit
+    image: forj-review-audit:master
     restart: unless-stopped
     env_file:
       - ./.env
-      - ./.env.database
     environment:
       PYTHONUNBUFFERED: "1"
       # 容器默认 UTC，日志时间戳和按天轮转的切点都会偏 8 小时（切点变成北京
@@ -26,29 +25,17 @@ services:
       REVIEW_LOG_LEVEL: "${REVIEW_LOG_LEVEL:-INFO}"
       REVIEW_LOG_MAX_MB: "${REVIEW_LOG_MAX_MB:-10}"
       REVIEW_LOG_BACKUP_COUNT: "${REVIEW_LOG_BACKUP_COUNT:-30}"
-      # 线上默认 public；本机使用 local。新版本启动前必须检查目标 Schema 已迁移。
-      # 连接只取下面的 PG* 和私密 env_file，避免模型文件中的旧 URL 覆盖它们。
-      REVIEW_DATABASE_URL: ""
-      REVIEW_DATABASE_SCHEMA: "${REVIEW_DATABASE_SCHEMA:-public}"
-      PGDATABASE: "forj_review"
-      PGUSER: "postgres"
-      PGHOST: "postgres"
-      PGPORT: "5432"
-      PGSSLMODE: "disable"
-    networks:
-      - default
-      - postgres
     volumes:
       # 与发布包同目录，排查时 cd 一次就能同时看到 tar 和日志。
       # 写权限由 deploy/server/start-server.sh 准备——容器用户和 ubuntu 不是同一个 uid。
-      - ${REVIEW_DEPLOY_DIR:-/home/ubuntu/forj-review}/logs:/logs:rw
+      - ${REVIEW_DEPLOY_DIR:-/home/ubuntu/forj-review-audit}/logs:/logs:rw
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
     ports:
-      - "26101:26101"
+      - "${REVIEW_HTTP_PORT:-26101}:26101"
     healthcheck:
       test: >-
         python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:26101/health', timeout=5).read()"
@@ -66,8 +53,3 @@ services:
     cap_drop:
       - ALL
     stop_grace_period: 30s
-
-networks:
-  postgres:
-    external: true
-    name: "${REVIEW_POSTGRES_NETWORK:-postgres_network}"

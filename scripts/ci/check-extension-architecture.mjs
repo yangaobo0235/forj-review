@@ -27,10 +27,10 @@ function scriptSource(file) {
   return [descriptor.script?.content, descriptor.scriptSetup?.content].filter(Boolean).join("\n");
 }
 
-// Keep both independently built frontends on Vue SFCs and plain TypeScript.
+// Keep the audit extension on Vue SFCs and plain TypeScript.
 const forbiddenFramework =
   /^(react(?:-dom|-test-renderer|-refresh)?|@types\/react(?:-dom)?|@vitejs\/plugin-react(?:-swc)?|@vitejs\/plugin-vue-jsx|@vue\/babel-plugin-jsx)(?:\/|$)/;
-for (const app of ["review-extension", "review-config-web"]) {
+for (const app of ["review-extension"]) {
   const directory = path.join(root, "apps", app);
   const manifest = JSON.parse(fs.readFileSync(path.join(directory, "package.json"), "utf8"));
   for (const dependency of Object.keys({ ...manifest.dependencies, ...manifest.devDependencies })) {
@@ -123,68 +123,6 @@ for (const file of walk(src)) {
   visit(source);
 }
 
-const webSrc = path.join(root, "apps/review-config-web/src");
-if (fs.existsSync(webSrc)) {
-  for (const file of walk(webSrc)) {
-    const relative = path.relative(webSrc, file).replaceAll("\\", "/");
-    const content = scriptSource(file);
-    const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true);
-    const visit = (node) => {
-      if (ts.isImportDeclaration(node) && node.moduleSpecifier) {
-        const specifier = node.moduleSpecifier.text;
-        if (
-          specifier.startsWith(".") &&
-          !path.resolve(path.dirname(file), specifier).startsWith(webSrc + path.sep)
-        ) {
-          findings.push(`configuration-web/${relative}: imports outside the web app: ${specifier}`);
-        }
-        if (
-          specifier.includes("extension") ||
-          (specifier.startsWith("@forj/") && specifier !== "@forj/configuration-contracts")
-        ) {
-          findings.push(
-            `configuration-web/${relative}: imports another frontend implementation: ${specifier}`,
-          );
-        }
-      }
-      if (
-        ts.isPropertyAccessExpression(node) &&
-        node.expression.getText(source) === "chrome" &&
-        !relative.startsWith("browser/")
-      ) {
-        findings.push(
-          `configuration-web/${relative}: Chrome API access must use the browser bridge`,
-        );
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(source);
-  }
-}
-const contracts = path.join(root, "packages/configuration-contracts/src");
-if (fs.existsSync(contracts)) {
-  for (const file of walk(contracts)) {
-    const source = ts.createSourceFile(
-      file,
-      fs.readFileSync(file, "utf8"),
-      ts.ScriptTarget.Latest,
-      true,
-    );
-    for (const node of source.statements) {
-      if (
-        ts.isInterfaceDeclaration(node) ||
-        ts.isTypeAliasDeclaration(node) ||
-        (ts.isExportDeclaration(node) && node.isTypeOnly) ||
-        (ts.isImportDeclaration(node) && node.importClause?.isTypeOnly)
-      )
-        continue;
-      findings.push(
-        `configuration-contracts/${path.basename(file)}: shared contracts contain runtime behavior`,
-      );
-    }
-  }
-}
-
 // Tests must not be the only consumers of a production module. Include type
 // imports and string-literal dynamic imports when walking from build entries.
 function checkReachability(directory, entries) {
@@ -236,10 +174,9 @@ function checkReachability(directory, entries) {
 }
 
 checkReachability(src, ["main.ts", "entrypoints/content.ts", "entrypoints/background.ts"]);
-checkReachability(webSrc, ["main.ts"]);
 console.log(
   findings.length
     ? findings.join("\n")
-    : "Frontend architecture: OK (extension, configuration-web, contracts)",
+    : "Frontend architecture: OK (audit extension)",
 );
 process.exitCode = findings.length ? 1 : 0;

@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches:
-      - main
+      - master
   pull_request:
 
 permissions:
@@ -17,20 +17,6 @@ jobs:
   backend:
     name: Backend
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_PASSWORD: test-only
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      FORJ_TEST_POSTGRES_URL: postgresql://postgres:test-only@127.0.0.1:5432/postgres
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,10 +32,10 @@ jobs:
         run: uv sync --locked
 
       - name: Unit and contract tests (no database)
-        run: uv run pytest -q tests/unit tests/contracts tests/configuration/unit tests/tooling
+        run: uv run pytest -q tests/unit tests/contracts tests/tooling
 
-      - name: Integration tests (isolated PostgreSQL)
-        run: uv run pytest -q tests/integration tests/configuration/integration tests/database tests/release
+      - name: Audit integration and deployment tests
+        run: uv run pytest -q tests/integration tests/release
 
       - name: Run Ruff
         run: uv run ruff check src tests scripts
@@ -113,38 +99,6 @@ jobs:
       - name: Check extension architecture
         run: node ../../scripts/ci/check-extension-architecture.mjs
 
-  configuration-web:
-    name: Configuration Web
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/review-config-web
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22.18.0"
-          cache: npm
-          cache-dependency-path: apps/review-config-web/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run tests
-        run: npm test
-
-      - name: Run ESLint
-        run: npm run lint
-
-      - name: Check formatting
-        run: npm run format:check
-
-      - name: Build configuration Web
-        run: npm run build
-
   container:
     name: Production container smoke
     runs-on: ubuntu-latest
@@ -158,16 +112,15 @@ jobs:
       - name: Install smoke-test dependencies
         run: uv sync --locked
       - name: Build production image
-        run: docker build --file deploy/Dockerfile --tag forj-review-service:ci .
+        run: docker build --file deploy/Dockerfile --tag forj-review-audit:ci .
       - name: Validate deployment Compose
         run: |
           validation_dir="$(mktemp -d)"
           trap 'rm -rf "$validation_dir"' EXIT
           cp deploy/server/review.env.example "$validation_dir/.env"
-          cp deploy/server/database.env.example "$validation_dir/.env.database"
           docker compose --project-directory "$validation_dir" --env-file "$validation_dir/.env" -f deploy/server/docker-compose.server.yml config --quiet
       - name: Verify health and persistent application logs
-        run: uv run python scripts/ci/smoke_container.py forj-review-service:ci
+        run: uv run python scripts/ci/smoke_container.py forj-review-audit:ci
 
   secrets:
     name: Secret scan

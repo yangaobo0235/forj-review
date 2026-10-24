@@ -1,20 +1,15 @@
 import pytest
 
-from scripts.ci.check_architecture import check_architecture, check_database_package
+from scripts.ci.check_architecture import check_architecture
 
 
 @pytest.mark.parametrize(
     "module",
-    [
-        "forj_review_service.contracts",
-        "forj_review_config_service.config",
-        "tests.support",
-        "scripts.dev",
-    ],
+    ["psycopg", "sqlalchemy", "sqlite3", "forj_review_database", "forj_review_config_service"],
 )
-def test_shared_database_cannot_depend_on_services_or_tooling(tmp_path, module):
-    (tmp_path / "database.py").write_text(f"from {module} import example\n", encoding="utf-8")
-    assert len(check_database_package(tmp_path)) == 1
+def test_audit_cannot_reintroduce_persistence_or_configuration_service(tmp_path, module):
+    (tmp_path / "adapter.py").write_text(f"import {module}\n", encoding="utf-8")
+    assert len(check_architecture(tmp_path)) == 1
 
 
 def test_architecture_rejects_reverse_dependencies_and_retired_imports(tmp_path):
@@ -116,17 +111,6 @@ def test_refactored_modules_cannot_reintroduce_reverse_dependencies(
     module, symbol = dependency.rsplit(".", 1)
     target.write_text(f"from forj_review_service.{module} import {symbol}\n", encoding="utf-8")
     assert any(reason in item for item in check_architecture(tmp_path))
-
-
-def test_configuration_architecture_enforces_the_single_adapter_boundary(tmp_path):
-    from scripts.ci.check_architecture import check_configuration_service
-
-    folder = tmp_path / "application"
-    folder.mkdir()
-    (folder / "bad.py").write_text(
-        "from forj_review_service.runtime.review_service import ReviewService\n", encoding="utf-8"
-    )
-    assert len(check_configuration_service(tmp_path)) == 1
 
 
 @pytest.mark.parametrize(

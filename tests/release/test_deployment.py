@@ -46,7 +46,7 @@ if [[ $1 == load ]]; then cp "$FAKE_STATE/incoming" "$FAKE_STATE/main"; exit 0; 
 if [[ $1 == tag ]]; then
   case "$3" in
     *:rollback) echo "$2" > "$FAKE_STATE/rollback";;
-    *:main) cat "$FAKE_STATE/rollback" > "$FAKE_STATE/main";;
+    *:master) cat "$FAKE_STATE/rollback" > "$FAKE_STATE/main";;
     *) exit 1;;
   esac
   exit 0
@@ -59,12 +59,13 @@ fi
 if [[ $1 == image && $2 == inspect ]]; then
   case "${@: -1}" in
     *:rollback) cat "$FAKE_STATE/rollback";;
-    forj-review-service:main) cat "$FAKE_STATE/main";;
+    forj-review-audit:master) cat "$FAKE_STATE/main";;
     *) exit 1;;
   esac
   exit $?
 fi
 if [[ $1 == run ]]; then
+  if [[ -f "$FAKE_STATE/invalid-data" && "$*" == *validated_configuration* ]]; then exit 1; fi
   exit 0
 fi
 exit 1
@@ -90,8 +91,7 @@ def host(tmp_path):
         "server-common.sh",
     ):
         shutil.copyfile(ROOT / "deploy/server" / name, upload / name)
-    (upload / ".env.database").write_text("PGPASSWORD=synthetic\n", encoding="utf-8")
-    for name in ("review.env.example", "database.env.example"):
+    for name in ("review.env.example",):
         shutil.copyfile(ROOT / "deploy/server" / name, upload / name)
     # flock itself is tested by Linux; Git Bash does not ship it.
     for name, text in {
@@ -106,7 +106,7 @@ def host(tmp_path):
 
     class Host:
         def write_archive(self):
-            with tarfile.open(upload / "forj-review-server.tar.gz", "w:gz") as archive:
+            with tarfile.open(upload / "forj-review-audit-server.tar.gz", "w:gz") as archive:
                 for name, content in self.members.items():
                     member = tarfile.TarInfo(name)
                     member.size = len(content)
@@ -117,7 +117,7 @@ def host(tmp_path):
             if compose is not None:
                 (upload / "docker-compose.server.yml").write_text(compose, encoding="utf-8")
             self.members = {
-                "forj-review-service-main.tar": ("synthetic " + image).encode(),
+                "forj-review-audit-master.tar": ("synthetic " + image).encode(),
                 "release.json": (
                     json.dumps({"image_id": image_id(image)}, indent=2) + "\n"
                 ).encode(),
@@ -184,7 +184,7 @@ def test_upgrade_repeat_failure_retry_and_rollback_keep_the_healthy_pair(host):
 
 def test_checksum_failure_prevents_image_load_or_container_changes(host):
     host.release()
-    host.members["forj-review-service-main.tar"] = b"corrupt"
+    host.members["forj-review-audit-master.tar"] = b"corrupt"
     host.write_archive()
     assert "checksum verification failed" in host.run("start-server.sh", success=False)
     commands = (host.state / "commands").read_text()
@@ -245,7 +245,7 @@ def test_unexpected_archive_members_refused_before_image_load(host, name):
 
 def test_archive_links_refused_before_extraction(host):
     host.release()
-    with tarfile.open(host.upload / "forj-review-server.tar.gz", "w:gz") as archive:
+    with tarfile.open(host.upload / "forj-review-audit-server.tar.gz", "w:gz") as archive:
         for name in host.members:
             member = tarfile.TarInfo(name)
             member.type = tarfile.SYMTYPE
@@ -281,18 +281,17 @@ def test_setup_is_repeatable_and_preserves_existing_credentials(host):
     host.run("setup-server.sh")
     assert (host.upload / ".runtime").is_dir()
     assert (host.upload / ".env").read_text() == "DASHSCOPE_API_KEY=synthetic\n"
-    assert (host.upload / ".env.database").read_text() == "PGPASSWORD=synthetic\n"
     commands = (host.state / "commands").read_text()
     assert " up " not in commands and "prune" not in commands and "volume" not in commands
 
 
 def test_setup_creates_only_missing_configuration_files(host):
-    (host.upload / ".env.database").unlink()
+    (host.upload / ".env").unlink()
     host.run("setup-server.sh")
-    assert (host.upload / ".env.database").read_bytes() == (
-        ROOT / "deploy/server/database.env.example"
+    assert (host.upload / ".env").read_bytes() == (
+        ROOT / "deploy/server/review.env.example"
     ).read_bytes()
-    assert (host.upload / ".env").read_text() == "DASHSCOPE_API_KEY=synthetic\n"
+    assert not (host.upload / ".env.database").exists()
 
 
 def test_first_start_uses_the_single_directory_layout(host):
@@ -304,3 +303,14 @@ def test_first_start_uses_the_single_directory_layout(host):
     assert (runtime / ".last-successful-image").read_text().strip() == image_id("new")
     assert not (runtime / ".env").exists()
     assert not (runtime / ".env.database").exists()
+
+
+def test_invalid_packaged_data_prevents_replacing_healthy_container(host):
+    host.release("old", "old config")
+    host.run("start-server.sh")
+    host.release("new", "new config")
+    (host.state / "invalid-data").touch()
+    assert "Audit data validation failed" in host.run("start-server.sh", success=False)
+    assert (host.state / "container").read_text().strip() == image_id("old")
+    assert (host.runtime / "docker-compose.server.yml").read_text() == "old config"
+    assert (host.runtime / ".last-successful-image").read_text().strip() == image_id("old")

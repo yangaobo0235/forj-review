@@ -1,4 +1,4 @@
-"""Owned review loops must support psycopg asynchronous sockets on Windows."""
+"""Create consistent event loops for synchronous and background audit workers."""
 
 import asyncio
 import sys

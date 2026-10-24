@@ -1,7 +1,7 @@
 [project]
-name = "forj-review"
+name = "forj-review-audit"
 version = "0.1.0"
-description = "FORJ 审核辅助系统：审核服务与审核配置服务"
+description = "FORJ 审核辅助系统：无数据库审核服务"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [
@@ -13,12 +13,7 @@ dependencies = [
     "pydantic>=2.13.4",
     "zxing-cpp>=2.3,<3",
     "uvicorn>=0.52.4",
-    "filelock>=3.20,<4",
     "pillow>=12,<13",
-    "psycopg[binary,pool]>=3.2,<4",
-    "sqlalchemy[asyncio]>=2.0.44,<3",
-    "pydantic-settings>=2.10,<3",
-    "langgraph-checkpoint-postgres>=3,<4",
 ]
 
 [dependency-groups]
@@ -30,9 +25,6 @@ dev = [
 
 [project.scripts]
 forj-review-service = "forj_review_service.interfaces.cli:main"
-forj-review-config-service = "forj_review_config_service.interfaces.cli:main"
-forj-review-config-develop = "forj_review_config_service.interfaces.develop:main"
-forj-review-database = "forj_review_service.interfaces.database_tools:main"
 
 [build-system]
 requires = ["hatchling>=1.27"]
@@ -42,7 +34,7 @@ build-backend = "hatchling.build"
 exclude = ["**/.env", "**/.env.*"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/forj_review_service", "src/forj_review_config_service", "src/forj_review_database"]
+packages = ["src/forj_review_service"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]

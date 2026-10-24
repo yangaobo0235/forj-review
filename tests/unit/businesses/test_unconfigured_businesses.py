@@ -112,5 +112,4 @@ def test_http_catalog_does_not_publish_old_collection_or_rules(profile):
             ).status_code
             == 404
         )
-        rules = client.get("/api/review/configuration/rules").json()["rules"]
-    assert not {"vehicle_model_consistency", "transfer_invoice_date"} & {r["id"] for r in rules}
+        assert client.get("/api/review/configuration/rules").status_code == 404

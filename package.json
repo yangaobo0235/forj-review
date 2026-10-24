@@ -1,5 +1,5 @@
 {
-  "name": "forj-review",
+  "name": "forj-review-audit",
   "private": true,
   "scripts": {
     "dev:extension": "npm --prefix apps/review-extension run dev",
@@ -8,12 +8,8 @@
     "test:extension": "npm --prefix apps/review-extension test",
     "lint:extension": "npm --prefix apps/review-extension run lint",
     "check:architecture": "python scripts/ci/check_architecture.py && node scripts/ci/check-extension-architecture.mjs",
-    "dev:configuration": "npm --prefix apps/review-config-web run dev",
-    "build:configuration": "npm --prefix apps/review-config-web run build",
-    "test:configuration": "npm --prefix apps/review-config-web test",
-    "lint:configuration": "npm --prefix apps/review-config-web run lint",
     "test:extension:browser": "npm --prefix apps/review-extension run test:browser",
-    "format": "npm --prefix apps/review-extension run format && npm --prefix apps/review-config-web run format",
-    "format:check": "npm --prefix apps/review-extension run format:check && npm --prefix apps/review-config-web run format:check"
+    "format": "npm --prefix apps/review-extension run format",
+    "format:check": "npm --prefix apps/review-extension run format:check"
   }
 }

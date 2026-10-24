@@ -9,7 +9,6 @@ from pathlib import Path
 
 from forj_review_service.businesses.context import BusinessContext
 from forj_review_service.businesses.page_config.loader import load_definitions
-from forj_review_service.businesses.page_config.state import ConfigurationState
 from forj_review_service.businesses.profiles import CONSISTENCY_DEFAULT
 from forj_review_service.businesses.registry import BusinessRegistry
 from forj_review_service.contracts.review import BusinessType
@@ -20,13 +19,7 @@ _DEFINITIONS = tuple(
 )
 
 
-def configuration_state():
-    return ConfigurationState(
-        deepcopy(_DEFINITIONS), {d["page_id"]: d["version"] for d in _DEFINITIONS}
-    )
-
-
-_PAGES = load_definitions(configuration_state().definitions, configuration_state().active)
+_PAGES = load_definitions(_DEFINITIONS, {d["page_id"]: d["version"] for d in _DEFINITIONS})
 BUSINESS_PROFILES = (*_PAGES.profiles, CONSISTENCY_DEFAULT)
 SCRAP_REPLACEMENT_QINGDAO = next(
     p for p in _PAGES.profiles if p.page_id == "scrap_replacement:qingdao"
@@ -59,7 +52,14 @@ def build_scrap_profile(region):
 
 
 def page_definition(profile):
-    definition = configuration_state().source(profile.page_id, profile.version)
+    definition = next(
+        (
+            d
+            for d in _DEFINITIONS
+            if d["page_id"] == profile.page_id and d["version"] == profile.version
+        ),
+        None,
+    )
     if definition is None:
         raise ValueError("Unknown test page")
     return {**deepcopy(definition), "active": True}

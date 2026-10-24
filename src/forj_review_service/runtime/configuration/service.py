@@ -13,7 +13,7 @@ from forj_review_service.businesses.page_config.inspection import (
 from forj_review_service.businesses.page_config.schema import Declaration, Key
 from forj_review_service.businesses.profiles import CONSISTENCY_DEFAULT
 from forj_review_service.businesses.registry import BusinessRegistry
-from forj_review_service.contracts.decisions import DECISION_POLICY, ReasonCode
+from forj_review_service.contracts.decisions import ReasonCode
 from forj_review_service.contracts.engine_emissions import (
     EngineEmissionLookupUnavailable,
     engine_model_key,
@@ -24,30 +24,13 @@ from forj_review_service.contracts.review import QrCheck, ReviewRequest
 from forj_review_service.runtime.review_service import ReviewService
 
 
-def decision_policy() -> dict:
-    """提供给配置端的审核语义能力，不暴露或修改内核实现。"""
-    return dict(DECISION_POLICY)
-
-
 def validated_configuration(directory: Path):
-    from forj_review_service.businesses.page_config.loader import load_page_profiles
-    from forj_review_service.businesses.page_config.state import ConfigurationState
-
-    pages = load_page_profiles(directory)
-    state = ConfigurationState(
-        tuple(d.model_dump(mode="json") for _, d in pages.sources),
-        {p.page_id: p.version for p in pages.active},
-    )
-    return validated_snapshot(state)
-
-
-def validated_snapshot(state):
     from dataclasses import replace
 
-    from forj_review_service.businesses.page_config.loader import load_definitions
+    from forj_review_service.businesses.page_config.loader import load_page_profiles
 
     templates = (CONSISTENCY_DEFAULT,)
-    pages = load_definitions(state.definitions, state.active)
+    pages = load_page_profiles(directory)
     pages = replace(pages, active=(*templates, *pages.active))
     return validate_pages(pages, templates)
 

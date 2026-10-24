@@ -80,7 +80,7 @@ export interface PageData {
   pageModelScope?: import("./vehicle-model").ModelPageScope;
   pageSelection?: import("./vehicle-model").ModelPageSelection;
   pageSelectionError?: string;
-  actions?: import("@forj/configuration-contracts").ActionBinding[];
+  actions?: import("./collection").ActionBinding[];
   fieldLabels?: Record<string, string>;
   pageId?: string;
   pageUrl: string;

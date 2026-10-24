@@ -17,7 +17,7 @@ import { searchVehicleModels } from "../../extension/vehicle-model-client.ts";
 import { ReviewPageFieldWriter } from "./page-field-writer.ts";
 import { readModelSelection } from "../collection/model-selection";
 import { inspectExactOption } from "./exact-select.ts";
-import type { ActionMapping } from "@forj/configuration-contracts";
+import type { ActionMapping } from "../../../shared/contracts/collection";
 
 export interface ModelFillRequest {
   expectedPageUrl?: string;

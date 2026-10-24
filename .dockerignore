@@ -13,7 +13,6 @@ tests/
 htmlcov/
 .coverage
 .tmp/
-.review-config/
 logs/
 .git/
 .idea/

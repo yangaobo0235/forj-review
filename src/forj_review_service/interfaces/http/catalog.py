@@ -8,8 +8,6 @@ from forj_review_service.businesses.packs import build_collect_manifest
 from forj_review_service.businesses.page_catalog import page_catalog
 from forj_review_service.businesses.page_config.inspection import profile_fingerprint
 from forj_review_service.businesses.page_config.kernel import KERNEL_VERSION
-from forj_review_service.businesses.page_config.schema import PageDefinition
-from forj_review_service.businesses.rules.catalog import RULE_DEFINITIONS
 from forj_review_service.contracts.errors import ReviewResourceError
 from forj_review_service.contracts.review import BusinessId
 from forj_review_service.contracts.review_schema import review_contract_schema
@@ -31,11 +29,6 @@ def loaded_configuration(request: Request, service: ReviewServiceDependency) -> 
     """Report the actual immutable in-memory snapshot, never reread files to claim activation."""
     return {
         "kernel_version": KERNEL_VERSION,
-        **(
-            request.app.state.configuration_loader.status
-            if getattr(request.app.state, "configuration_loader", None)
-            else {}
-        ),
         "release_id": getattr(service.registry, "release_id", None),
         "process_instance_id": request.app.state.process_instance_id,
         "directory": request.app.state.configuration_directory,
@@ -117,25 +110,3 @@ def review_page_catalog(service: ReviewServiceDependency) -> dict[str, object]:
     就不知道该取哪份清单。因此这里一次下发全部业务，而不是按业务类型查。
     """
     return page_catalog(service.registry.active_profiles)
-
-
-@router.get("/api/review/configuration/schema")
-def page_configuration_schema() -> dict[str, object]:
-    """Machine-readable authoring contract; does not publish or execute changes."""
-    return PageDefinition.model_json_schema()
-
-
-@router.get("/api/review/configuration/rules")
-def configuration_rules() -> dict[str, object]:
-    """Registered rule metadata for configuration authors; no executable code."""
-    return {
-        "rules": [
-            {
-                "id": key,
-                "required_fields": list(value.fields),
-                "check_ids": list(value.checks),
-                "stage": value.stage,
-            }
-            for key, value in sorted(RULE_DEFINITIONS.items())
-        ]
-    }

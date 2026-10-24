@@ -40,11 +40,6 @@ import {
 } from "../platform/browser/identity/page-identity.ts";
 import type { BusinessSelection, PageWriteGroupAction } from "../shared/contracts/review.ts";
 import { logDiagnostic } from "../shared/diagnostics.ts";
-import {
-  captureConfigurationPage,
-  trialConfigurationPage,
-} from "../platform/browser/collection/configuration-discovery";
-import type { ConfigurationPending } from "../shared/contracts/configuration";
 import { createVehicleModelFiller } from "../platform/browser/actions/vehicle-model-fill.ts";
 import {
   manifestActions,
@@ -268,21 +263,6 @@ chrome.runtime.onMessage.addListener((message: ReviewMessage, _sender, sendRespo
   }
   if (message.type === "APPLY_VEHICLE_MODEL") {
     void modelFiller.fill(message).then(sendResponse);
-    return true;
-  }
-  if (
-    message.type === "DISCOVER_CONFIGURATION_PAGE" ||
-    message.type === "TRIAL_CONFIGURATION_PAGE"
-  ) {
-    const task =
-      message.type === "DISCOVER_CONFIGURATION_PAGE"
-        ? captureConfigurationPage(message.pageCatalog as PageCatalog | null)
-        : trialConfigurationPage(message.task as ConfigurationPending);
-    void task
-      .then(sendResponse)
-      .catch((error) =>
-        sendResponse({ error: error instanceof Error ? error.message : "页面采集失败" }),
-      );
     return true;
   }
 

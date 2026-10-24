@@ -93,7 +93,6 @@ def main() -> None:
         reload=args.reload,
         reload_dirs=[
             str(Path(__file__).resolve().parents[1]),
-            str(Path(__file__).resolve().parents[2] / "forj_review_database"),
         ]
         if args.reload
         else None,

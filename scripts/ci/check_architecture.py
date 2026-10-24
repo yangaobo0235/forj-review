@@ -50,7 +50,16 @@ def check_architecture(source: Path = SOURCE) -> list[str]:
             if parts[0] == PACKAGE and parts[-1].startswith("_"):
                 findings.append(f"{relative.as_posix()}:{line}: imports private API: {module}")
             reason = None
-            if parts[0] in {"tests", "scripts", "app"}:
+            if parts[0] in {
+                "tests",
+                "scripts",
+                "app",
+                "psycopg",
+                "sqlalchemy",
+                "sqlite3",
+                "forj_review_database",
+                "forj_review_config_service",
+            }:
                 reason = "product code imports repository tooling or a retired package"
             elif parts[0] == PACKAGE and len(parts) > 1:
                 target = parts[1]
@@ -150,89 +159,6 @@ def check_architecture(source: Path = SOURCE) -> list[str]:
                     findings.append(
                         f"{relative.as_posix()}:{node.lineno}: workflow embeds business registration: {node.value}"
                     )
-    if source == SOURCE:
-        findings.extend(check_configuration_service())
-        findings.extend(check_database_package())
-    return findings
-
-
-def check_database_package(source: Path | None = None) -> list[str]:
-    """Shared persistence cannot depend on either service or repository tooling."""
-    source = source or ROOT / "src/forj_review_database"
-    findings = []
-    for path in sorted(source.rglob("*.py")):
-        relative = path.relative_to(source)
-        package = ".".join(["forj_review_database", *relative.parts[:-1]])
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for line, module in runtime_imports(tree, package):
-            if module.split(".")[0] in {
-                "forj_review_service",
-                "forj_review_config_service",
-                "tests",
-                "scripts",
-            }:
-                findings.append(
-                    f"forj_review_database/{relative.as_posix()}:{line}: "
-                    f"shared database imports service or repository tooling: {module}"
-                )
-    return findings
-
-
-def check_configuration_service(source: Path | None = None) -> list[str]:
-    source = source or ROOT / "src/forj_review_config_service"
-    findings = []
-    shared = (
-        "forj_review_service.contracts.errors.",
-        "forj_review_service.businesses.page_config.",
-        "forj_review_service.businesses.packs.",
-        "forj_review_service.businesses.page_catalog.",
-        "forj_review_service.businesses.rules.catalog.",
-        "forj_review_service.runtime.configuration.service.",
-        "forj_review_service.runtime.configuration.publication.",
-        "forj_review_service.runtime.configuration.verification.",
-        "forj_review_service.businesses.page_config.state.",
-        "forj_review_service.integrations.storage.",
-    )
-    for path in sorted(source.rglob("*.py")):
-        relative = path.relative_to(source)
-        group = relative.parts[0] if len(relative.parts) > 1 else "entrypoint"
-        package = ".".join(["forj_review_config_service", *relative.parts[:-1]])
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for line, module in runtime_imports(tree, package):
-            reason = None
-            if module.startswith("forj_review_service"):
-                if relative.parts[:2] != ("integrations", "review_kernel") or not module.startswith(
-                    shared
-                ):
-                    reason = (
-                        "cross-package access must use the registered review_kernel adapter API"
-                    )
-            elif module.startswith("forj_review_config_service."):
-                target = module.split(".")[1]
-                if group in {"contracts", "config"} and target != group:
-                    reason = "foundation imports execution"
-                elif group in {"application", "workflow", "tools"} and target in {
-                    "integrations",
-                    "interfaces",
-                    "bootstrap",
-                }:
-                    reason = "orchestration imports a concrete adapter or entrypoint"
-                elif group == "integrations" and target in {
-                    "application",
-                    "workflow",
-                    "interfaces",
-                    "bootstrap",
-                }:
-                    reason = "adapter imports orchestration"
-            if reason:
-                findings.append(
-                    f"forj_review_config_service/{relative.as_posix()}:{line}: {reason}: {module}"
-                )
-    # The review service must never depend on the configuration service.
-    if source == ROOT / "src/forj_review_config_service":
-        for path in SOURCE.rglob("*.py"):
-            if "forj_review_config_service" in path.read_text(encoding="utf-8"):
-                findings.append(f"{path.name}: audit package depends on configuration service")
     return findings
 
 

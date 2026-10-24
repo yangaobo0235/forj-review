@@ -7,8 +7,6 @@
 import asyncio
 import inspect
 import logging
-import threading
-import weakref
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -25,6 +23,7 @@ from forj_review_service.capabilities.specs import (
     BusinessRuleHandler,
     ExternalCheckHandler,
 )
+from forj_review_service.config.data import engine_emissions_file
 from forj_review_service.config.event_loop import new_event_loop
 from forj_review_service.config.settings import image_private_hosts, load_qwen_config
 from forj_review_service.contracts.recognition import (
@@ -38,6 +37,10 @@ from forj_review_service.contracts.review import (
     ReviewResponse,
 )
 from forj_review_service.evidence.collection import collect_observations, collection_issues
+from forj_review_service.integrations.engine_emissions import (
+    load_engine_emissions,
+    lookup_engine_emissions,
+)
 from forj_review_service.integrations.qr.decoder import QrImageDecoder
 from forj_review_service.integrations.qr.web_verifier import QrWebVerifier
 from forj_review_service.integrations.qr.workflow import QrVerificationWorkflow
@@ -72,9 +75,7 @@ class ReviewService:
         vehicle_api=None,
     ) -> None:
         self.vehicle_api = vehicle_api
-        # The HTTP loop and job worker each own their SQLAlchemy engine.
-        self._emission_databases = weakref.WeakKeyDictionary()
-        self._emission_database_lock = threading.Lock()
+        self._engine_reference = load_engine_emissions(engine_emissions_file())
         config = load_qwen_config() if load_model else None
         self.qr_web = QrWebVerifier(allowed_hosts=["qclt.mofcom.gov.cn"])
         self.qr_decoder = qr_decoder or QrImageDecoder(private_hosts=image_private_hosts())
@@ -96,25 +97,12 @@ class ReviewService:
         )
 
     async def lookup_engine_emissions(self, models):
-        from forj_review_service.integrations.database import AsyncDatabase, review_database
-        from forj_review_service.integrations.engine_emissions import lookup_engine_emissions_async
-
-        loop = asyncio.get_running_loop()
-        with self._emission_database_lock:
-            database = self._emission_databases.get(loop)
-            if database is None:
-                database = AsyncDatabase(review_database())
-                self._emission_databases[loop] = database
-        return await lookup_engine_emissions_async(models, database=database)
+        return lookup_engine_emissions(models, self._engine_reference)
 
     async def aclose(self) -> None:
-        """Release recognition clients and database pools on their owning event loop."""
+        """Release recognition clients on their owning event loop."""
         if self.recognition is not None:
             await self.recognition.client.aclose()
-        with self._emission_database_lock:
-            database = self._emission_databases.pop(asyncio.get_running_loop(), None)
-        if database is not None:
-            await database.engine.dispose()
 
     def assist(
         self, request: ReviewRequest, *, business: BusinessContext = DEFAULT_BUSINESS

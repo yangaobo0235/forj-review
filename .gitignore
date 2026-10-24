@@ -5,9 +5,6 @@
 # `.env.production.example` 这类会被 `.env.*` 吞掉——而且被忽略的文件不会出现在
 # `git status` 里，等于静默消失在仓库之外。
 !*.example
-postgres-owner.env
-postgres-review.env
-postgres-local.env
 
 # Python
 __pycache__/
@@ -50,9 +47,6 @@ logs/
 .tmp-*
 .worktrees/
 .superpowers/
-
-# Local configuration conversations, checkpoints and credentials
-.review-config/
 
 # Local development plans, excluded from version control.
 /docs/开发计划/

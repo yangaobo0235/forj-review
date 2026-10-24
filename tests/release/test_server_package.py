@@ -61,24 +61,26 @@ def test_daily_package_only_writes_archive_and_preserves_fixed_tools(release_pro
     project, run = release_project
     tools = project / "deploy/server"
     tools.mkdir(parents=True)
-    for name in (".env", ".env.database", "start-server.sh", "docker-compose.server.yml"):
+    for name in (".env", "start-server.sh", "docker-compose.server.yml"):
         (tools / name).write_text("operator-owned " + name, encoding="utf-8")
     original_tools = {p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in tools.iterdir()}
     # Fixed files model the operator's installation sources, outside release/.
     result = run("package-server")
     assert result.returncode == 0, result.stdout + result.stderr
-    package_path = project / "release/server/forj-review-server.tar.gz"
+    package_path = project / "release/server/forj-review-audit-server.tar.gz"
     with tarfile.open(package_path) as archive:
-        assert archive.getnames() == ["forj-review-service-main.tar", "release.json", "SHA256SUMS"]
+        assert archive.getnames() == ["forj-review-audit-master.tar", "release.json", "SHA256SUMS"]
         files = {member.name: archive.extractfile(member).read() for member in archive}
-    assert files["forj-review-service-main.tar"] == b"synthetic image"
+    assert files["forj-review-audit-master.tar"] == b"synthetic image"
     assert json.loads(files["release.json"])["image_id"] == "sha256:" + "a" * 64
-    assert json.loads(files["release.json"])["database_storage_version"] == 4
+    assert json.loads(files["release.json"])["storage"] == "json"
     for line in files["SHA256SUMS"].decode().splitlines():
         checksum, name = line.split("  ")
         assert hashlib.sha256(files[name]).hexdigest() == checksum
-    assert {path.name for path in package_path.parent.iterdir()} == {"forj-review-server.tar.gz"}
-    assert not (project / "deploy/forj-review-server.tar.gz").exists()
+    assert {path.name for path in package_path.parent.iterdir()} == {
+        "forj-review-audit-server.tar.gz"
+    }
+    assert not (project / "deploy/forj-review-audit-server.tar.gz").exists()
     assert not list((project / ".tmp").glob("server-stage-*"))
     assert not (project / ".tmp/server-release").exists()
     assert not (project / ".tmp/server-deploy").exists()
@@ -87,7 +89,9 @@ def test_daily_package_only_writes_archive_and_preserves_fixed_tools(release_pro
     previous = package_path.read_bytes()
     assert run("package-server", FAIL_BUILD="1").returncode != 0
     assert package_path.read_bytes() == previous
-    assert {path.name for path in package_path.parent.iterdir()} == {"forj-review-server.tar.gz"}
+    assert {path.name for path in package_path.parent.iterdir()} == {
+        "forj-review-audit-server.tar.gz"
+    }
     assert {
         p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in tools.iterdir()
     } == original_tools

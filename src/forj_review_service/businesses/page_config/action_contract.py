@@ -72,3 +72,22 @@ class ActionBinding(_ActionContract):
                 raise ValueError("未实现的选项来源属性")
             previous.add(m.mapping_id)
         return self
+
+
+def vehicle_model_action():
+    return ActionBinding(
+        action_id="vehicle_model_fill",
+        handler_id="vehicle_model_fill",
+        label="车型回填",
+        mappings=(
+            ActionMapping(
+                mapping_id="model",
+                source_kind="MODEL_CANDIDATE",
+                source_property="modelName",
+                source_option_property="modelId",
+                target_field="vehicle.model",
+                order=0,
+                wait_condition_id="options_ready",
+            ),
+        ),
+    )

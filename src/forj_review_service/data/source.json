@@ -1,0 +1,27 @@
+{
+  "source": "database-read-only",
+  "schema": "local",
+  "exported_at": "2026-10-23T16:36:32.735670+00:00",
+  "release_id": 3,
+  "revision": 3,
+  "active": {
+    "scrap_replacement:changchun": "20261023.independent-fields.1",
+    "scrap_replacement:qingdao": "20261023.independent-fields.1",
+    "transfer:default": "20261023.independent-fields.1",
+    "vehicle_source:default": "20261020.054212.localcompl"
+  },
+  "engine_emission_count": 3123,
+  "sha256": {
+    "pages/scrap_replacement-changchun.json": "d068a68cd632fdd2d1a6febf806112ebb8ada2e81ce2e399f263f6b4c0a9a980",
+    "pages/scrap_replacement-qingdao.json": "c9ddd68ddccc85c8a644adad039982797a64911c76c5aa0d0363faf6abcf14db",
+    "pages/transfer-default.json": "6f57f9504095b62fd5a0e49697e56e034551c9396a394a052eeece6732974d7d",
+    "pages/vehicle_source-default.json": "05b5f4b7ee9338e2f9ac028dbdc6884dada3222b07cbadd7b910f591c5d83cf5",
+    "engine-emissions.json": "179d4a8571736d809a085048af21e6da5f6323f79ecf4aa1dc5ed9be16f45433"
+  },
+  "effective_fingerprints": {
+    "scrap_replacement:changchun": "75ad6c3d2b7ea0275ebbb7a713d8a64e059cb2dee9b632b3f2c34b433e582e7e",
+    "scrap_replacement:qingdao": "915965d42635e20121c3e472eeb3711636b8202380d843bc865436c844736840",
+    "transfer:default": "16550d01599059318d24e42f49fbcbc3d4be9fb38255e4cb530abc39d0ac25ee",
+    "vehicle_source:default": "23959d79998964d0b971348ab129a42936209ce1d41c06aaa3ff9cd491e0b409"
+  }
+}

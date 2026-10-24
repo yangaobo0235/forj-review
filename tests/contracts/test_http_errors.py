@@ -4,14 +4,12 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from forj_review_config_service.contracts.models import ConfigurationError
-from forj_review_config_service.interfaces.errors import install_error_handlers as config_errors
 from forj_review_service.contracts.errors import ReviewInputError
 from forj_review_service.contracts.review import ReviewRequest
 from forj_review_service.interfaces.http.errors import install_error_handlers as review_errors
 
 
-@pytest.mark.parametrize("install", [review_errors, config_errors])
+@pytest.mark.parametrize("install", [review_errors])
 @pytest.mark.parametrize("failure", [ValueError, RuntimeError])
 def test_internal_errors_have_stable_response_without_exception_values(install, failure, caplog):
     app = FastAPI()
@@ -31,7 +29,7 @@ def test_internal_errors_have_stable_response_without_exception_values(install, 
     assert "test_http_errors.py" in caplog.text
 
 
-@pytest.mark.parametrize("install", [review_errors, config_errors])
+@pytest.mark.parametrize("install", [review_errors])
 def test_request_validation_does_not_echo_input_or_validator_exception(install):
     app = FastAPI()
     install(app)
@@ -53,12 +51,6 @@ def test_request_validation_does_not_echo_input_or_validator_exception(install):
     "install,error,code,status",
     [
         (review_errors, ReviewInputError("图片清单包含重复标识"), "INVALID_REVIEW_INPUT", 422),
-        (
-            config_errors,
-            ConfigurationError("BASELINE_CHANGED", "请重新验证候选"),
-            "BASELINE_CHANGED",
-            409,
-        ),
     ],
 )
 def test_known_business_errors_retain_actionable_messages(install, error, code, status):

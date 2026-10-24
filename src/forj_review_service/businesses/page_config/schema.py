@@ -256,7 +256,7 @@ class PageDefinition(Declaration):
                 ActionBinding(action_id=a, handler_id=a, label=a) for a in self.page_actions
             )
             if self.business_type == "vehicle_source":
-                from forj_review_service.businesses.page_config.row_contract import (
+                from forj_review_service.businesses.page_config.action_contract import (
                     vehicle_model_action,
                 )
 

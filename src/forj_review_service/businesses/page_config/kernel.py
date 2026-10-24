@@ -1,4 +1,4 @@
-"""Source fingerprint used to bind validation and activation receipts to the kernel."""
+"""Fingerprint of the audit engine used by runtime diagnostics."""
 
 import hashlib
 from pathlib import Path
@@ -23,4 +23,3 @@ def _kernel_version():
 
 
 KERNEL_VERSION = _kernel_version()
-KERNEL_CONTRACT_VERSION = "0.1.0"

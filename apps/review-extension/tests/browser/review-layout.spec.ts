@@ -73,14 +73,14 @@ for (const business of ["vehicle_source", "transfer", "scrap_replacement"]) {
   }
 }
 
-test("短列表按内容收缩，业务和配置入口可用", async ({ page }) => {
+test("短列表按内容收缩，业务入口可用且无配置管理入口", async ({ page }) => {
   await start(page, "?short");
   const list = page.locator(".workbench-index");
   await expect(list.locator("button")).toHaveCount(2);
   expect(await list.evaluate((element) => element.clientHeight)).toBeLessThan(110);
   await expect(page.locator("#business-selection")).toBeEnabled();
-  await page.locator(".panel-more > summary").click();
-  await expect(page.getByRole("button", { name: "采集并打开配置工作台" })).toBeVisible();
+  await expect(page.locator(".panel-more")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "采集并打开配置工作台" })).toHaveCount(0);
 });
 
 test("连续切换时只滚动顶部项目列表，保留页面阅读位置", async ({ page }) => {

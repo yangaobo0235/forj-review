@@ -1,4 +1,4 @@
-"""Runtime declaration types and manifest compiler; page data comes from PostgreSQL."""
+"""Runtime declaration types and manifest compiler; page data comes from validated JSON."""
 
 from forj_review_service.businesses.packs.model import (
     AuthorityRule,

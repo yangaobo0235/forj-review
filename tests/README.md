@@ -1,77 +1,32 @@
 # 测试组织与业务边界
 
-测试按实际需求维护。生产页面的权威配置是 PostgreSQL；测试不访问本机 `local` 或线上 `public`，也不向服务目录放业务默认数据。
-
-## 目录
+本版测试不需要数据库或 SSH 隧道，不访问真实模型、车型业务接口或原项目数据。测试日志使用临时目录，普通用例隔离私密模型和业务接口配置。
 
 | 目录 | 验证内容 |
 | --- | --- |
-| `unit/businesses` | 青岛及长春报废置换、车源、过户的规则、路由与地区政策 |
-| `unit/evidence`、`unit/presentation` | 证据可信度、比较、任务展示及回填限制 |
-| `unit/capabilities`、`unit/runtime`、`unit/integrations` | 能力执行、异步任务生命周期、模型与二维码适配 |
-| `integration` | 审核 HTTP、完整审核图及各业务的组合场景 |
-| `configuration/unit` | 完整页面编译、普通字段增删改、开发属性保护、离线检查与回放 |
-| `configuration/integration` | 字段全链路、现场采集、会话、助手协议、验证、发布与回滚 |
-| `database` | 真实 PostgreSQL 的 ORM 查询、事务、不可变历史、并发、Schema 隔离及迁移 |
-| `contracts` | 请求、证据和返回结构的接口约束 |
-| `release`、`tooling` | 打包、部署回退、架构边界 |
-| `fixtures` | 固定的脱敏页面声明和回放输入；不能作为生产初始化数据 |
-| `support` | 测试工厂、模型替身和隔离数据库工具；测试文件之间不互相导入 |
+| `unit/businesses` | 四个业务页面规则、政策、材料路由、页面编译及离线回放 |
+| `unit/evidence`、`unit/presentation` | 证据、独立字段比较、工作台任务及回填保护 |
+| `unit/capabilities`、`unit/runtime` | 审核图、并发队列、任务期限、生命周期 |
+| `unit/integrations` | 模型/二维码/车型 API 和精确 JSON 排放查询 |
+| `integration` | 审核 HTTP 与完整业务场景，真实内置 JSON 启动 |
+| `contracts` | 请求、响应、错误分类与环境参数 |
+| `release`、`tooling` | 发布包校验、部署回退和架构边界 |
+| `fixtures`、`support` | 合成材料、固定页面声明及替身；不是生产默认数据 |
 
-## 实际需求对应的验证
+`integration/test_file_runtime.py` 核对导出摘要与数据库有效规则指纹，验证所有内置页面、真实版本采集清单和审核入口，不靠合成夹具冒充生产启动。缺失页面和损坏排放数据必须启动失败。`unit/integrations/test_engine_emissions.py` 验证完整型号精确匹配、正常未命中与读取错误区分、不可变数据及多线程共享。
 
-| 需求 | 主要用例 |
-| --- | --- |
-| 已有页面只改配置即可增删普通字段 | `configuration/unit/test_field_maintenance.py`、`configuration/integration/test_field_changes.py` |
-| 变更贯通采集、材料提取、比较与任务 | `configuration/integration/test_field_changes.py` |
-| 手动维护和助手共用校验与保存规则 | `configuration/integration/test_daily_maintenance.py`、`test_publication.py` |
-| 助手不能新增页面、新算法或绕过显式权限操作 | `configuration/unit/test_field_maintenance.py`、`configuration/integration/test_daily_maintenance.py` |
-| 新版本发布、单页回退、整批回退、重复提交及并发冲突 | `configuration/integration/test_publication.py`、`database/test_relational_configuration.py`、`database/test_postgres_storage.py` |
-| 车源车型筛选、无匹配、多候选、人工选择与回填 | `database/test_vehicle_model_catalog.py`、`integration/test_vehicle_source_workflow.py`、`unit/businesses/test_vehicle_source_configuration.py` |
-| 不确定材料、缺失证据和过期现场不能生成可信回填 | `unit/evidence`、`integration/test_review_decision_safety.py`、`configuration/integration/test_collection_validation.py` |
-| 缺少数据库配置时不能恢复内置页面 | `configuration/integration/test_field_changes.py`、`database/test_relational_configuration.py` |
-| 历史摘要校验、增量迁移失败回滚及四张业务表保护 | `database/test_schema_v4_migration.py`、`database/test_migration_history.py` |
-| 两后端错误分类、内部错误与请求数据不透出 | `contracts/test_http_errors.py` |
-
-## 运行
+`unit/businesses/test_page_compiler.py` 和 `test_offline_tools.py` 保留原配置模块中的审核内核验证；配置助手、发布事务和数据库迁移测试随已移除功能删除。其余业务用例保持固定预期，不为测试通过修改政策。
 
 ```powershell
-# 快速验证，不需要数据库
-uv run pytest -q tests/unit tests/contracts tests/configuration/unit tests/tooling
-
-# 审核、配置和数据库集成验证；默认自动创建一次性 PostgreSQL 容器
-uv run pytest -q tests/integration tests/configuration/integration tests/database
-
-# 完整验证，包含打包和部署工具
 uv run pytest -q
+uv run ruff check src tests scripts
+uv run ruff format --check src tests scripts
+uv run python scripts/ci/check_architecture.py
+npm run test:extension
+npm run lint:extension
+npm run test:extension:browser
 ```
 
-可通过 `FORJ_TEST_POSTGRES_URL` 复用本机专用测试实例。仅允许 loopback 地址；每个用例创建唯一的 `forj_test_*` Schema 并在结束时删除。不要填写 IDEA 转发到真实业务库的连接。测试会屏蔽工作区私密数据库及车型业务接口配置，日志写临时目录。业务接口契约由 `unit/integrations/test_vehicle_api.py` 的 HTTP MockTransport 验证，不访问真实业务服务。
+扩展浏览器用例覆盖页面采集、身份失效、品牌型号人工回填、车型 ID 写入，以及五条滚动、证据与原图合卡、首行回填及人工输入交互。部署测试使用模拟 Docker 主机测试真实 Bash 脚本；`scripts/ci/smoke_container.py` 对实际镜像禁网验证，不启动数据库，不调用模型。
 
-四个业务页面夹具保存在 `fixtures/pages`，使用独立完整 2.0 声明，业务版本固定为 `1.0`。它们是可审查的固定输入，修改生产数据库不会改变测试预期。`fixtures/permit.json` 用于配置功能的合成页面；`fixtures/replay` 保存人工确定的结果。生产程序不会读取这些目录。
-
-## 增删测试的规则
-
-保留可解释的业务结果、权限边界、故障处理和事务保障。新增测试应说明触发条件与预期行为；不要只比较两个从同一输入生成的对象，或把实现细节抄成断言。
-
-旧版文件历史、增量模板继承、内置声明转换与旧快照跨 Schema 初始化测试已经删除。数据库显式迁移仍有保护源数据的测试，因为未来首次升级仍需要这个工具。接口和持久化会话仍实际使用的兼容行为继续验证，不按文件名中的“legacy”一概删除。
-
-前端测试分别放在两个应用的 `tests` 中；浏览器真实采集和回填用例位于扩展的 `tests/browser`。从根目录运行 `npm run test:extension`、`npm run test:configuration`、`npm run test:extension:browser`。
-
-
-当前重点回归按场景维护：
-
-| 场景 | 用例入口 |
-| --- | --- |
-| 验证证据、修订覆盖拦截、在途任务固定配置与加载失败保护 | `database/test_configuration_evidence.py`、`unit/runtime/test_configuration_reload.py`、`unit/runtime/test_jobs.py` |
-| 聊天目标更正/撤回、调查预算与定向读取、路线调查、长历史和工具结果分页 | `configuration/unit/test_task_lifecycle.py`、`test_investigation_progress.py`、`test_tool_result_lookup.py`、`configuration/integration/test_task_workflow.py` |
-| 本地开发副本、冻结验收、补丁基线、取消/预算与交接守卫 | `configuration/unit/test_local_development.py`、`configuration/integration/test_workbench_recovery.py` |
-| 图片目录、来源绑定、历史现场、补采修订与按需分析 | `configuration/integration/test_capture_evidence.py`、`test_material_comparison_configuration.py` |
-| 需求属性、局部更正、无需发布和实际采用 | `configuration/unit/test_requirement_verification.py`、`configuration/integration/test_task_workflow.py` |
-| 数据库 v4→v5、v5→v6、v6→v7 的历史保持、来源回填与待对账发布保护 | `database/test_schema_v5_migration.py`、`test_schema_v6_migration.py`、`test_schema_v7_migration.py` |
-| 三类审核页面的五行滚动、材料与原图合卡、首行回填、人工草稿、失效保护、识别中和超时展示 | 扩展 `tests/browser/review-layout.spec.ts` |
-| 品牌型号人工回填保留冲突、车型只写 ID 且规格由业务系统带入 | 扩展 `tests/browser/brand-model.spec.ts`、`vehicle-model.spec.ts` |
-
-扩展只验证当前统一任务工作台；缺少任务的响应必须显示契约错误。已删除旧结果卡片、前端自行重算证据差异及静态页面适配器对应的测试，材料标签、后端差异展示、官网链接与回填保护仍由当前场景覆盖。格式断言不应依赖换行或无意义空白。
-
-真实模型调用和业务浏览器联调单独记录；脚本替身通过不能计作模型识别成功率或现场审核通过。
+真实模型成功率、官网核验和原业务页面联调需单独验证；模拟测试通过不表示审核通过。新增回归以业务行为和故障边界为主，不复制实现或删除有效保护。

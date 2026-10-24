@@ -1,96 +1,69 @@
-"""Reference lookup and pool ownership without touching a business service."""
+"""Exact JSON lookups, immutable snapshots, and explicit data failures."""
 
 import asyncio
-from contextlib import asynccontextmanager
-from types import SimpleNamespace
-from unittest.mock import AsyncMock
 
 import pytest
-from sqlalchemy.exc import SQLAlchemyError
 
 from forj_review_service.contracts.engine_emissions import EngineEmissionLookupUnavailable
-from forj_review_service.integrations.engine_emissions import lookup_engine_emissions_async
+from forj_review_service.integrations.engine_emissions import (
+    load_engine_emissions,
+    lookup_engine_emissions,
+)
 from forj_review_service.runtime.review_service import ReviewService
 from forj_review_service.runtime.scheduling.fair_scheduler import FairAsyncScheduler
 
 
-class ReferenceDatabase:
-    def __init__(self, rows=(), failure=None):
-        self.rows = rows
-        self.failure = failure
-        self.queries = []
-
-    @asynccontextmanager
-    async def session(self, *, readonly):
-        assert readonly
-        yield self
-
-    async def execute(self, query):
-        self.queries.append(query)
-        if self.failure:
-            raise self.failure
-        return SimpleNamespace(all=lambda: self.rows)
+def test_reference_normalizes_exact_keys_and_remains_immutable(tmp_path):
+    path = tmp_path / "emissions.json"
+    path.write_text('{"ENGINE42-E6": "国六"}', encoding="utf-8")
+    reference = load_engine_emissions(path)
+    assert lookup_engine_emissions(
+        ["示例 ＥＮＧＩＮＥ４２－Ｅ６", "ENGINE42-E6", "ENGINE42-E6A", ""], reference
+    ) == {"ENGINE42-E6": "国六"}
+    assert lookup_engine_emissions([], reference) == {}
+    assert lookup_engine_emissions(["UNKNOWN-E6"], reference) == {}
+    with pytest.raises(TypeError):
+        reference["MODEL"] = "国三"
+    path.write_text('{"ENGINE42-E6": "国三"}', encoding="utf-8")
+    assert reference["ENGINE42-E6"] == "国六"
 
 
-@pytest.mark.asyncio
-async def test_reference_lookup_normalizes_deduplicates_and_batches_exact_models():
-    database = ReferenceDatabase([("ENGINE42-E6", "国六")])
-    result = await lookup_engine_emissions_async(
-        ["示例 ＥＮＧＩＮＥ４２－Ｅ６", "ENGINE42-E6", "ENGINE42-E6A", ""], database=database
-    )
-    assert result == {"ENGINE42-E6": "国六"}
-    assert len(database.queries) == 1
-    query = database.queries[0]
-    assert "ref_engine_emission" in str(query)
-    assert query.compile().params == {"engine_model_1": ["ENGINE42-E6", "ENGINE42-E6A"]}
-
-
-@pytest.mark.asyncio
-async def test_empty_input_does_not_query_and_normal_miss_is_empty():
-    database = ReferenceDatabase()
-    assert await lookup_engine_emissions_async([], database=database) == {}
-    assert not database.queries
-    assert await lookup_engine_emissions_async(["UNKNOWN-E6"], database=database) == {}
-    assert len(database.queries) == 1
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "rows,failure", [([], SQLAlchemyError("secret")), ([("MODEL", "京六")], None)]
+    "content",
+    [
+        "{}",
+        "[]",
+        "null",
+        "broken",
+        '{"MODEL":"京六"}',
+        '{"MODEL":"国六","MODEL":"国三"}',
+        '{"model":"国六","ＭＯＤＥＬ":"国三"}',
+        '{"":"国六"}',
+        '{"MODEL": []}',
+    ],
 )
-async def test_reference_failure_and_invalid_standards_are_not_normal_misses(rows, failure):
-    with pytest.raises(EngineEmissionLookupUnavailable) as error:
-        await lookup_engine_emissions_async(["MODEL"], database=ReferenceDatabase(rows, failure))
-    assert "secret" not in str(error.value)
+def test_invalid_reference_is_not_an_ordinary_miss(tmp_path, content):
+    path = tmp_path / "emissions.json"
+    path.write_text(content, encoding="utf-8")
+    with pytest.raises(EngineEmissionLookupUnavailable):
+        load_engine_emissions(path)
+
+
+def test_missing_reference_is_explicit(tmp_path):
+    with pytest.raises(EngineEmissionLookupUnavailable):
+        load_engine_emissions(tmp_path / "absent.json")
 
 
 @pytest.mark.asyncio
-async def test_shared_service_reuses_one_engine_per_worker_loop_and_closes_on_owner(monkeypatch):
-    databases = []
-
-    class LoopDatabase(ReferenceDatabase):
-        def __init__(self, settings):
-            super().__init__([("LOOPTEST", "国六")])
-            self.loop = asyncio.get_running_loop()
-            self.engine = SimpleNamespace(dispose=AsyncMock(side_effect=self.dispose))
-            databases.append(self)
-
-        async def execute(self, query):
-            assert asyncio.get_running_loop() is self.loop
-            return await super().execute(query)
-
-        async def dispose(self):
-            assert asyncio.get_running_loop() is self.loop
-
-    monkeypatch.setattr("forj_review_service.integrations.database.AsyncDatabase", LoopDatabase)
-    monkeypatch.setattr(
-        "forj_review_service.integrations.database.review_database", lambda: object()
-    )
+async def test_service_reference_is_safe_across_worker_loops(tmp_path, monkeypatch):
+    path = tmp_path / "emissions.json"
+    path.write_text('{"LOOPTEST":"国六"}', encoding="utf-8")
+    monkeypatch.setenv("REVIEW_ENGINE_EMISSIONS_FILE", str(path))
     service = ReviewService(load_model=False)
+    path.unlink()
 
     async def run():
-        for _ in range(2):
-            assert await service.lookup_engine_emissions(["LOOPTEST"]) == {"LOOPTEST": "国六"}
+        assert await service.lookup_engine_emissions(["LOOPTEST"]) == {"LOOPTEST": "国六"}
 
     schedulers = [FairAsyncScheduler(global_limit=1, per_job_limit=1) for _ in range(2)]
     try:
@@ -98,7 +71,3 @@ async def test_shared_service_reuses_one_engine_per_worker_loop_and_closes_on_ow
     finally:
         for scheduler in schedulers:
             await asyncio.to_thread(scheduler.close, cleanup=service.aclose)
-    assert len(databases) == 2
-    assert all(len(db.queries) == 2 for db in databases)
-    assert all(db.engine.dispose.await_count == 1 for db in databases)
-    assert not service._emission_databases

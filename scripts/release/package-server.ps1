@@ -7,8 +7,8 @@ $ErrorActionPreference = "Stop"
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
 $tempRoot = Join-Path $projectRoot ".tmp"
 $outputDirectory = Join-Path $projectRoot "release/server"
-$packageName = "forj-review-server.tar.gz"
-$imageName = "forj-review-service:main"
+$packageName = "forj-review-audit-server.tar.gz"
+$imageName = "forj-review-audit:master"
 
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     throw "Docker was not found. Install and start Docker Desktop first."
@@ -31,29 +31,28 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Docker image build failed; previous release files are retained." }
     $imageId = (& docker image inspect --format '{{.Id}}' $imageName)
     if ($LASTEXITCODE -ne 0) { throw "Cannot inspect the built image." }
-    & docker save --output (Join-Path $stage "forj-review-service-main.tar") $imageName
+    & docker save --output (Join-Path $stage "forj-review-audit-master.tar") $imageName
     if ($LASTEXITCODE -ne 0) { throw "Docker export failed; previous release files are retained." }
     $utf8 = New-Object System.Text.UTF8Encoding($false)
     $metadata = [ordered]@{
         release_id = $releaseId; source_revision = $revision; working_tree_dirty = $dirty
         image = $imageName; image_id = $imageId; platform = "linux/amd64"
-        database_storage_version = 4; database_migration = "explicit"
+        storage = "json"; page_data = "packaged"
         created_at_utc = (Get-Date).ToUniversalTime().ToString("o")
     }
     [IO.File]::WriteAllText((Join-Path $stage "release.json"), ($metadata | ConvertTo-Json) + "`n", $utf8)
-    $checksums = foreach ($name in @("forj-review-service-main.tar", "release.json")) {
+    $checksums = foreach ($name in @("forj-review-audit-master.tar", "release.json")) {
         (Get-ReleaseSha256 (Join-Path $stage $name)) + "  " + $name
     }
     [IO.File]::WriteAllText((Join-Path $stage "SHA256SUMS"), ($checksums -join "`n") + "`n", $utf8)
     Write-Host "Creating single backend package..." -ForegroundColor Cyan
-    & tar -czf (Join-Path $stage $packageName) -C $stage forj-review-service-main.tar release.json SHA256SUMS
+    & tar -czf (Join-Path $stage $packageName) -C $stage forj-review-audit-master.tar release.json SHA256SUMS
     if ($LASTEXITCODE -ne 0) { throw "Release archive creation failed; previous package retained." }
     New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
     Move-Item -LiteralPath (Join-Path $stage $packageName) -Destination (Join-Path $outputDirectory $packageName) -Force
     Write-Host "Backend package: $(Join-Path $outputDirectory $packageName)" -ForegroundColor Green
-    Write-Host "Routine update: upload $packageName -> start-server.sh (schema preflight runs before container replacement)."
-    Write-Host "For a storage-contract upgrade, upload updated server scripts/Compose and explicitly migrate the target schema first."
-    Write-Host "Upload destination: /home/ubuntu/forj-review/ (no manual extraction needed)."
+    Write-Host "Routine update: upload $packageName -> start-server.sh (audit-data preflight runs before container replacement)."
+    Write-Host "Upload destination: /home/ubuntu/forj-review-audit/ (no manual extraction needed)."
 } finally {
     # Only remove this invocation's staging folder inside the workspace temp root.
     $resolvedStage = [IO.Path]::GetFullPath($stage)

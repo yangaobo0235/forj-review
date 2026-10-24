@@ -1,28 +1,11 @@
-"""Verify published business routes against the real PostgreSQL startup path."""
+"""Verify all registered business routes through an isolated audit runtime."""
 
 import pytest
-from fastapi.testclient import TestClient
-
-from forj_review_service.bootstrap.application import create_app
 
 
 @pytest.fixture
-def published_client(database, monkeypatch):
-    from tests.support.postgres import seed_complete_pages
-
-    seed_complete_pages(database)
-    monkeypatch.setenv("DASHSCOPE_API_KEY", "")
-    with database.connect() as connection:
-        original = connection.execute(
-            "SELECT release_id, revision FROM cfg_head WHERE id=1"
-        ).fetchone()
-    with TestClient(create_app()) as client:
-        yield client
-    with database.connect() as connection:
-        assert (
-            connection.execute("SELECT release_id, revision FROM cfg_head WHERE id=1").fetchone()
-            == original
-        )
+def published_client(client):
+    yield client
 
 
 def test_startup_publishes_all_builtin_business_routes(published_client):

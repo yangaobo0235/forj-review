@@ -18,8 +18,6 @@
   "host_permissions": [
     "http://127.0.0.1:26101/*",
     "http://localhost:26101/*",
-    "http://127.0.0.1:26102/*",
-    "http://localhost:26102/*",
     "http://175.178.6.214:26101/*",
     "http://test.forjtruck.com/*",
     "https://test.forjtruck.com/*",
@@ -28,9 +26,6 @@
   ],
   "background": {
     "service_worker": "background.js"
-  },
-  "externally_connectable": {
-    "matches": ["http://127.0.0.1/*", "http://localhost/*"]
   },
   "action": {
     "default_title": "打开赋界审核辅助工作台",

@@ -18,7 +18,7 @@ class ConfiguredPages:
 
 
 def load_definitions(definitions, active) -> ConfiguredPages:
-    """Compile relational aggregates directly; no filenames or implicit templates."""
+    """Compile complete declarations with an explicit active version per page."""
     sources, profiles, selected = [], [], []
     identities = set()
     for data in definitions:
@@ -27,7 +27,7 @@ def load_definitions(definitions, active) -> ConfiguredPages:
         )
         identity = (definition.page_id, definition.version)
         if identity in identities or definition.schema_version != "2.0" or definition.extends:
-            raise ValueError("数据库要求唯一、独立的完整页面版本")
+            raise ValueError("审核页面要求唯一、独立的完整版本")
         identities.add(identity)
         profile = compile_page(definition)
         sources.append((f"{definition.page_id}@{definition.version}", definition))
@@ -35,7 +35,7 @@ def load_definitions(definitions, active) -> ConfiguredPages:
         if definition.active:
             selected.append(profile)
     if not active or {(p.page_id, p.version) for p in selected} != set(active.items()):
-        raise ValueError("数据库缺少明确有效的发布页面选择")
+        raise ValueError("审核数据缺少明确有效的活动页面选择")
     return ConfiguredPages(tuple(profiles), tuple(selected), tuple(sources))
 
 

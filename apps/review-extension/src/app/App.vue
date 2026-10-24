@@ -15,7 +15,6 @@ import {
   type BusinessChoice,
 } from "../features/review/model/review-panel";
 import type { PageData } from "../shared/contracts/review";
-import CaptureLauncher from "../features/configuration-capture/CaptureLauncher.vue";
 import "./App.css";
 
 const businessSelection = ref<BusinessChoice>("AUTO");
@@ -75,10 +74,6 @@ async function refreshPage() {
             <p>材料识别与字段核对</p>
           </div>
         </div>
-        <details class="panel-more">
-          <summary>更多</summary>
-          <div class="panel-more-content"><CaptureLauncher /></div>
-        </details>
       </div>
       <section
         class="review-context"
